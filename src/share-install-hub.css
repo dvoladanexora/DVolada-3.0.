@@ -1,0 +1,58 @@
+
+/* Compartí Dvolada: tarjetas suaves con identidad naranja, responsive */
+.dv-share-hub{max-width:1080px;padding-bottom:110px}
+.dv-share-hero{isolation:isolate;position:relative;overflow:hidden;padding:35px clamp(18px,4vw,46px) 27px;border-radius:28px;background:linear-gradient(125deg,color-mix(in srgb,var(--surface) 91%,var(--accent) 9%),var(--surface));border:1px solid var(--line)}
+.dv-share-glow{position:absolute;z-index:-1;width:280px;height:280px;right:-85px;top:-110px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--accent) 22%,transparent),transparent 75%)}
+.dv-share-eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:11px;letter-spacing:.11em;font-weight:850;color:var(--accent)}
+.dv-share-hero h1{max-width:640px;font-size:clamp(27px,4.8vw,45px);letter-spacing:-.045em;line-height:1.12;margin:13px 0 11px}
+.dv-share-hero h1 span{color:var(--accent)}
+.dv-share-hero p{max-width:630px;color:var(--muted);font-size:14px;line-height:1.6}
+.dv-share-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:24px}
+.dv-share-tabs button{border-radius:14px;border:1px solid var(--line);background:var(--surface);padding:12px 16px;font-weight:750;display:flex;align-items:center;gap:8px;min-height:44px}
+.dv-share-tabs button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.dv-share-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(270px,.75fr);gap:16px;margin-top:19px;align-items:start}
+.dv-share-card{border:1px solid var(--line);background:color-mix(in srgb,var(--surface) 94%,transparent);border-radius:24px;padding:clamp(18px,3vw,26px);box-shadow:0 8px 30px rgba(0,0,0,.035)}
+.dv-share-card h2{margin:10px 0;font-size:clamp(20px,3vw,28px)}
+.dv-share-card p{color:var(--muted);font-size:14px;line-height:1.6}
+.dv-share-link-field{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:14px;background:var(--bg);padding:5px 7px 5px 13px;margin:20px 0;color:var(--muted)}
+.dv-share-link-field input{min-width:0;flex:1;border:0;background:transparent;font-size:12px;color:var(--ink);padding:8px 0;overflow:hidden}
+.dv-share-link-field button{height:35px;width:37px;border-radius:11px;color:var(--ink);background:var(--surface);display:grid;place-items:center}
+.dv-share-buttons{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.dv-share-button{display:flex;align-items:center;justify-content:center;gap:8px;padding:13px 12px;min-height:46px;border:1px solid var(--line);border-radius:15px;font-size:13px;font-weight:800;text-decoration:none;text-align:center;cursor:pointer;color:var(--ink);background:var(--surface)}
+.dv-share-whatsapp{grid-column:1/-1;background:#168954;color:#fff;border-color:#168954}
+.dv-share-native{border-color:color-mix(in srgb,var(--accent) 35%,var(--line));color:var(--ink)}
+.dv-share-nearby{margin-top:20px;padding:13px;display:flex;gap:12px;background:var(--soft);color:var(--muted);font-size:12px;border-radius:15px;line-height:1.55}
+.dv-share-nearby svg{flex-shrink:0}
+.dv-share-nfc{margin-top:15px;padding:13px;border:1px solid var(--line);border-radius:16px;display:flex;gap:10px;align-items:center;justify-content:space-between}
+.dv-share-nfc strong{display:flex;align-items:center;gap:7px;font-size:13px}
+.dv-share-nfc small{display:block;font-size:11px;color:var(--muted);line-height:1.5;margin-top:6px}
+.dv-share-nfc button{flex-shrink:0;background:var(--soft);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:9px;font-size:12px;font-weight:750}
+.dv-share-qr{text-align:center}
+.dv-share-qr-icon{display:grid;place-items:center;width:42px;height:42px;margin:0 auto;border-radius:14px;background:var(--soft);color:var(--accent)}
+.dv-share-qr-image{display:grid;place-items:center;margin:15px auto;padding:12px;max-width:280px;border-radius:20px;background:#fff;min-height:230px}
+.dv-share-qr-image img{display:block;width:min(100%,240px);height:auto;aspect-ratio:1}
+.dv-share-qr p{margin-bottom:8px}
+.dv-share-qr>small{display:block;font-size:11px;color:var(--muted)}
+.dv-share-qr-fallback{display:grid;justify-items:center;gap:12px;color:#474747}
+.dv-share-qr-fallback small{font-size:12px}
+.dv-share-install{margin-top:18px;display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:16px}
+.dv-share-install-intro{background:linear-gradient(140deg,color-mix(in srgb,var(--surface) 90%,var(--accent) 10%),var(--surface))}
+.dv-share-install-button{display:inline-flex;align-items:center;justify-content:center;gap:9px;border-radius:14px;padding:13px 15px;background:var(--accent);color:#fff;font-weight:750;margin-top:13px}
+.dv-share-installed{display:flex;gap:9px;align-items:center;color:var(--ink);font-weight:700;font-size:13px;margin-top:17px}
+.dv-share-device-tabs{display:flex;gap:8px;margin-bottom:20px}
+.dv-share-device-tabs button{flex:1;border:1px solid var(--line);border-radius:12px;padding:12px 6px;font-size:13px;font-weight:750}
+.dv-share-device-tabs button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.dv-share-steps h3{font-size:18px;margin-bottom:12px}
+.dv-share-steps ol{padding-left:21px;margin-bottom:12px;display:grid;gap:10px}
+.dv-share-steps li{font-size:13px;line-height:1.6;padding-left:4px}
+.dv-share-steps li svg{vertical-align:middle}
+.dv-share-steps p{font-size:12px;margin-bottom:0}
+.dv-share-install-share{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.dv-share-install-share h3{margin:0;font-size:16px}
+.dv-share-install-share p{margin:0}
+.dv-share-notice{position:sticky;bottom:85px;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--ink);color:var(--surface);padding:11px 16px;border-radius:13px;font-size:12px;max-width:490px;margin:16px auto 0}
+.dv-share-notice button{color:inherit}
+.dv-share-hub button:focus-visible,.dv-share-hub a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:750px){.dv-share-grid,.dv-share-install{grid-template-columns:1fr}.dv-share-install-share{grid-column:auto}.dv-share-hero{padding:24px 18px}.dv-share-tabs button{flex:1;justify-content:center}.dv-share-install-share{align-items:flex-start;flex-direction:column}}
+@media(max-width:380px){.dv-share-buttons{grid-template-columns:1fr}.dv-share-whatsapp{grid-column:auto}.dv-share-nfc{flex-direction:column;align-items:flex-start}}
+@media(prefers-reduced-motion:reduce){.dv-share-hub *{scroll-behavior:auto!important}}

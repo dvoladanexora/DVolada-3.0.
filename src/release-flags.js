@@ -9,7 +9,6 @@ export const CUSTOMER_HIDDEN_PAGES=Object.freeze([
  'groceries', // Dvolada Mandados: pendiente de lanzamiento
  'express',   // Dvolada Express: pendiente de lanzamiento
  'rewards',   // Dvolada Club: todavía sin reglas definitivas
- 'invite',    // Programa de invitaciones: sin recompensas reales
  'group',     // Pedidos grupales: sin sincronización multiusuario
  'driver',    // Pruebas de repartidor
  'admin',     // Panel administrativo local no autenticado

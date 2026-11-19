@@ -26,5 +26,7 @@ jobs:
         run: npm run test:online
       - name: Pruebas de bienvenida, feed y publicidad
         run: npm run test:preview
+      - name: Pruebas de compartir, instalación y sonido
+        run: npm run test:share
       - name: Compilar aplicación
         run: npm run build

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {applyOrderStatus,stageElapsedMinutes,decisionForOrder,allowedDecision} from '../src/restaurant-order-flow.js';
 import {neutralizeSpreadsheetFormula,quoteCsv,csvFromRows,historyCsvRows} from '../src/restaurant-export.js';
-import {decodeDemoStorageEvent,recordRestaurantShift,shiftLogKey,normalizeRestaurantShiftLog} from '../src/restaurant-demo-bridge.js';
+import {decodeDemoStorageEvent,recordRestaurantShift,shiftLogKey,normalizeRestaurantShiftLog,mutateDemoPlaces} from '../src/restaurant-demo-bridge.js';
 
 const at=new Date('2026-11-19T06:00:00.000Z');
 const sample={id:'100',placeId:1,status:'Pendiente',kind:'food',createdAt:'2026-11-19T05:30:00.000Z',items:[{name:'Pollo',qty:2}]};
@@ -162,4 +162,56 @@ test('Eventos de otras pestañas rechazan productos dañados antes de cambiar la
  ];
  for(const event of invalid)assert.equal(decodeDemoStorageEvent(event),null);
  assert.deepEqual(decodeDemoStorageEvent({key:'dv_orders',newValue:JSON.stringify([{id:'X',status:'Pendiente'}])})?.rows[0].status,'Pendiente');
+});
+
+test('Dos pestañas pueden editar ficha y menú sin eliminar cambios anteriores',()=>{
+ const original=[{id:1,name:'Doña Rosa',items:[{id:11,name:'Baleada',price:45}],isOpen:true},
+  {id:2,name:'Otro local',items:[{id:22,name:'Pollo',price:80}],isOpen:true}];
+ const disk=new Map([['dv_places',JSON.stringify(original)]]);
+ const storage={getItem:key=>disk.get(key)??null,setItem:(key,val)=>disk.set(key,val)};
+ const staleA=structuredClone(original),staleB=structuredClone(original);
+ const changed=mutateDemoPlaces(storage,staleA,latest=>latest.map(p=>p.id===1?{...p,name:'Doña Rosa Renovada'}:p));
+ assert.equal(changed.ok,true);
+ const menu=mutateDemoPlaces(storage,staleB,latest=>latest.map(p=>p.id===1?{...p,items:[...p.items,{id:12,name:'Refresco',price:25}]}:p));
+ assert.equal(menu.ok,true);
+ const saved=JSON.parse(disk.get('dv_places'));
+ assert.equal(saved[0].name,'Doña Rosa Renovada');
+ assert.deepEqual(saved[0].items.map(item=>item.name),['Baleada','Refresco']);
+ assert.deepEqual(saved[1],original[1],'el segundo negocio no se toca');
+});
+
+test('Estado de restaurante cambiado en otra pestaña se conserva al editar su catálogo',()=>{
+ const before=[{id:1,name:'Local',items:[{id:1,name:'Baleada',price:50}],isPaused:false}];
+ const disk=new Map([['dv_places',JSON.stringify(before)]]);
+ const storage={getItem:k=>disk.get(k)??null,setItem:(k,v)=>disk.set(k,v)};
+ assert.equal(mutateDemoPlaces(storage,before,places=>places.map(p=>({...p,isPaused:true}))).ok,true);
+ const menu=mutateDemoPlaces(storage,before,places=>places.map(p=>({...p,items:[{id:1,name:'Baleada',price:60}]})));
+ assert.equal(menu.ok,true);
+ const after=JSON.parse(disk.get('dv_places'))[0];
+ assert.equal(after.isPaused,true);
+ assert.equal(after.items[0].price,60);
+});
+
+test('Datos corruptos, cuotas llenas y productos inválidos bloquean guardado de restaurantes',()=>{
+ const original=[{id:1,name:'Restaurante',items:[{id:1,name:'Plato',price:75}]}];
+ let content=JSON.stringify(original),writes=0;
+ const storage={getItem:()=>content,setItem:(key,next)=>{writes++;content=next}};
+ assert.equal(mutateDemoPlaces(storage,original,()=>[{id:1,items:[null]}]).ok,false);
+ assert.equal(writes,0);
+ for(const malformed of ['{','{}','[null]','[{"id":2,"items":[null]}]']){
+  content=malformed;
+  assert.equal(mutateDemoPlaces(storage,original,p=>p).ok,false);
+  assert.equal(content,malformed);
+ }
+ assert.equal(writes,0);
+ const blocked={getItem:()=>JSON.stringify(original),setItem:()=>{throw Error('Quota')}};
+ assert.equal(mutateDemoPlaces(blocked,original,p=>p).ok,false);
+ assert.equal(mutateDemoPlaces(null,original,p=>p).ok,false);
+});
+
+test('Eventos de pestañas no admiten IDs de pedido repetidos',()=>{
+ const order={id:'DV-1',status:'Pendiente'};
+ assert.equal(decodeDemoStorageEvent({key:'dv_orders',newValue:JSON.stringify([order,{...order}])}),null);
+ assert.equal(decodeDemoStorageEvent({key:'dv_orders',newValue:JSON.stringify([{id:1,status:'Pendiente'},{id:'1',status:'Pendiente'}])}),null);
+ assert.ok(decodeDemoStorageEvent({key:'dv_orders',newValue:JSON.stringify([order])}));
 });

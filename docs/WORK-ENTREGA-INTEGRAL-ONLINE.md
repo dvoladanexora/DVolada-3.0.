@@ -203,3 +203,19 @@ Esta tanda mejora la **preparación del frontend** de Cliente y Restaurante/Caja
 - **Bloqueos no resueltos por esta tanda:** cuentas, permisos, precios y PIN en servidor, persistencia transaccional, sincronización multidispositivo, fotos reales, pagos, chat y notificaciones. No fusionar en `main` ni desplegar Cloudflare antes de aprobación expresa.
 
 **Meta del usuario:** dejar Cliente cercano al 98% y Restaurante/Caja cercano al 99% de preparación del frontend para Work. Estas cifras son **objetivos** y deben validarse con criterios de aceptación y pruebas visuales, nunca inferirse solo de los tests unitarios.
+
+
+## 11. Refuerzo de horarios nocturnos y relevos — 19/11/2026
+
+Esta etapa refuerza la demostración de Cliente, Restaurante y Caja sin agregar un servidor real.
+
+- El editor permite horarios que cruzan medianoche: jueves 18:00–01:30 significa abrir el jueves a las 18:00 y cerrar el viernes a la 01:30. Horas iguales se rechazan; no se admiten horas malformadas.
+- El cálculo compartido `withinBusinessHours` contempla el turno del día actual y la continuación del día anterior; esto se utiliza en la disponibilidad de Caja y en el checkout inmediato/programado de Cliente.
+- Se corrigió una diferencia peligrosa del catálogo del Cliente: el distintivo de restaurante ya no contradice la validación de checkout cuando hay pausa, cierre o un turno nocturno.
+- La ficha del Cliente indica cuándo el horario corresponde a un turno iniciado ayer y cuándo el restaurante cierra mañana.
+- Las notas de relevo guardadas en un navegador se normalizan al leerlas: registros dañados, de otros restaurantes o con fechas inválidas se descartan en lugar de provocar fallos de renderizado. Se conservan hasta 25 notas válidas por negocio.
+- Pruebas añadidas a `tests/online-integration.test.js`, `tests/restaurant-business.test.js` y `tests/restaurant-hardening.test.js` para horarios nocturnos, límites de minutos, estados pausado/cerrado y recuperación de relevos.
+- **Pendiente de Work:** horario y zona horaria aplicados por servidor, festivos y excepciones, notificaciones/órdenes multiusuario, aislamiento de datos con permisos reales y aceptación visual en dispositivos. La hora local del navegador no es una fuente autorizada de producción.
+- Se mantiene la prohibición de fusionar `main` o publicar el servicio sin validación y aprobación del usuario.
+
+**CI para este corte:** consultar la ejecución [#44592860064](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44592860064). No marcar como aprobada hasta que finalice.

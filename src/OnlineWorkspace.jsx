@@ -12,22 +12,24 @@ import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {Bell,BellRing,ChefHat,CheckCircle2,Clock,LogOut,Search,Settings2,Store,PauseCircle,PlayCircle,Package,MessageCircle,Printer,AlertTriangle,SlidersHorizontal,History,ChevronDown,ChevronUp,X,WifiOff,HelpCircle,Volume2,Eye,ArrowRight,CalendarClock,Pin,PinOff,Sun,Moon,Monitor,Wifi,LayoutDashboard,BarChart3,UtensilsCrossed,PanelLeft,Maximize2,Minimize2,Headphones,Menu,ShieldCheck} from 'lucide-react';
 import './online-workspace.css';
 const get=(k,d)=>{try{return JSON.parse(localStorage.getItem('dv_online_'+k))??d}catch{return d}};
+const savePreference=(k,v)=>{try{localStorage.setItem('dv_online_'+k,JSON.stringify(v));return true}catch{return false}};
 const dateOf=o=>{const d=new Date(o.createdAt||o.date||0);return Number.isNaN(+d)?null:d};
 const sameDay=d=>d&&d.toDateString()===new Date().toDateString();
 const minutes=d=>d?Math.max(0,Math.floor((Date.now()-d.getTime())/60000)):0;
 const defaults={accept:'manual',view:'comfortable',welcome:true,sort:'smart',capacity:10,capacityMode:'warn',status:'Abierto',sound:'once',volume:65,reminder:5,reminderSound:false,close:'guided',shift:'optional',mobileSwitch:false,prep:25,print:'manual',paperWidth:'80',handoff:'simple'};
 const peso=n=>'L '+Number(n||0).toLocaleString('es-HN',{minimumFractionDigits:2,maximumFractionDigits:2});
 export default function OnlineWorkspace({orders=[],places=[],restaurantId,onUpdate=()=>{},onCatalogChange=()=>false,onRestaurantChange=()=>false,onRestaurantStatusChange=()=>false,onLogout=()=>{}}){
- const [settings,setSettings]=useState(()=>({...defaults,...get('settings',{})}));
+ const prefId=String(restaurantId??places[0]?.id??'unselected');
+ const [settings,setSettings]=useState(()=>({...defaults,...get('settings_'+prefId,{})}));
  const [networkOnline,setNetworkOnline]=useState(()=>typeof navigator==='undefined'?true:navigator.onLine);
  const [serverState,setServerState]=useState('unconfigured');
  const [lastServerCheck,setLastServerCheck]=useState(null);
- const [screen,setScreen]=useState('inicio'),[mobile,setMobile]=useState('new'),[search,setSearch]=useState(''),[searchOpen,setSearchOpen]=useState(false),[detail,setDetail]=useState(null),[expanded,setExpanded]=useState({}),[notice,setNotice]=useState(''),[pauseUntil,setPauseUntil]=useState(()=>get('pauseUntil',null)),[modal,setModal]=useState(''),[handover,setHandover]=useState(''),[soundReady,setSoundReady]=useState(false),[now,setNow]=useState(Date.now()),[reordered,setReordered]=useState({});
+ const [screen,setScreen]=useState('inicio'),[mobile,setMobile]=useState('new'),[search,setSearch]=useState(''),[searchOpen,setSearchOpen]=useState(false),[detail,setDetail]=useState(null),[expanded,setExpanded]=useState({}),[notice,setNotice]=useState(''),[pauseUntil,setPauseUntil]=useState(()=>get('pauseUntil_'+prefId,null)),[modal,setModal]=useState(''),[handover,setHandover]=useState(''),[soundReady,setSoundReady]=useState(false),[now,setNow]=useState(Date.now()),[reordered,setReordered]=useState({});
  const [pinned,setPinned]=useState(()=>get('sidebarPinned',false));
  const [theme,setTheme]=useState(()=>get('workspaceTheme','auto'));
  const [kitchenFull,setKitchenFull]=useState(false);
  const [kitchenFilter,setKitchenFilter]=useState('all');
- const [kitchenAlertMinutes,setKitchenAlertMinutes]=useState(()=>get('kitchenAlertMinutes',20));
+ const [kitchenAlertMinutes,setKitchenAlertMinutes]=useState(()=>get('kitchenAlertMinutes_'+prefId,20));
  const [historyStatus,setHistoryStatus]=useState('all'),[historyRange,setHistoryRange]=useState('all');
  const [quickPanel,setQuickPanel]=useState('');
  const [shiftLog,setShiftLog]=useState(()=>get('shiftLog_'+String(restaurantId??places[0]?.id),[]));
@@ -36,8 +38,8 @@ export default function OnlineWorkspace({orders=[],places=[],restaurantId,onUpda
  const apiBase=(import.meta.env.VITE_DVOLADA_API_URL||'').trim().replace(/\/$/,'');
  useEffect(()=>{if(!apiBase){setServerState('unconfigured');return}if(!networkOnline){setServerState('offline');return}let cancelled=false;const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),6000);setServerState('checking');fetch(apiBase+'/health',{method:'GET',cache:'no-store',credentials:'include',signal:controller.signal}).then(async response=>{if(!response.ok)throw Error('Health HTTP '+response.status);const data=await response.json();if(data?.status!=='ok')throw Error('Health status invalid');if(!cancelled){setServerState('online');setLastServerCheck(Date.now())}}).catch(()=>{if(!cancelled)setServerState('unreachable')}).finally(()=>clearTimeout(timeout));return()=>{cancelled=true;clearTimeout(timeout);controller.abort()}},[apiBase,networkOnline,Math.floor(now/30000)]);
  useEffect(()=>{const online=()=>setNetworkOnline(true),offline=()=>setNetworkOnline(false);window.addEventListener('online',online);window.addEventListener('offline',offline);return()=>{window.removeEventListener('online',online);window.removeEventListener('offline',offline)}},[]);
- useEffect(()=>{localStorage.setItem('dv_online_sidebarPinned',JSON.stringify(pinned))},[pinned]);
- useEffect(()=>{localStorage.setItem('dv_online_workspaceTheme',JSON.stringify(theme))},[theme]);
+ useEffect(()=>{savePreference('sidebarPinned',pinned)},[pinned]);
+ useEffect(()=>{savePreference('workspaceTheme',theme)},[theme]);
  const business=places.find(p=>String(p.id)===String(restaurantId??places[0]?.id));
  const operatingStatus=restaurantStatus(business);
  const changeOperatingStatus=next=>{
@@ -61,9 +63,9 @@ export default function OnlineWorkspace({orders=[],places=[],restaurantId,onUpda
  const cancellationSeen=useRef(null);
  useEffect(()=>{const ids=new Set(list.filter(o=>['Cancelado','Cancelación solicitada'].includes(o.status)).map(o=>o.id+':'+o.status));if(cancellationSeen.current!==null){const fresh=[...ids].filter(id=>!cancellationSeen.current.has(id));if(fresh.length){setNotice('🔔 Atención: cancelación o solicitud de cancelación recibida');if(soundReady&&settings.sound!=='silent'){try{const c=audio.current;c.resume();[760,590,440].forEach((hz,i)=>{const osc=c.createOscillator(),g=c.createGain(),t=c.currentTime+i*.2;osc.type='triangle';osc.frequency.value=hz;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(settings.volume/100*.15,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+.17);osc.connect(g);g.connect(c.destination);osc.start(t);osc.stop(t+.18)})}catch{}}}}cancellationSeen.current=ids},[orders,soundReady,settings.sound,settings.volume]);
  const set=k=>v=>setSettings(s=>({...s,[k]:v}));
- useEffect(()=>{localStorage.setItem('dv_online_settings',JSON.stringify(settings))},[settings]);
- useEffect(()=>{localStorage.setItem('dv_online_pauseUntil',JSON.stringify(pauseUntil))},[pauseUntil]);
- useEffect(()=>{localStorage.setItem('dv_online_kitchenAlertMinutes',JSON.stringify(kitchenAlertMinutes))},[kitchenAlertMinutes]);
+ useEffect(()=>{if(!savePreference('settings_'+prefId,settings))setNotice('No se guardaron las preferencias del negocio. Revisá el espacio de almacenamiento.')},[settings,prefId]);
+ useEffect(()=>{savePreference('pauseUntil_'+prefId,pauseUntil)},[pauseUntil,prefId]);
+ useEffect(()=>{savePreference('kitchenAlertMinutes_'+prefId,kitchenAlertMinutes)},[kitchenAlertMinutes,prefId]);
  useEffect(()=>{const id=setInterval(()=>setNow(Date.now()),30000);return()=>clearInterval(id)},[]);
  const sound=(force=false)=>{try{
  if((!soundReady&&!force)||(settings.sound==='silent'&&!force)||!audio.current)return;

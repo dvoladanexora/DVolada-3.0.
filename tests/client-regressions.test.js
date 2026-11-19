@@ -339,3 +339,8 @@ test('Auditoría carrito: malformed prices show warnings instead of silently pas
  assert.match(warnings,/!Number\.isFinite\(Number\(line\.price\)\)/);
  assert.match(warnings,/precio actualizado o inválido/);
 });
+
+test('Auditoría persistencia: cart and orders recover from malformed storage',()=>{
+ assert.match(app,/Array\.isArray\(saved\)\?saved\.filter\(item=>item&&typeof item==='object'\):\[\]/);
+ assert.match(app,/Array\.isArray\(saved\)\?saved\.filter\(order=>order&&typeof order==='object'\):starterOrders/);
+});

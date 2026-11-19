@@ -5,6 +5,7 @@
 const CACHE='dvolada-shell-v9';
 const ROOT='/DVolada-3.0./';
 const SHELL=[ROOT,ROOT+'index.html',ROOT+'manifest.webmanifest',ROOT+'icon-clean-192.png',ROOT+'icon-clean-512.png'];
+const STATIC_PUBLIC=new Set(['logo.png','dvolada-logo-original.png','nexora-logo-original.png','dvolada-slide-white.svg','dvolada-d-symbol.svg','icon-clean-192.png','icon-clean-512.png','manifest.webmanifest'].map(path=>ROOT+path));
 const shellPath=pathname=>pathname===ROOT||pathname===ROOT+'index.html';
 const privatePath=pathname=>/\/(?:api|auth|admin|session)(?:\/|$)/i.test(pathname);
 self.addEventListener('install',event=>{
@@ -39,7 +40,7 @@ self.addEventListener('fetch',event=>{
  }
  // Recursos públicos inmutables: guarda JS/CSS y pequeños recursos del shell,
  // pero no peticiones a API ni endpoints que incluyan datos de usuarios.
- const cacheable=/\.(?:js|css|svg|png|webp|woff2|webmanifest)$/i.test(url.pathname);
+ const cacheable=STATIC_PUBLIC.has(url.pathname)||(url.pathname.startsWith(ROOT+'assets/')&&/\.(?:js|css|svg|woff2)$/i.test(url.pathname));
  if(!cacheable)return;
  event.respondWith(
   fetch(req).then(response=>{

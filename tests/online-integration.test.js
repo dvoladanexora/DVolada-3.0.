@@ -369,3 +369,18 @@ test('Carrito rechaza precios nulos, negativos, infinitos o con más de dos deci
  const maxBase={...a,items:[{...a.items[0],price:10000,extras:['Queso extra']}]};
  assert.equal(validateCartCatalog([{...first,price:10010}],[maxBase]),null);
 });
+
+test('Horarios incompletos o inválidos no se interpretan como restaurante abierto',()=>{
+ const time=new Date('2026-11-19T12:30:00');
+ const wrongHours=[
+  {4:{open:'25:00',close:'27:00'}},
+  {4:{open:'12:30',close:'11:30'}},
+  {4:{open:'08:00',close:'08:00'}},
+  {4:{open:'no',close:'18:00'}},
+  {5:{open:'08:00',close:'18:00'}},
+ ];
+ for(const hours of wrongHours){
+  assert.equal(withinBusinessHours({...a,hours},time),false,JSON.stringify(hours));
+ }
+ assert.equal(restaurantOrderBlockReason({...a,hours:null},{at:time}),null);
+});

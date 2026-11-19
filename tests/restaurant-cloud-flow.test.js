@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {kitchenQueues,elapsedMinutes,kitchenTicketHtml,belongsToRestaurant,openKitchenTicket} from '../src/kitchen-operations.js';
+import {kitchenQueues,elapsedMinutes,kitchenTicketHtml,belongsToRestaurant,openKitchenTicket,canMoveRestaurantOrder,matchesRestaurantOrder} from '../src/kitchen-operations.js';
 
 const order=(id,status,placeId='r1',options={})=>({
  id,orderNo:'#DV-'+id,kind:'food',placeId,status,delivery:'delivery',name:'Cliente',
@@ -76,4 +76,34 @@ test('Separación de pantallas y estados en el panel Online',()=>{
  assert.ok(kitchen.includes('Comanda'));
  assert.ok(kitchen.includes('Las nuevas solicitudes'));
  assert.ok(kitchen.includes('se requiere la conexión segura del servidor'));
+});
+
+test('Caja y Cocina rechazan transiciones fuera de su área',()=>{
+ assert.equal(canMoveRestaurantOrder('Pendiente','Aceptado','cashier'),true);
+ assert.equal(canMoveRestaurantOrder('Pendiente','Rechazado','cashier'),true);
+ assert.equal(canMoveRestaurantOrder('Pendiente','Preparando','kitchen'),false);
+ assert.equal(canMoveRestaurantOrder('Aceptado','Preparando','kitchen'),true);
+ assert.equal(canMoveRestaurantOrder('Preparando','Listo','kitchen'),true);
+ assert.equal(canMoveRestaurantOrder('Aceptado','Listo','kitchen'),false);
+ assert.equal(canMoveRestaurantOrder('Listo','Entregado','kitchen'),false);
+ assert.equal(canMoveRestaurantOrder('Cancelado','Preparando','kitchen'),false);
+ assert.equal(canMoveRestaurantOrder('Aceptado','Aceptado','cashier'),false);
+});
+test('Buscador de Caja y Cocina encuentra número, nombre y productos',()=>{
+ const sample=order('abc','Pendiente','r1',{name:'María Pérez',items:[{name:'Pollo con tajadas',instructions:'Sin cebolla'}]});
+ for(const query of ['DV-abc','maría','TAJADAS','cebolla',''])assert.equal(matchesRestaurantOrder(sample,query),true,query);
+ assert.equal(matchesRestaurantOrder(sample,'hamburguesa'),false);
+});
+test('El buscador global filtra visualmente ambas pantallas y la capacidad informa',()=>{
+ const workspace=readFileSync(new URL('../src/OnlineWorkspace.jsx',import.meta.url),'utf8');
+ const cashier=readFileSync(new URL('../src/RestaurantCashierConsole.jsx',import.meta.url),'utf8');
+ const kds=readFileSync(new URL('../src/RestaurantKitchenDisplay.jsx',import.meta.url),'utf8');
+ assert.ok(workspace.includes('query={search} capacity={settings.capacity}'));
+ assert.ok(workspace.includes('connected={networkOnline} query={search} onChange={update}'));
+ assert.ok(cashier.includes('matchesRestaurantOrder(order,query)'));
+ assert.ok(cashier.includes('atCapacity'));
+ assert.ok(kds.includes('matchesRestaurantOrder(order,query)'));
+ assert.ok(workspace.includes('canMoveRestaurantOrder(currentOrder.status,status,area)'));
+ assert.ok(workspace.includes('Activar sonido de pedidos'));
+ assert.ok(workspace.includes('Avisos sonoros activos'));
 });

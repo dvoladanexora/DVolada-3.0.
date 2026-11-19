@@ -60,3 +60,23 @@ export function splitRestaurantCart(cart,places,serviceFee=0,deliveryFee=0){
  });
 }
 export const cartCheckoutTotal=groups=>moneyFromCents((Array.isArray(groups)?groups:[]).reduce((sum,group)=>sum+cents(group.total),0));
+
+
+/** Identidad de línea por restaurante + producto (los IDs del menú no son globales).
+ * Un mismo número de producto puede existir en dos restaurantes diferentes.
+ */
+export const sameCartLine=(line,itemId,placeId)=>Boolean(
+ line&&String(line.id)===String(itemId)&&String(line.placeId)===String(placeId)
+);
+export function changeCartQuantity(cart,itemId,placeId,delta){
+ if(!Array.isArray(cart)||!Number.isInteger(delta)||delta===0)return Array.isArray(cart)?cart:[];
+ return cart.map(line=>{
+  if(!sameCartLine(line,itemId,placeId))return line;
+  const quantity=Number(line.qty);
+  return {...line,qty:Math.min(99,(Number.isInteger(quantity)?quantity:1)+delta)};
+ }).filter(line=>Number(line?.qty)>0);
+}
+export function changeCartInstruction(cart,itemId,placeId,value){
+ if(!Array.isArray(cart))return [];
+ return cart.map(line=>sameCartLine(line,itemId,placeId)?{...line,instructions:String(value??'').slice(0,200)}:line);
+}

@@ -255,3 +255,26 @@ Esta etapa refuerza la demostración de Cliente, Restaurante y Caja sin agregar 
 - Revisar tamaño de otras dependencias e imágenes, migrar el servidor de demo a API autenticada, aplicar cuotas, reconciliación y seguridad del lado servidor.
 - **No asumir que 98%/99% están certificados**; son metas de preparación frontend y requieren aceptación funcional y visual.
 - No fusionar a `main`, ni activar publicación de Cloudflare o pagos reales sin autorización expresa.
+
+
+## 13. Persistencia segura de demo y recuperación de catálogo — 19/11/2026
+
+**Pruebas verificadas:** [GitHub Actions #44613519622](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44613519622): **137/137 aprobadas**, 0 fallos, 0 omitidas, verificación de servidor preliminar y compilación Vite exitosa.
+
+### Cliente, Caja y Repartidor
+- `persistDemoOrders` en `src/order-demo-operations.js` centraliza el guardado previo de órdenes de demostración (`dv_orders`), con validación mínima, máximo 500 registros y límite de 3.5 MB compatible con la recepción de eventos entre pestañas.
+- Si el navegador niega acceso o no tiene espacio, la operación devuelve error; **no se muestra aceptación, cancelación ni recogida como exitosa** si la orden no quedó persistida.
+- Integración realizada en `placeOrder`, `confirmCancelOrder`, `updateOrder` (Caja/Cocina) y `handleCourierAction`. Conserva las referencias de estado y carrito hasta que haya escritura válida.
+- Test añadido para cuota agotada, ausencia de storage, array inválido, registro excesivo y límites; otro test comprueba el orden guardado → actualización de interfaz.
+
+### Recuperación de datos entre pestañas
+- `validStoredRestaurants` valida objetos de restaurante y productos antes de usar `dv_places` del localStorage, previniendo fallos de renderizado con productos `null`, identificadores ausentes, nombres inválidos o importes no numéricos.
+- `decodeDemoStorageEvent` rechaza actualizaciones dañadas de `dv_places` y `dv_orders`; se conservan los registros legítimos.
+- Pruebas cubren datos locales heredados y eventos entre pestañas válidos e inválidos.
+
+### Restricciones importantes para Work
+- **No equivale a sincronización real.** `localStorage` no ofrece transacciones para cambios concurrentes entre dispositivos; varias pestañas pueden pisarse si escriben al mismo tiempo. La API real debe incorporar versión del pedido, autorización por restaurante, idempotencia, límites, persistencia transaccional y reconciliación.
+- Las órdenes de prueba no deben contener datos de pacientes/clientes reales ni convertirse en ventas sin implementar el servidor y controles de privacidad y pagos.
+- Revisar aceptación visual en Android, iOS y PC, restablecimiento tras almacenamiento lleno y varios pedidos simultáneos.
+- Mantener PR #74 como borrador. **Sin cambios en main ni despliegue Cloudflare** hasta aprobar integraciones reales.
+- Las metas **Cliente 98% y Restaurante/Caja 99%** siguen siendo objetivos de preparación de frontend; no porcentajes validados de producto comercial.

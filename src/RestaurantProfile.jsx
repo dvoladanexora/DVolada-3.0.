@@ -6,7 +6,7 @@ export default function RestaurantProfile({place,reviews=[],favorite=false,onFav
  useEffect(()=>{if(!infoOpen)return;const onKey=e=>{if(e.key==='Escape')setInfoOpen(false)};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[infoOpen]);
  if(!place)return null;
  const normalizeQuery=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es').trim();const menu=Array.isArray(place.items)?place.items.filter(x=>x&&typeof x==='object'):[];const categories=[...new Set(menu.map(x=>x.category).filter(Boolean))];const entries=menu.filter(x=>(activeCategory==='Todas'||x.category===activeCategory)&&normalizeQuery(x.name+' '+(x.category||'')).includes(normalizeQuery(query)));
- const feedback=reviews.filter(r=>r.placeName===place.name),avg=feedback.length?(feedback.reduce((s,r)=>s+Number(r.stars||0),0)/feedback.length).toFixed(1):null;
+ const feedback=reviews.filter(r=>r?.placeId!=null?String(r.placeId)===String(place.id):r?.placeName===place.name),avg=feedback.length?(feedback.reduce((s,r)=>s+Number(r.stars||0),0)/feedback.length).toFixed(1):null;
  const address=place.address||place.location||null;const verified=place.verified===true;
  return <article className="dv-restaurant-profile">
   <div className="dv-rp-cover"><img src={place.coverImage||place.image} alt={'Imagen de '+place.name}/><button className="dv-rp-back" onClick={onBack}><ArrowLeft size={19}/> Restaurantes</button><span className="dv-rp-demo">Perfil de demostración</span></div>

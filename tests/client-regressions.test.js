@@ -646,3 +646,15 @@ test('Persistencia: malformed cart, order and catalog rows with missing IDs are 
  assert.ok(app.includes("cleanItemList(p.items).filter(i=>hasStableId(i.id))"));
  assert.ok(app.includes("const count=cart.reduce((s,i)=>s+Math.max(0,Number(i.qty)||0),0)"));
 });
+
+
+test('Cabecera: clicking the search icon can close the open search instead of reopening it',()=>{
+ assert.ok(app.includes("!e.target.closest('.dv-search-toggle')"));
+ assert.ok(!app.includes("!e.target.closest('.dv-header-search-toggle')"));
+});
+
+test('Carrito: opening the drawer locks background scrolling like the other overlays',()=>{
+ const lock=app.slice(app.indexOf("const isOpen=Boolean(foodChoice"),app.indexOf("const activeFlashPromos")>0?app.indexOf("const activeFlashPromos"):app.indexOf("const notify="));
+ assert.ok(app.includes("exitPrompt||cartDrawer"));
+ assert.ok(app.includes("exitPrompt,cartDrawer]"));
+});

@@ -79,3 +79,34 @@ export function persistDemoOrders(storage,nextOrders){
   return {ok:false,reason:'No se pudo guardar el pedido de prueba en este dispositivo. Revisá el espacio disponible; los cambios no se aplicaron.'};
  }
 }
+
+
+/** Relee la última versión compartida de la demo ANTES de mutar.
+ * Mitiga las escrituras a partir de estado React desactualizado y las pérdidas
+ * secuenciales entre pestañas. NO es una transacción entre navegadores:
+ * localStorage no ofrece compare-and-swap ni exclusión mutua entre pestañas.
+ * En producción reemplazar por API con transacciones e idempotencia.
+ */
+export function mutateDemoOrders(storage,fallbackOrders,change){
+ if(typeof storage?.getItem!=='function'||typeof storage?.setItem!=='function')
+  return {ok:false,reason:'El almacenamiento local no está disponible.'};
+ let latest;
+ try{
+  const raw=storage.getItem('dv_orders');
+  latest=raw===null?(Array.isArray(fallbackOrders)?fallbackOrders:[]):JSON.parse(raw);
+ }catch{
+  return {ok:false,reason:'Los pedidos locales no se pudieron leer. No se modificó ninguna orden.'};
+ }
+ if(!Array.isArray(latest)||latest.length>500||
+  !latest.every(row=>row&&typeof row==='object'&&!Array.isArray(row)
+    &&row.id!=null&&typeof row.status==='string'))
+  return {ok:false,reason:'Los pedidos guardados están dañados o exceden el límite. No se modificó ninguna orden.'};
+ let result;
+ try{result=change(latest)}catch{
+  return {ok:false,reason:'No se pudo completar la operación de prueba. No se guardaron cambios.'};
+ }
+ if(!result||result.ok!==true)return result?.ok===false?result:{ok:false,reason:'La operación no devolvió un resultado válido.'};
+ const saved=persistDemoOrders(storage,result.orders);
+ if(!saved.ok)return saved;
+ return result;
+}

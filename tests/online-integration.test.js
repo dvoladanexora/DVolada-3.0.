@@ -457,3 +457,14 @@ test('El catálogo del Cliente usa la misma regla que Caja y checkout para pausa
  assert.match(restaurantOrderBlockReason(withRestaurantStatus(place,'Pausado'),{at:now}),/pausa/);
  assert.match(restaurantOrderBlockReason(withRestaurantStatus(place,'Cerrado'),{at:now}),/cerrado/);
 });
+
+test('Tarjetas de restaurantes distinguen pausa, cierre y fuera de horario',()=>{
+ const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(app.includes("availabilityLabel=status==='Pausado'?'En pausa'"));
+ assert.ok(app.includes("'Fuera de horario';const cheapest="));
+ assert.ok(app.includes("restaurantStatus(activePlace)==='Pausado'?'En pausa'"));
+ const open={...a,hours:null};
+ const paused=withRestaurantStatus(open,'Pausado');
+ assert.equal(restaurantStatus(paused),'Pausado');
+ assert.equal(restaurantOrderBlockReason(paused), 'El restaurante '+open.name+' está en pausa y no recibe pedidos nuevos.');
+});

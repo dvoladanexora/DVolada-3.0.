@@ -15,7 +15,7 @@ export default function SoundPreferences({soundEnabled,onSoundChange,onPreview,o
   const prevFocus=document.activeElement,prev=document.body.style.overflow;document.body.style.overflow='hidden';closeRef.current?.focus();
   const key=e=>{if(e.key==='Escape'){e.preventDefault();onClose()}if(e.key==='Tab'){const controls=dialogRef.current?.querySelectorAll('button:not([disabled]),input:not([disabled])');if(!controls?.length)return;const first=controls[0],last=controls[controls.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}};
   document.addEventListener('keydown',key);return()=>{document.body.style.overflow=prev;document.removeEventListener('keydown',key);prevFocus?.focus?.()};
- },[onClose]);
+ },[]);
  const notify=async()=>{try{const result=await onRequestPermission();setMessage(result==='granted'?'Permiso concedido. Los avisos con la app cerrada requieren nuestro futuro servidor.':result==='denied'?'El navegador bloqueó este permiso. Podés cambiarlo en la configuración del sitio.':result==='unsupported'?'Este navegador no admite este permiso desde aquí.':'El permiso no fue concedido.')}catch{setMessage('No se pudo solicitar el permiso. Probá desde la configuración del navegador.')}};
  return <div className="dv-sound-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
   <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="dv-sound-title" className="dv-sound-dialog">

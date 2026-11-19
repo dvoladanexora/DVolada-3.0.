@@ -169,3 +169,10 @@ test('Caja muestra programados en lotes, permite ver más y respeta búsqueda',(
  assert.ok(ui.includes('setScheduledLimit(10);setFutureLimit(5)'));
  assert.ok(ui.includes('onActivate(order)'),'activación de programados debe conservarse');
 });
+
+test('Caja identifica cada botón de impresión con el número del pedido',()=>{
+ const cashier=readFileSync(new URL('../src/RestaurantCashierConsole.jsx',import.meta.url),'utf8');
+ assert.ok(cashier.includes('aria-label={"Imprimir comanda de "+number(o)}'));
+ assert.equal(cashier.split('aria-label={"Imprimir comanda de "+number(o)}').length-1,3);
+ assert.ok(cashier.includes('title="Imprimir comanda"'));
+});

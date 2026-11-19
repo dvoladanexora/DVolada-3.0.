@@ -5,6 +5,7 @@ import {execFileSync} from 'node:child_process';
 
 const sw=readFileSync(new URL('../public/sw.js',import.meta.url),'utf8');
 const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+const swVersioner=readFileSync(new URL('../scripts/version-service-worker.mjs',import.meta.url),'utf8');
 
 test('service worker compila como JavaScript',()=>{
  execFileSync(process.execPath,['--check',new URL('../public/sw.js',import.meta.url).pathname]);
@@ -33,4 +34,11 @@ test('no confirma pedidos ni mandados sin conexión',()=>{
  assert.match(app,/function placeOrder\(\)\{if\(isOffline\)/);
  assert.match(app,/function sendMandado\(\)\{if\(isOffline\)/);
  assert.match(app,/disabled=\{isOffline\|\|/);
+});
+
+
+test('build versions the shell cache that the service worker actually uses',()=>{
+ assert.match(sw,/const SHELL='dvolada-shell-/);
+ assert.match(swVersioner,/const SHELL='dvolada-shell-/);
+ assert.doesNotMatch(swVersioner,/const CACHE='dvolada-shell-/);
 });

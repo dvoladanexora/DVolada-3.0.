@@ -3,7 +3,7 @@ import {AlertCircle,ArrowLeft,ArrowRight,Bike,Check,CheckCheck,ChevronRight,Cloc
 import CourierMap from './CourierMap.jsx';
 import CourierGpsArrival from './CourierGpsArrival.jsx';
 import CourierAcceptDialog from './CourierAcceptDialog.jsx';
-import {DEMO_RIDERS,MAX_ACTIVE_DELIVERIES,courierQueues,courierPublicOrder,courierOrderCoords,courierRestaurantCoords,riderKey,riderIssueKey,buildCourierIssue,pinAttemptKey,sanitizePinAttempts,incrementPinAttempt,courierNextTask} from './courier-workflow.js';
+import {DEMO_RIDERS,MAX_ACTIVE_DELIVERIES,courierQueues,courierPublicOrder,courierOrderCoords,courierRestaurantCoords,riderKey,riderIssueKey,buildCourierIssue,pinAttemptKey,sanitizePinAttempts,incrementPinAttempt,courierNextTask,COURIER_INCIDENT_CATEGORIES} from './courier-workflow.js';
 import './courier-online.css';
 
 const isOnline=()=>typeof navigator==='undefined'||navigator.onLine!==false;
@@ -57,8 +57,10 @@ function OfferCard({order,place,canTake,onAccept,onDecline}){
  </article>;
 }
 function IncidentForm({order,onSave,onClose}){
- const [message,setMessage]=useState(''),[error,setError]=useState('');
- return <form className="dv-rider-incident" onSubmit={e=>{e.preventDefault();try{onSave(order,message);onClose()}catch(ex){setError(ex.message)}}}>
+ const [message,setMessage]=useState(''),[category,setCategory]=useState('Otro'),[error,setError]=useState('');
+ return <form className="dv-rider-incident" onSubmit={e=>{e.preventDefault();try{onSave(order,message,category);onClose()}catch(ex){setError(ex.message)}}}>
+  <label htmlFor={'dv-incident-category-'+order.id}>Tipo de problema</label>
+  <select id={'dv-incident-category-'+order.id} value={category} onChange={e=>setCategory(e.target.value)}>{COURIER_INCIDENT_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
   <label htmlFor={'dv-incident-'+order.id}>¿Qué inconveniente encontraste?</label>
   <textarea id={'dv-incident-'+order.id} value={message} maxLength={300} onChange={e=>{setMessage(e.target.value);setError('')}} rows={3} placeholder="Ej. No puedo localizar al cliente, tuve una avería…"/>
   <small>{message.length}/300 · Esta nota se guarda localmente; no se envía al restaurante.</small>
@@ -154,8 +156,8 @@ export default function CourierOnlineDashboard({orders=[],places=[],courierId='d
   if(action==='accept')setTab('active');
   return result;
  };
- const recordIssue=(order,note)=>{
-  const item=buildCourierIssue(order,courierId,note),next=[item,...issues].slice(0,30);
+ const recordIssue=(order,note,category)=>{
+  const item=buildCourierIssue(order,courierId,note,new Date(),category),next=[item,...issues].slice(0,30);
   if(!persist(riderIssueKey(courierId),next))throw Error('El dispositivo no pudo guardar la nota.');
   setIssues(next);alert('Incidencia guardada SOLO en este dispositivo; no se envió al negocio.');
  };
@@ -199,7 +201,7 @@ export default function CourierOnlineDashboard({orders=[],places=[],courierId='d
   </>}
   {tab==='history'&&<><div className="dv-rider-section-top"><div><span className="dv-rider-eyebrow">TU ACTIVIDAD</span><h2>Historial de entregas</h2><p>Registro local de tus entregas de demostración. No incluye ingresos, comisiones ni pagos inventados.</p></div></div>
    <div className="dv-rider-history">{history.length?history.map(o=><article key={o.id}><span className="dv-rider-history-icon"><CheckCheck size={20}/></span><div><strong>{o.orderNo||o.id} · {o.placeName||'Restaurante'}</strong><small>{stamp(o)}</small></div><span className="dv-rider-history-state">{visibleStatus[o.status]||o.status}</span></article>):<div className="dv-rider-empty"><History size={34}/><h3>Sin entregas anteriores</h3><p>Aquí se guardarán las órdenes finalizadas de esta identidad de prueba.</p></div>}</div>
-   {issues.length>0&&<div className="dv-rider-issue-history"><h3><AlertCircle size={17}/> Notas locales de incidencias</h3>{issues.slice(0,5).map(i=><div key={i.id}><strong>Orden {i.orderId}</strong><p>{i.note}</p><small>{i.status}</small></div>)}</div>}
+   {issues.length>0&&<div className="dv-rider-issue-history"><h3><AlertCircle size={17}/> Notas locales de incidencias</h3>{issues.slice(0,5).map(i=><div key={i.id}><strong>Orden {i.orderId} · {i.category||'Otro'}</strong><p>{i.note}</p><small>{i.status}</small></div>)}</div>}
   </>}
   {pendingAccept!==null&&<CourierAcceptDialog order={chosenOffer||null} place={chosenOffer?placeOf(chosenOffer):null} slots={data.slotsRemaining} canAccept={online&&network&&data.slotsRemaining>0} onClose={()=>setPendingAccept(null)} onConfirm={()=>{if(!chosenOffer){alert('La oferta ya no está disponible.');return}const result=run(chosenOffer,'accept');if(result?.ok)setPendingAccept(null)}}/>}
  </section>;

@@ -6,12 +6,29 @@ const idLists=new Set(['dv_orders','dv_places','dv_cart']);
  * No sustituye la validación del catálogo ni la autorización del servidor.
  */
 export function validStoredRestaurants(rows){
- return Array.isArray(rows)&&rows.every(place=>place&&typeof place==='object'&&!Array.isArray(place)
-  &&place.id!==null&&place.id!==undefined&&Array.isArray(place.items)
-  &&place.items.every(item=>item&&typeof item==='object'&&!Array.isArray(item)
-   &&item.id!==null&&item.id!==undefined&&typeof item.name==='string'
-   &&typeof item.price!=='object'&&item.price!==null&&item.price!==undefined
-   &&Number.isFinite(Number(item.price))));
+ if(!Array.isArray(rows)||rows.length>500)return false;
+ const businessIds=new Set();
+ return rows.every(place=>{
+  if(!place||typeof place!=='object'||Array.isArray(place)
+   ||!['number','string'].includes(typeof place.id)||!String(place.id).trim()
+   ||typeof place.name!=='string'||!place.name.trim()||!Array.isArray(place.items)
+   ||place.items.length>150)return false;
+  const businessId=String(place.id);
+  if(businessIds.has(businessId))return false;
+  businessIds.add(businessId);
+  const productIds=new Set();
+  return place.items.every(item=>{
+   if(!item||typeof item!=='object'||Array.isArray(item)
+    ||!['number','string'].includes(typeof item.id)||!String(item.id).trim()
+    ||typeof item.name!=='string'||!item.name.trim()
+    ||item.price===null||item.price===undefined||item.price===''
+    ||!Number.isFinite(Number(item.price)))return false;
+   const id=String(item.id);
+   if(productIds.has(id))return false;
+   productIds.add(id);
+   return true;
+  });
+ });
 }
 /** Rechaza IDs repetidos o filas dañadas: la UI y las transiciones buscan por ID. */
 export function validStoredOrders(rows){

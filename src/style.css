@@ -1356,3 +1356,8 @@ body:has(.modal-backdrop) .mobile-nav.dv-compact-nav{visibility:hidden!important
 .dv-more-delete-local{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:43px;margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--muted);font-size:12px;font-weight:800}
 .dv-more-delete-local:hover{color:var(--ink);border-color:var(--accent)}
 .dv-more-delete-local:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+/* Fase 2: rutas diferidas. El usuario ve un estado accesible al abrir un módulo secundario. */
+.dv-feature-loading{max-width:780px;margin:22px auto;padding:18px 22px;border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--muted);text-align:center;font-size:14px;line-height:1.5;font-weight:700}
+@media(max-width:760px){.dv-feature-loading{margin:14px 12px;padding:18px 12px}}
+@media(prefers-reduced-motion:reduce){.dv-feature-loading{animation:none;transition:none}}

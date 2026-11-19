@@ -444,3 +444,16 @@ test('Turno de sábado a domingo conserva el cierre del domingo y no abre días 
  assert.equal(withinBusinessHours(place,new Date('2026-11-22T02:00:00')),false);
  assert.equal(withinBusinessHours(place,new Date('2026-11-22T21:00:00')),false);
 });
+
+test('El catálogo del Cliente usa la misma regla que Caja y checkout para pausa y turnos nocturnos',()=>{
+ const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(app.includes("const dvIsOpen=p=>restaurantStatus(p)==='Abierto'?withinBusinessHours(p):false"));
+ assert.ok(app.includes('turno iniciado ayer'));
+ const schedule={4:{open:'18:00',close:'01:30'}};
+ const place={...a,hours:schedule};
+ const now=new Date('2026-11-20T00:30:00');
+ assert.equal(withinBusinessHours(place,now),true);
+ assert.equal(restaurantOrderBlockReason(place,{at:now}),null);
+ assert.match(restaurantOrderBlockReason(withRestaurantStatus(place,'Pausado'),{at:now}),/pausa/);
+ assert.match(restaurantOrderBlockReason(withRestaurantStatus(place,'Cerrado'),{at:now}),/cerrado/);
+});

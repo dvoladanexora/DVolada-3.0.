@@ -88,7 +88,8 @@ export default function OnlineWorkspace({orders=[],places=[],restaurantId,onUpda
  if(screen!==areaScreen){setNotice('Esta acción pertenece al área '+(area==='cashier'?'Caja/Recepción':'Cocina')+'.');return}
  if(status==='Pendiente'&&scheduledOrderState(currentOrder,now)!=='due'){setNotice('Este pedido todavía no está listo para activarse.');return}
  if(!canMoveRestaurantOrder(currentOrder.status,status,area)){setNotice('El cambio de estado no corresponde a esta etapa.');return}
- onUpdate(currentOrder.id,status);
+ const response=onUpdate(currentOrder.id,status,{},currentOrder.status,area,business?.id);
+ if(!response?.ok){setNotice(response?.reason||'No se pudo actualizar el pedido.');return}
  setNotice('Estado actualizado en esta demostración local: '+(currentOrder.orderNo||currentOrder.id)+' → '+status);
  setDetail(null)
 };
@@ -96,7 +97,8 @@ export default function OnlineWorkspace({orders=[],places=[],restaurantId,onUpda
   if(screen!=='inicio'){setNotice('Las decisiones de Caja solo se confirman en Recepción.');setDecision(null);return}
   if(!decision||!decisionOrder||!allowedDecision(decisionOrder,decision.action)){setNotice('La orden cambió; revisá su estado actual.');setDecision(null);return}
   if(!networkOnline){setNotice('No se pueden confirmar decisiones sin conexión.');return}
-  onUpdate(decisionOrder.id,status,metadata);
+  const response=onUpdate(decisionOrder.id,status,metadata,decisionOrder.status,'cashier',business?.id);
+  if(!response?.ok){setNotice(response?.reason||'No se pudo registrar la decisión.');setDecision(null);return}
   setNotice('Decisión registrada en esta demostración local para '+(decisionOrder.orderNo||decisionOrder.id));
   setDecision(null);setDetail(null);
  };

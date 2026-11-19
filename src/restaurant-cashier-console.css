@@ -58,3 +58,9 @@
 /* La capacidad informa, pero no promete bloquear pedidos sin servidor. */
 .dv-cash-capacity{display:flex;gap:11px;align-items:flex-start;padding:13px 15px;border-radius:14px;border:1px solid color-mix(in srgb,#d89e45 48%,var(--ow-line,var(--line)));background:color-mix(in srgb,#eda34a 12%,var(--ow-card,var(--surface)));font-size:12px;line-height:1.55;font-weight:700}
 .dv-cash-capacity svg{flex-shrink:0;color:#c67c29}
+
+
+@supports not (background:color-mix(in srgb,#fff,#000)){
+ .dv-cash-hero,.dv-cash-order,.dv-cash-overview>div,.dv-cash-pending,.dv-cash-production{background:var(--ow-card,var(--surface))}
+ .dv-cash-capacity{background:var(--ow-bg,var(--soft))}
+}

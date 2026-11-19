@@ -64,3 +64,9 @@
 
 
 .dv-kitchen-filter-notice{margin:0;padding:10px 13px;border-radius:12px;background:var(--ow-card,var(--surface));border:1px solid var(--ow-line,var(--line));color:var(--ow-sub,var(--muted));font-size:12px}
+
+
+@supports not (background:color-mix(in srgb,#fff,#000)){
+ .dv-kitchen-overview,.dv-kitchen-lane,.dv-kitchen-order{background:var(--ow-card,var(--surface))}
+ .dv-kitchen-order-note,.dv-kitchen-timer,.dv-kitchen-service{background:var(--ow-bg,var(--soft))}
+}

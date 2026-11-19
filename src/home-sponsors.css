@@ -1,0 +1,22 @@
+/* Inventario publicitario suave, sin superposiciones ni pop-ups. */
+.dv-sponsor-slot{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:22px;padding:18px 20px;background:color-mix(in srgb,var(--surface) 92%,var(--accent) 8%);color:var(--ink);overflow:hidden}
+.dv-sponsor-head{display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--muted);font-weight:750;font-size:10px;letter-spacing:.09em}
+.dv-sponsor-head span{display:inline-flex;align-items:center;gap:7px}
+.dv-sponsor-head small{font-size:10px;letter-spacing:normal}
+.dv-sponsor-content{display:flex;justify-content:space-between;align-items:center;gap:20px;min-height:85px}
+.dv-sponsor-content strong{font-size:clamp(16px,2vw,20px);display:block;margin:10px 0 3px}
+.dv-sponsor-content p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+.dv-sponsor-content button{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:10px 13px;border-radius:13px;background:var(--surface);border:1px solid var(--line);color:var(--ink);font-weight:700;cursor:pointer}
+.dv-sponsor-content button:hover{border-color:var(--accent)}
+.dv-sponsor-controls{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:4px}
+.dv-sponsor-controls>button{width:30px;height:30px;display:grid;place-items:center;border:0;border-radius:999px;background:transparent;color:var(--muted);cursor:pointer}
+.dv-sponsor-controls>button:hover{background:var(--surface);color:var(--ink)}
+.dv-sponsor-dots{display:flex;gap:6px;align-items:center}
+.dv-sponsor-dots button{width:7px;height:7px;border-radius:999px;background:var(--muted);opacity:.4;border:0;padding:0;cursor:pointer}
+.dv-sponsor-dots button.selected{width:19px;background:var(--accent);opacity:1}
+.dv-sponsor-compact{padding:13px 16px}
+.dv-sponsor-compact .dv-sponsor-content{min-height:58px}
+.dv-sponsor-compact .dv-sponsor-content strong{font-size:15px;margin:7px 0 2px}
+.dv-sponsor-compact .dv-sponsor-content p{font-size:12px}
+.dv-sponsor-compact .dv-sponsor-content button{font-size:12px}
+@media(max-width:600px){.dv-sponsor-slot{padding:14px}.dv-sponsor-content{gap:10px;align-items:flex-start;flex-direction:column}.dv-sponsor-content button{align-self:flex-start}.dv-sponsor-compact .dv-sponsor-content{min-height:0}.dv-sponsor-head{font-size:9px}}

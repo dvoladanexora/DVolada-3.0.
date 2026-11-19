@@ -92,3 +92,25 @@
 .dv-flash-dialog .dv-flash-premium-hero{isolation:auto!important}
 .dv-flash-dialog .dv-flash-logo-dark{mix-blend-mode:screen!important}
 .dv-flash-dialog .dv-flash-logo-light{mix-blend-mode:multiply!important}
+
+/* Dvolada Club — review 2/3: scoped responsive dashboard */
+.dv32 .gx-club{min-width:0;max-width:100%;box-sizing:border-box}
+.dv32 .gx-club .gx-heading h1{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;letter-spacing:-.045em;font-size:clamp(28px,5vw,44px);line-height:1.13}
+.dv32 .gx-club .gx-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(10px,2vw,18px)}
+.dv32 .gx-club .gx-stats article{min-width:0;padding:clamp(15px,2.5vw,24px);border-radius:20px;background:var(--surface);color:var(--ink);border:1px solid var(--line);box-shadow:0 8px 24px #00000008}
+.dv32 .gx-club .gx-stats article svg{color:var(--accent)}
+.dv32 .gx-club .gx-stats article strong{font-family:'Plus Jakarta Sans',sans-serif;font-size:clamp(26px,4vw,40px);font-weight:800;line-height:1.1}
+.dv32 .gx-club .gx-stats article span{color:var(--muted);overflow-wrap:anywhere;line-height:1.4}
+.dv32 .gx-club .gx-card{min-width:0;border:1px solid var(--line);border-radius:20px;padding:clamp(18px,3vw,28px);background:var(--surface);color:var(--ink)}
+.dv32 .gx-club .gx-card h2{font-family:'Plus Jakarta Sans',sans-serif;font-weight:750;font-size:clamp(20px,3vw,25px);letter-spacing:-.03em}
+.dv32 .gx-club .gx-primary,.dv32 .gx-club .gx-outline{min-height:46px;border-radius:13px;justify-content:center}
+.dv32 .gx-club .gx-primary{background:var(--accent);color:#fff}
+.dv32 .gx-club .gx-outline{background:var(--bg);color:var(--ink);border:1px solid var(--line)}
+.dv32 .gx-club .gx-coupon{min-width:0;display:flex;flex-wrap:wrap;gap:10px;border:1px dashed var(--line);background:var(--bg);color:var(--ink);border-radius:14px;overflow-wrap:anywhere}
+.dv32 .gx-club .gx-coupon span{margin-left:auto;color:var(--muted)}
+.dv32 .gx-club button:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+[data-theme="dark"] .dv32 .gx-club .gx-stats article,[data-theme="dark"] .dv32 .gx-club .gx-card{background:var(--surface);color:var(--ink);border-color:var(--line)}
+[data-theme="dark"] .dv32 .gx-club .gx-coupon{background:var(--bg);border-color:var(--line)}
+@media(max-width:720px){.dv32 .gx-club .gx-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.dv32 .gx-club .gx-stats article:last-child{grid-column:1/-1}}
+@media(max-width:420px){.dv32 .gx-club .gx-stats{grid-template-columns:minmax(0,1fr)}.dv32 .gx-club .gx-stats article:last-child{grid-column:auto}.dv32 .gx-club .gx-card{padding:18px 15px}.dv32 .gx-club .gx-primary,.dv32 .gx-club .gx-outline{width:100%}.dv32 .gx-club .gx-coupon span{margin-left:0;width:100%}}
+@media(prefers-reduced-motion:reduce){.dv32 .gx-club button{transition:none!important}}

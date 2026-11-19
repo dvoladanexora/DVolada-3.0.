@@ -6,6 +6,7 @@ import {execFileSync} from 'node:child_process';
 const sw=readFileSync(new URL('../public/sw.js',import.meta.url),'utf8');
 const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 const swVersioner=readFileSync(new URL('../scripts/version-service-worker.mjs',import.meta.url),'utf8');
+const manifest=JSON.parse(readFileSync(new URL('../public/manifest.webmanifest',import.meta.url),'utf8'));
 
 test('service worker compila como JavaScript',()=>{
  execFileSync(process.execPath,['--check',new URL('../public/sw.js',import.meta.url).pathname]);
@@ -41,4 +42,10 @@ test('build versions the shell cache that the service worker actually uses',()=>
  assert.match(sw,/const SHELL='dvolada-shell-/);
  assert.match(swVersioner,/const SHELL='dvolada-shell-/);
  assert.doesNotMatch(swVersioner,/const CACHE='dvolada-shell-/);
+});
+
+
+test('PWA can rotate instead of forcing portrait on tablets and installed desktop-like devices',()=>{
+ assert.equal(manifest.orientation,'any');
+ assert.equal(manifest.display,'standalone');
 });

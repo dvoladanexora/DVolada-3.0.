@@ -13,6 +13,20 @@ export function validStoredRestaurants(rows){
    &&typeof item.price!=='object'&&item.price!==null&&item.price!==undefined
    &&Number.isFinite(Number(item.price))));
 }
+/** Rechaza IDs repetidos o filas dañadas: la UI y las transiciones buscan por ID. */
+export function validStoredOrders(rows){
+ if(!Array.isArray(rows)||rows.length>500)return false;
+ const ids=new Set();
+ return rows.every(row=>{
+  if(!row||typeof row!=='object'||Array.isArray(row)
+    ||row.id==null||!['number','string'].includes(typeof row.id)
+    ||typeof row.status!=='string'||!row.status.trim()||row.status.length>60)return false;
+  const id=String(row.id);
+  if(!id.trim()||id.length>150||ids.has(id))return false;
+  ids.add(id);
+  return true;
+ });
+}
 export function safeReadStored(storage,key,fallback){
  try{
   const raw=storage?.getItem?.(key);
@@ -23,7 +37,7 @@ export function safeReadStored(storage,key,fallback){
    if(!Array.isArray(value))return fallback;
    if(idLists.has(key)&&!value.every(row=>row&&typeof row==='object'&&!Array.isArray(row)&&row.id!==null&&row.id!==undefined))
     return fallback;
-   if(key==='dv_orders'&&!value.every(row=>typeof row.status==='string'))return fallback;
+   if(key==='dv_orders'&&!validStoredOrders(value))return fallback;
    if(key==='dv_places'&&!validStoredRestaurants(value))return fallback;
    return value;
   }

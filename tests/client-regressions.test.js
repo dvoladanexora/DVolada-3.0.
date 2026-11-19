@@ -85,3 +85,12 @@ test('Mis pedidos: filter includes intermediate delivery statuses',()=>{
 test('Mis pedidos: searches order identifiers and products without accent sensitivity',()=>{
  assert.equal((app.match(/normalizeFoodSearch\(historyQuery\)/g)||[]).length,2);
 });
+
+const customerStyles=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
+test('Mis pedidos: small-screen, dark-theme and keyboard safeguards',()=>{
+ assert.match(customerStyles,/\.dv32 \.dv-orders-tabs button:focus-visible/);
+ assert.match(customerStyles,/\.dv32 \.dv-chat-panel select/);
+ assert.match(customerStyles,/\[data-theme="dark"\] \.dv32 \.dv-orders-tabs button.active/);
+ assert.match(customerStyles,/@media\(max-width:420px\)/);
+ assert.match(customerStyles,/\.dv32 \.dv-history-actions\{display:grid;grid-template-columns:1fr\}/);
+});

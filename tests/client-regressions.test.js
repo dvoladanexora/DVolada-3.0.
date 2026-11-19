@@ -304,3 +304,15 @@ test('Más opciones: appearance controls have dark and keyboard styling',()=>{
  assert.match(moreStyles,/\.dv-more-sheet button:focus-visible/);
  assert.match(moreStyles,/@media\(prefers-reduced-motion:reduce\)\{\.dv-more-sheet/);
 });
+
+test('Auditoría cliente: route permissions are applied before writing browser history',()=>{
+ const navigate=app.slice(app.indexOf('const navigate=p=>'),app.indexOf('function addItem(',app.indexOf('const navigate=p=>')));
+ assert.ok(navigate.indexOf("if(guestMode&&")>=0);
+ assert.ok(navigate.indexOf("if(['business','partner-plus','partner-hub'].includes(p)&&!affiliateSession)")>=0);
+ assert.ok(navigate.indexOf('window.history.pushState')>navigate.indexOf("if(['partner-plus','partner-hub'].includes(p))"));
+});
+test('Auditoría cliente: checkout requires a useful delivery address',()=>{
+ assert.match(app,/delivery==='delivery'&&address\.trim\(\)\.length<8/);
+ assert.match(app,/const catalogProblem=checkCartCatalog\(\)/);
+ assert.match(app,/if\(isOffline\)\{notify\('Sin conexión: el pedido no puede confirmarse/);
+});

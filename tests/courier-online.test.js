@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {
  MAX_ACTIVE_DELIVERIES,DEMO_RIDERS,courierQueues,isCourierOffer,isRiderOwner,
  validateCourierAction,applyCourierAction,courierPublicOrder,courierOrderCoords,
- courierRestaurantCoords,buildCourierIssue,cleanCourierIssue,riderKey,courierViewOrders,courierViewOrder,sanitizePinAttempts,incrementPinAttempt,pinAttemptKey
+ courierRestaurantCoords,buildCourierIssue,cleanCourierIssue,riderKey,courierViewOrders,courierViewOrder,sanitizePinAttempts,incrementPinAttempt,pinAttemptKey,courierNextTask,COURIER_INCIDENT_CATEGORIES
 } from '../src/courier-workflow.js';
 
 const now=new Date('2026-11-19T09:00:00.000Z');
@@ -229,4 +229,65 @@ test('Dos toques de aceptar usan un estado adelantado inmediatamente y no anunci
  assert.ok(block.includes('courierOrdersRef.current??orders'));
  assert.ok(block.includes('courierOrdersRef.current=result.orders'));
  assert.ok(!block.includes('setOrders(previous=>'));
+});
+
+test('Dos toques al mismo pedido no producen dos aceptaciones ni dos cupos ocupados',()=>{
+ const initial=[order('A'),order('B'),order('C')];
+ const first=applyCourierAction(initial,'A','accept',riderA,{online:true},now);
+ assert.equal(first.ok,true);
+ const repeat=applyCourierAction(first.orders,'A','accept',riderA,{online:true},now);
+ assert.equal(repeat.ok,false);
+ const other=applyCourierAction(first.orders,'A','accept',riderB,{online:true},now);
+ assert.equal(other.ok,false);
+ const second=applyCourierAction(first.orders,'B','accept',riderA,{online:true},now);
+ assert.equal(second.ok,true);
+ const blocked=applyCourierAction(second.orders,'C','accept',riderA,{online:true},now);
+ assert.equal(blocked.ok,false);
+ assert.equal(courierQueues(second.orders,riderA).active.length,2);
+});
+test('Resumen de siguiente paso prioriza entregar antes de ir a recoger otro pedido',()=>{
+ const rows=[order('recoger','Listo',{courierAccepted:true,courierId:riderA}),
+             order('entregar','En ubicación',{courierAccepted:true,courierId:riderA})];
+ const next=courierNextTask(rows,riderA);
+ assert.equal(next.orderId,'entregar');
+ assert.equal(next.next,'Solicitar PIN y finalizar entrega');
+ assert.equal(courierNextTask([],riderA),null);
+ assert.equal(courierNextTask(rows,riderB),null);
+});
+test('Incidencias se categorizan y siguen sin afirmar notificación remota',()=>{
+ const categories=COURIER_INCIDENT_CATEGORIES;
+ for(const category of ['No encuentro al cliente','Problema con la dirección','Pedido incorrecto o dañado','Avería o accidente','Otro'])assert.ok(categories.includes(category));
+ const owned=applyCourierAction([order('A')],'A','accept',riderA,{online:true},now).order;
+ const issue=buildCourierIssue(owned,riderA,'No encuentro la dirección correcta',now,'Problema con la dirección');
+ assert.equal(issue.category,'Problema con la dirección');
+ assert.match(issue.status,/sin enviar/);
+ assert.throws(()=>buildCourierIssue(owned,riderA,'Descripción detallada',now,'Pago confirmado'),/categoría/);
+ const ui=readFileSync(new URL('../src/CourierOnlineDashboard.jsx',import.meta.url),'utf8');
+ assert.ok(ui.includes('Tipo de problema'));
+ assert.ok(ui.includes('COURIER_INCIDENT_CATEGORIES.map'));
+});
+test('Al reingresar con entregas activas el panel prioriza Mis entregas',()=>{
+ const ui=readFileSync(new URL('../src/CourierOnlineDashboard.jsx',import.meta.url),'utf8');
+ assert.ok(ui.includes("courierQueues(orders,courierId).active.length?'active':'offers'"));
+ assert.ok(ui.includes('const nextTask=courierNextTask(orders,courierId)'));
+ assert.ok(ui.includes('SIGUIENTE PASO'));
+ assert.ok(ui.includes("setTab('active')"));
+ assert.ok(ui.includes('persistedRiderRef.current!==courierId'));
+});
+test('El GPS de llegada requiere activación y descarta posiciones viejas',()=>{
+ const gps=readFileSync(new URL('../src/CourierGpsArrival.jsx',import.meta.url),'utf8');
+ assert.ok(gps.includes("const [enabled,setEnabled]=useState(false)"));
+ assert.ok(gps.includes('if(!enabled||!target)return'));
+ assert.ok(gps.includes('Detener GPS'));
+ assert.ok(gps.includes('Activar GPS para verificar'));
+ assert.ok(gps.includes('tick-fix.timestamp<30000'));
+ assert.ok(gps.includes('navigator.geolocation.clearWatch(watch)'));
+});
+test('Diálogo de aceptación conserva foco entre renders y puede cerrarse con Escape',()=>{
+ const dialog=readFileSync(new URL('../src/CourierAcceptDialog.jsx',import.meta.url),'utf8');
+ assert.ok(dialog.includes('closeRef.current=onClose'));
+ assert.ok(dialog.includes("e.key==='Escape'"));
+ assert.ok(dialog.includes('role="dialog"'));
+ assert.ok(dialog.includes('aria-modal="true"'));
+ assert.ok(dialog.includes("},[]);"));
 });

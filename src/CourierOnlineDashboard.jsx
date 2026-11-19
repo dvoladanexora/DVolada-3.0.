@@ -8,6 +8,7 @@ import './courier-online.css';
 const isOnline=()=>typeof navigator==='undefined'||navigator.onLine!==false;
 const read=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))??fallback}catch{return fallback}};
 const persist=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));return true}catch{return false}};
+const readRiderIssues=id=>{const value=read(riderIssueKey(id),[]);return Array.isArray(value)?value.filter(i=>i&&typeof i==='object'&&i.courierId===id).slice(0,30):[]};
 const visibleStatus={
  'Aceptado':'Aceptado en el restaurante',
  'Preparando':'Lo están preparando',
@@ -21,7 +22,7 @@ const visibleStatus={
  'Rechazado':'Rechazado',
 };
 const stamp=o=>{const value=o.courierAssignedAt||o.createdAt||o.date;const date=new Date(value||0);return Number.isNaN(date.getTime())?'Sin hora':date.toLocaleString('es-HN',{dateStyle:'short',timeStyle:'short'})};
-const safeTel=n=>{const raw=String(n||'').trim();return /^\+?[0-9\s\-()]{8,20}$/.test(raw)&&raw.replace(/\D/g,'').length>=8?raw.replace(/[^+\d]/g,''):null};
+const safeTel=n=>{const raw=String(n||'').trim(),digits=raw.replace(/\D/g,'');return /^\+?[0-9\s\-()]{8,25}$/.test(raw)&&digits.length>=8&&digits.length<=15?raw.replace(/[^+\d]/g,''):null};
 const mapUrl=(address,coords)=>{
  const destination=coords?coords.lat+','+coords.lng:String(address||'').trim();
  return destination?'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(destination):null;
@@ -31,7 +32,8 @@ const riderName=id=>DEMO_RIDERS.find(r=>r.id===id)?.name||'Repartidor de prueba'
 
 function Progress({status}){
  const states=['Aceptado','Listo','Recogido','En camino','En ubicación','Entregado'];
- const stage=states.indexOf(status),checked=stage>=0;
+ const normalized=status==='Preparando'||status==='Cancelación solicitada'?'Aceptado':status;
+ const stage=states.indexOf(normalized),checked=stage>=0;
  return <div className="dv-rider-progress" aria-label={'Estado actual: '+(visibleStatus[status]||status)}>
   {['Aceptado','Listo','Recogido','En camino','Entregado'].map((s,i)=>{
    const step=states.indexOf(s);
@@ -64,7 +66,7 @@ function IncidentForm({order,onSave,onClose}){
  </form>;
 }
 function ActiveCard({order,place,onAction,onIssue,onNotify,onPinError,failedPinAttempts=0}){
- const [pin,setPin]=useState(''),[showMap,setShowMap]=useState(false),[showArrival,setShowArrival]=useState(false),[showIncident,setShowIncident]=useState(false),[revealCustomer,setRevealCustomer]=useState(false);
+ const [pin,setPin]=useState(''),[showMap,setShowMap]=useState(false),[showArrival,setShowArrival]=useState(false),[showIncident,setShowIncident]=useState(false);
  const customerCoords=courierOrderCoords(order),restaurantCoords=courierRestaurantCoords(place);
  const restaurantLink=mapUrl(place?.address||place?.name,restaurantCoords);
  const customerLink=mapUrl(order.address,customerCoords),restaurantPhone=safeTel(place?.phone),customerPhone=safeTel(order.phone);
@@ -90,7 +92,7 @@ function ActiveCard({order,place,onAction,onIssue,onNotify,onPinError,failedPinA
   {order.status==='Recogido'&&<button type="button" className="dv-rider-next" onClick={()=>onAction(order,'route')}><Route size={19}/> Iniciar recorrido <ArrowRight size={17}/></button>}
   {order.status==='En camino'&&<div className="dv-rider-arrival">
    <button type="button" className="dv-rider-next" onClick={()=>setShowArrival(v=>!v)}><MapPin size={18}/> {showArrival?'Cerrar comprobación GPS':'Confirmar llegada al destino'} <ChevronRight size={17}/></button>
-   {showArrival&&(customerCoords?<CourierGpsArrival order={order} onArrive={()=>{onAction(order,'arrive',{gpsVerified:true});setShowArrival(false)}}/>:<div className="dv-rider-gps-warning"><AlertCircle size={17}/> Este pedido no tiene coordenadas verificadas. Para las pruebas podés simular la llegada; con clientes reales se requiere confirmar la dirección y el método de llegada.</div>)}
+   {showArrival&&(customerCoords?<CourierGpsArrival order={order} onArrive={()=>{const result=onAction(order,'arrive',{gpsVerified:true});if(result?.ok)setShowArrival(false)}}/>:<div className="dv-rider-gps-warning"><AlertCircle size={17}/> Este pedido no tiene coordenadas verificadas. Para las pruebas podés simular la llegada; con clientes reales se requiere confirmar la dirección y el método de llegada.</div>)}
    {import.meta.env.DEV&&<button type="button" className="dv-rider-demo-sim" onClick={()=>onAction(order,'arrive',{demoSimulation:true})}>Simular llegada · SOLO DEMO LOCAL</button>}
   </div>}
   {order.status==='En ubicación'&&<div className="dv-rider-pin"><div><ShieldCheck size={19}/><strong>Confirmación de entrega</strong></div><p>Pedile al cliente su PIN de seis dígitos. El sistema no te lo muestra.</p>
@@ -106,12 +108,12 @@ function ActiveCard({order,place,onAction,onIssue,onNotify,onPinError,failedPinA
 }
 
 export default function CourierOnlineDashboard({orders=[],places=[],courierId='demo-rider-1',onAction=()=>({ok:false}),onSeed=()=>{},onLogout=()=>{}}){
- const [tab,setTab]=useState('offers'),[online,setOnline]=useState(()=>read(riderKey(courierId),false)),[query,setQuery]=useState('');
- const [message,setMessage]=useState(''),[issues,setIssues]=useState(()=>read(riderIssueKey(courierId),[]));
+ const [tab,setTab]=useState('offers'),[online,setOnline]=useState(()=>read(riderKey(courierId),false)===true),[query,setQuery]=useState('');
+ const [message,setMessage]=useState(''),[issues,setIssues]=useState(()=>readRiderIssues(courierId));
  const [pinFailures,setPinFailures]=useState({}),[audioEnabled,setAudioEnabled]=useState(false);
  const audioRef=useRef(null),lastOffers=useRef(null),messageRef=useRef(null);
  const [network,setNetwork]=useState(isOnline);
- useEffect(()=>{setOnline(read(riderKey(courierId),false));setIssues(read(riderIssueKey(courierId),[]));setTab('offers');setPinFailures({});lastOffers.current=null},[courierId]);
+ useEffect(()=>{setOnline(read(riderKey(courierId),false)===true);setIssues(readRiderIssues(courierId));setTab('offers');setPinFailures({});lastOffers.current=null},[courierId]);
  useEffect(()=>{if(!persist(riderKey(courierId),online))setMessage('No se pudo guardar la disponibilidad en este navegador.')},[online,courierId]);
  useEffect(()=>{const changed=()=>setNetwork(isOnline());window.addEventListener('online',changed);window.addEventListener('offline',changed);return()=>{window.removeEventListener('online',changed);window.removeEventListener('offline',changed)}},[]);
  const data=useMemo(()=>courierQueues(orders,courierId),[orders,courierId]);

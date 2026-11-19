@@ -226,3 +226,32 @@ Esta etapa refuerza la demostración de Cliente, Restaurante y Caja sin agregar 
 - Se añadió una prueba específica de esta diferencia en el catálogo.
 - **Última validación: 129/129 pruebas aprobadas, cero fallos, cero omitidas y compilación Vite correcta**, [GitHub Actions #44593179149](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44593179149).
 - Avisos técnicos no bloqueantes para Work: chunk de JS grande en Vite y avisos de deprecación de dependencias de GitHub Actions / `punycode`. Priorizar comprobación de rendimiento de iPhone antiguo y actualización responsable de herramientas.
+
+
+## 12. Optimización de inicio, Cliente y Caja — 19/11/2026
+
+**Último CI verificado:** [GitHub Actions #44609596145](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44609596145): **133/133 pruebas de nueve suites aprobadas**, 0 fallos, 0 omitidas, validación de servidor preliminar y compilación Vite correctas.
+
+### Peso y carga de la aplicación
+- Antes: JS inicial **538.52 kB**, CSS inicial **347.22 kB** (medidas sin comprimir del build previo).
+- Después: JS inicial **412.92 kB** (119.64 kB gzip), CSS inicial **271.38 kB** (48.44 kB gzip).
+- Los paneles internos usan `React.lazy` y `React.Suspense`: Restaurante/Caja, login de restaurante y Repartidor se cargan al abrirse. En el build aparecen chunks separados `AffiliateOnline` (~89.79 kB JS y ~73.46 kB CSS) y `CourierOnlineDashboard` (~36.43 kB JS y ~2.89 kB CSS).
+- Resultado: aproximadamente **23% menos JS inicial** y **22% menos CSS inicial**. Esto no acredita la velocidad en iPhone 6S; medir en dispositivos reales, con red lenta y caché vacía.
+
+### Compra y pedidos programados
+- `SlideConfirm` utiliza la etiqueta específica del pedido inmediato/programado y muestra el monto informado. Nunca debe mostrar éxito si `onConfirm` no devuelve `true`.
+- La tecla de flecha mueve el control sin enviar el pedido. Enter/Espacio siguen disponibles como alternativa accesible para confirmar; no sustituye la validación del pedido.
+- Work debe comprobar pérdida de conexión, doble toque, prevención de pedidos repetidos y respuestas lentas en teléfonos reales.
+
+### Restaurante/Caja y fotografía
+- Bandeja de Caja: muestra hasta 20 pendientes por lote, con carga de 20 más, preservando filtros y búsqueda; evita renderizar cientos de tarjetas de una sola vez. Distingue lista vacía de búsqueda sin resultados.
+- Editor del menú: invalida el resultado de una fotografía si se cerró el formulario o cambió el producto durante el procesamiento. El resultado tardío no reabre el editor ni contamina otro producto.
+- Pruebas específicas agregadas en `tests/online-integration.test.js` y `tests/restaurant-menu.test.js`.
+
+### Pendientes de aceptación por Work
+- Medir primer render, interacción y memoria en iPhone 6S, Android y PC, con caché vacía y conectividad intermitente.
+- Probar carga diferida de restaurante/repartidor (incluido error de descarga), y que no aparezca una página en blanco.
+- Confirmación de pedido programado e inmediato por deslizamiento y teclado; error de cuota local; estados de Caja al recibir 100+ órdenes; fotografías JPG/PNG/WebP.
+- Revisar tamaño de otras dependencias e imágenes, migrar el servidor de demo a API autenticada, aplicar cuotas, reconciliación y seguridad del lado servidor.
+- **No asumir que 98%/99% están certificados**; son metas de preparación frontend y requieren aceptación funcional y visual.
+- No fusionar a `main`, ni activar publicación de Cloudflare o pagos reales sin autorización expresa.

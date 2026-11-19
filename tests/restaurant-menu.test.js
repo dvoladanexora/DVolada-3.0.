@@ -82,7 +82,8 @@ test('editor Cloud incluye CRUD, fotos, filtros, alertas y notas sobre modo loca
  assert.ok(wrapper.includes('onCatalogChange={onCatalogChange}'));
  assert.ok(main.includes('onCatalogChange={saveRestaurantMenu}'));
  assert.ok(main.includes('mutateDemoPlaces(localStorage,places,latest=>'));
- assert.ok(main.includes('content.length>3200000'));
+ const bridge=readFileSync(new URL('../src/restaurant-demo-bridge.js',import.meta.url),'utf8');
+ assert.ok(bridge.includes('content.length>3_200_000'));
 });
 
 test('Editor descarta subidas tardías al cancelar, cambiar de producto o reabrir',()=>{

@@ -127,3 +127,13 @@ test('Mandados: responsive panels and dark theme are scoped',()=>{
  assert.match(customerStyles,/\.dv-groceries-page \.add-grid\{grid-template-columns:minmax\(0,1fr\)/);
  assert.match(customerStyles,/\[data-theme="dark"\] \.dv-groceries-page \.surface/);
 });
+
+test('Favoritos: stale saved entries do not suppress empty-state guidance',()=>{
+ assert.match(app,/customerCatalog\.some\(x=>customerWishlist\.includes\(String\(x\.place\.id\)/);
+ assert.match(app,/places\.some\(p=>favorites\.includes\(p\.id\)\)/);
+ assert.match(app,/No hay comidas habituales disponibles en el catálogo actual/);
+});
+test('Favoritos: removal uses normalized product keys and an accessible label',()=>{
+ assert.match(app,/aria-label=\{'Quitar '\+x\.item\.name\+' de comidas favoritas'\}/);
+ assert.match(app,/v\.filter\(k=>k!==String\(x\.place\.id\)\+'-'\+String\(x\.item\.id\)\)/);
+});

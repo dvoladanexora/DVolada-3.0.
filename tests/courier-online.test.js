@@ -155,8 +155,9 @@ test('Accesibilidad y controles de tamaño móvil siguen presentes',()=>{
 
 test('El seeder de reparto genera números distintos y limita exceso de pedidos ficticios',()=>{
  const src=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
- assert.ok(src.includes("const count=orders.filter(o=>o.demo"));
- assert.ok(src.includes("if(count>=8)"));
+ assert.ok(src.includes("const active=latest.filter(o=>o.demo"));
+ assert.ok(src.includes("if(active>=8)"));
+ assert.ok(src.includes('mutateDemoOrders(localStorage,courierOrdersRef.current??orders,latest=>'));
  assert.ok(src.includes("orderNo:prefix+'-1'"));
  assert.ok(src.includes("orderNo:prefix+'-2'"));
  assert.ok(src.includes("createdAt,acceptedAt:createdAt,readyAt:createdAt"));

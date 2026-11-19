@@ -6,7 +6,7 @@ import {runInNewContext} from 'node:vm';
 import {offeredExtrasFor,validateCartCatalog,splitRestaurantCart,cartCheckoutTotal,sameCartLine,changeCartQuantity,changeCartInstruction} from '../src/customer-order-rules.js';
 import {canMoveRestaurantOrder,kitchenQueues,scheduledOrderState} from '../src/kitchen-operations.js';
 import {applyOrderStatus,decisionForOrder} from '../src/restaurant-order-flow.js';
-import {cancelDemoOrder,changeDemoRestaurantOrder,persistDemoOrders} from '../src/order-demo-operations.js';
+import {cancelDemoOrder,changeDemoRestaurantOrder,persistDemoOrders,mutateDemoOrders} from '../src/order-demo-operations.js';
 import {safeReadStored,validStoredRestaurants} from '../src/browser-storage.js';
 import {courierQueues,applyCourierAction,courierViewOrder,validateCourierAction} from '../src/courier-workflow.js';
 
@@ -261,8 +261,8 @@ test('Rechazo y revisión de cancelación requieren motivo y etapa válida',()=>
 test('Cliente, Caja y Cocina muestran conflicto en lugar de falso éxito',()=>{
  const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
  const restaurant=readFileSync(new URL('../src/OnlineWorkspace.jsx',import.meta.url),'utf8');
- assert.ok(main.includes('cancelDemoOrder(current,cancelOrder.id,reason)'));
- assert.ok(main.includes('changeDemoRestaurantOrder(current,{orderId:id,restaurantId,expectedStatus,toStatus:status,area,metadata})'));
+ assert.ok(main.includes('cancelDemoOrder(latest,cancelOrder.id,reason)'));
+ assert.ok(main.includes('changeDemoRestaurantOrder(latest,{orderId:id,restaurantId,expectedStatus,toStatus:status,area,metadata})'));
  assert.ok(restaurant.includes('if(!response?.ok)'));
  assert.ok(restaurant.includes('currentOrder.status,area,business?.id'));
  assert.ok(restaurant.includes("decisionOrder.status,'cashier',business?.id"));
@@ -412,8 +412,9 @@ test('Checkout preserva carrito si falla el guardado local; valida horario con r
  const checkout=app.slice(start,end);
  assert.ok(checkout.includes('withinBusinessHours(p,d)===false'));
  assert.ok(checkout.includes('courierOrdersRef.current=savedOrders'));
- assert.ok(checkout.includes('persistDemoOrders(localStorage,savedOrders)'));
- assert.ok(checkout.indexOf('persistDemoOrders(localStorage,savedOrders)')<checkout.indexOf('setCart([])'));
+ assert.ok(checkout.includes('mutateDemoOrders(localStorage,courierOrdersRef.current??orders,latest=>'));
+ assert.ok(checkout.indexOf('mutateDemoOrders(localStorage,')<checkout.indexOf('setCart([])'));
+ assert.ok(checkout.includes('checkoutCommittedRef.current=true'));
  assert.ok(checkout.includes('tu carrito sigue intacto'));
  const persistence=app.slice(app.indexOf(' const previous=persisted.current,next='),app.indexOf(' persisted.current=next;'));
  assert.ok(persistence.includes('next[key]=serialized}'));
@@ -523,13 +524,13 @@ test('Caja, cliente y repartidor persisten antes de notificar un estado completa
  const cancel=app.slice(app.indexOf('function confirmCancelOrder()'),app.indexOf('function saveRestaurantProfile(',app.indexOf('function confirmCancelOrder()')));
  const courier=app.slice(app.indexOf('function handleCourierAction('),app.indexOf('function repeatOrder(',app.indexOf('function handleCourierAction(')));
  for(const source of [cashier,cancel,courier]){
-  assert.ok(source.includes('persistDemoOrders(localStorage,'),'debe persistir antes de modificar UI');
-  const write=source.indexOf('persistDemoOrders(localStorage,');
+  assert.ok(source.includes('mutateDemoOrders(localStorage,'),'debe usar la versión actual antes de modificar UI');
+  const write=source.indexOf('mutateDemoOrders(localStorage,');
   assert.ok(write<source.indexOf('courierOrdersRef.current='));
-  assert.ok(source.includes('if(!saved.ok)'),'debe detenerse si el almacenamiento falla');
+  assert.ok(/if\(!(?:result|outcome)\.ok\)/.test(source),'debe detenerse si falla el guardado');
  }
- assert.ok(cashier.includes('if(!saved.ok)return saved;'));
- assert.ok(courier.includes('if(!saved.ok)return saved;'));
+ assert.ok(cashier.includes('if(!outcome.ok)return {ok:false,reason:outcome.reason};'));
+ assert.ok(courier.includes('if(!result.ok)return {ok:false,reason:result.reason};'));
 });
 
 test('Catálogo heredado corrupto no rompe la pantalla de Cliente ni los menús',()=>{
@@ -550,4 +551,84 @@ test('Catálogo heredado corrupto no rompe la pantalla de Cliente ni los menús'
  assert.equal(validStoredRestaurants(accepted),true);
  assert.deepEqual(safeReadStored(get(accepted),'dv_places',fallback),accepted);
  assert.equal(validStoredRestaurants([]),true);
+});
+
+test('Dos pestañas secuenciales conservan cambios independientes al releer el último lote',()=>{
+ const map=new Map();
+ const disk={getItem:key=>map.has(key)?map.get(key):null,setItem:(key,val)=>map.set(key,val)};
+ const original=[
+  {id:'A',kind:'food',placeId:1,status:'Pendiente'},
+  {id:'B',kind:'food',placeId:1,status:'Pendiente'},
+ ];
+ assert.equal(persistDemoOrders(disk,original).ok,true);
+ const staleTabA=structuredClone(original),staleTabB=structuredClone(original);
+ const first=mutateDemoOrders(disk,staleTabB,latest=>changeDemoRestaurantOrder(latest,{
+  orderId:'A',restaurantId:1,expectedStatus:'Pendiente',toStatus:'Aceptado',area:'cashier'
+ }));
+ assert.equal(first.ok,true);
+ const second=mutateDemoOrders(disk,staleTabA,latest=>changeDemoRestaurantOrder(latest,{
+  orderId:'B',restaurantId:1,expectedStatus:'Pendiente',toStatus:'Aceptado',area:'cashier'
+ }));
+ assert.equal(second.ok,true);
+ assert.deepEqual(JSON.parse(map.get('dv_orders')).map(o=>o.status),['Aceptado','Aceptado']);
+ assert.equal(second.orders[0].status,'Aceptado','no se pierde el cambio previo de otra pestaña');
+});
+
+test('Caja y repartidor rechazan tarjetas antiguas tras actualización de otra pestaña',()=>{
+ const disk=new Map([['dv_orders',JSON.stringify([{id:'A',kind:'food',placeId:1,status:'Pendiente'}])]]);
+ const storage={getItem:k=>disk.get(k)??null,setItem:(k,v)=>disk.set(k,v)};
+ const stale=JSON.parse(disk.get('dv_orders'));
+ const first=mutateDemoOrders(storage,stale,latest=>changeDemoRestaurantOrder(latest,{
+  orderId:'A',restaurantId:1,expectedStatus:'Pendiente',toStatus:'Aceptado',area:'cashier'
+ }));
+ assert.equal(first.ok,true);
+ const afterFirst=disk.get('dv_orders');
+ const duplicate=mutateDemoOrders(storage,stale,latest=>changeDemoRestaurantOrder(latest,{
+  orderId:'A',restaurantId:1,expectedStatus:'Pendiente',toStatus:'Aceptado',area:'cashier'
+ }));
+ assert.equal(duplicate.ok,false);
+ assert.match(duplicate.reason,/cambió/);
+ assert.equal(disk.get('dv_orders'),afterFirst,'un intento con estado antiguo no sobrescribe datos');
+});
+
+test('Lectura corrupta, cuotas agotadas y excepciones no permiten mutaciones parciales',()=>{
+ let writes=0;const disk=new Map();
+ const storage={getItem:key=>disk.get(key)??null,setItem:(key,value)=>{writes++;disk.set(key,value)}};
+ const seed=[{id:'A',status:'Pendiente',kind:'food'}];
+ const malformed=['{','{}','[null]','[{"id":"A"}]'];
+ for(const value of malformed){
+  disk.set('dv_orders',value);
+  const result=mutateDemoOrders(storage,seed,()=>({ok:true,orders:[]}));
+  assert.equal(result.ok,false);
+  assert.equal(disk.get('dv_orders'),value,'una lectura inválida no puede sobrescribir almacenamiento');
+ }
+ assert.equal(writes,0);
+ disk.delete('dv_orders');
+ assert.equal(mutateDemoOrders(storage,seed,()=>{throw Error('Fallo inesperado')}).ok,false);
+ assert.equal(mutateDemoOrders(storage,seed,()=>({ok:false,reason:'Rechazado'})).ok,false);
+ assert.equal(writes,0);
+ const blocked={getItem:()=>JSON.stringify(seed),setItem(){throw Error('QuotaExceededError')}};
+ assert.equal(mutateDemoOrders(blocked,seed,latest=>({ok:true,orders:latest})).ok,false);
+ assert.equal(mutateDemoOrders(null,seed,()=>({ok:true,orders:seed})).ok,false);
+});
+
+test('Checkout bloquea una segunda confirmación sin cerrar ni volver a abrir la compra',()=>{
+ const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ const checkout=app.slice(app.indexOf('function placeOrder(){'),app.indexOf('function sendMandado(){'));
+ assert.ok(checkout.includes('if(checkoutCommittedRef.current)'));
+ assert.ok(checkout.indexOf('checkoutCommittedRef.current=true')<checkout.indexOf('setCart([])'));
+ assert.ok(app.includes('function openCustomerCheckout(){checkoutCommittedRef.current=false;'));
+});
+
+test('Disminuir una cantidad no borra silenciosamente otros productos dañados',()=>{
+ const untouched={id:'una-foto',placeId:2,qty:0,name:'Producto antiguo'};
+ const target={id:'plato',placeId:1,qty:2,name:'Baleada'};
+ const cart=[untouched,target];
+ const next=changeCartQuantity(cart,'plato',1,-1);
+ assert.equal(next.length,2);
+ assert.strictEqual(next[0],untouched);
+ assert.equal(next[1].qty,1);
+ const removed=changeCartQuantity(next,'plato',1,-1);
+ assert.deepEqual(removed,[untouched]);
+ assert.deepEqual(cart,[untouched,target],'el carrito anterior se mantiene intacto');
 });

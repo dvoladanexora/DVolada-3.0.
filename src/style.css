@@ -1465,3 +1465,13 @@ body:has(.modal-backdrop) .mobile-nav.dv-compact-nav{visibility:hidden!important
 /* Desktop utility: explicit refresh so users do not need Ctrl+F5. */
 .dv32 .dv-desktop-refresh{display:inline-grid;place-items:center}
 @media(max-width:760px){.dv32 .dv-desktop-refresh{display:none!important}}
+
+
+/* Last-resort recovery instead of a blank screen if unexpected local data breaks rendering. */
+.dv-fatal-recovery{min-height:100dvh;box-sizing:border-box;display:grid;place-content:center;justify-items:center;gap:14px;padding:28px;text-align:center;background:var(--bg,#fff9f4);color:var(--ink,#172131)}
+.dv-fatal-recovery>img{width:min(240px,72vw);height:auto}
+.dv-fatal-recovery h1{margin:6px 0 0;font-size:clamp(26px,5vw,42px)}
+.dv-fatal-recovery p{max-width:620px;margin:0;color:var(--muted,#66746b);line-height:1.6}
+.dv-fatal-recovery>div{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.dv-fatal-recovery button{min-height:44px}
+.dv-fatal-recovery small{max-width:620px;color:var(--muted,#66746b)}

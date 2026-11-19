@@ -32,8 +32,8 @@ export function validateBusinessProfile(draft){
  for(const {id,label} of WEEK_DAYS){
   const day=hours[id]??hours[String(id)];
   if(!day?.enabled)continue;
-  if(!timePattern.test(String(day.open))||!timePattern.test(String(day.close))||day.open>=day.close){
-   errors.hours='Revisá el horario del '+label+'. Por ahora el cierre debe ser después de la apertura el mismo día.';
+  if(!timePattern.test(String(day.open))||!timePattern.test(String(day.close))||day.open===day.close){
+   errors.hours='Revisá el horario del '+label+'. La apertura y el cierre no pueden ser iguales; si el cierre es anterior, se entiende como el día siguiente.';
    break;
   }
  }

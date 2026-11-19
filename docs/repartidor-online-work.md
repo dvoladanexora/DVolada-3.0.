@@ -64,3 +64,29 @@ npm run build
 - Solo se registran como fallos de PIN los códigos realmente incorrectos, no errores de internet.
 - Los registros locales de incidencias y disponibilidad se validan al leerlos para evitar datos corruptos o valores ajenos.
 - El mapa solo solicita GPS tras pulsar el botón correspondiente. Los teléfonos válidos tienen 8 a 15 dígitos.
+
+
+## Segunda auditoría del panel — edición adicional
+
+### Mejoras realizadas y por qué
+1. **Confirmación para aceptar ofertas.** Evita perder un cupo por tocar un botón involuntariamente; hoja modal accesible con Escape, trampa de foco y diseño adaptado a móvil.
+2. **Privacidad previa a aceptación.** `courierViewOrders` envía a la interfaz ofertas con identificador, estado, restaurante, fecha y cantidades; no entrega nombre, dirección, teléfono, notas ni PIN del cliente antes de asignarlas. En producción esta reducción debe ocurrir en API, no en JavaScript.
+3. **Doble toque y ofertas viejas.** El controlador local conserva inmediatamente el siguiente estado tras aceptar y rechaza un segundo intento sobre esa misma orden. Es una protección de demostración en una pestaña, no sustituye transacciones servidor.
+4. **PIN protegido.** Introducción oculta por defecto y opción Mostrar/Ocultar, intentos erróneos limitados a tres y guardados localmente por identidad y orden. Los fallos de red no consumen intentos. Work debe reemplazarlo con límites de seguridad del servidor.
+5. **Llegada GPS explícita.** La comprobación solo empieza si el usuario pulsa Activar GPS; comprueba frescura (30 segundos) y precisión y detiene seguimiento al cerrar o desactivar.
+6. **Inicio útil.** Si hay entregas pendientes, se abre `Mis entregas` y se muestra `Siguiente paso` con la orden prioritaria; evita que el repartidor busque entre ofertas mientras ya va en ruta.
+7. **Información de pago visible pero no operativa.** La tarjeta presenta método e importe referencial del pedido. No registra dinero, comisiones ni liquidaciones.
+8. **Incidencias clasificadas.** Categorías de dirección, cliente, producto o avería, con observación y estado explícito `Borrador local · sin enviar`. No promete soporte remoto.
+9. **Aislamiento de preferencias.** Cambio de repartidor no copia disponibilidad del repartidor anterior en el navegador.
+
+### Riesgos abiertos para Work
+- Red compartida y estado real: el navegador no puede garantizar asignación única ni máximo dos en varios dispositivos. Implementar bloqueo transaccional de orden y cupos por usuario.
+- Identidad: todas las opciones de demo son no autenticadas; en producción el servidor debe obtener `rider_id` desde la sesión autorizada.
+- PIN: la demo conserva el PIN en memoria/almacenamiento de cliente; no puede publicarse así. Verificación remota, bloqueo persistente, procedimientos de recuperación y auditoría.
+- GPS/mapas: revisar términos de servicio, privacidad y opciones cuando falla ubicación; no inferir llegada sin coordenadas verificadas.
+- Seguridad vial: botones grandes y minimizar interacción en movimiento; validar con usuarios de campo. La app no debe incentivar usar el teléfono mientras se conduce.
+- Cobros: definir política real de efectivo, transferencias y conciliaciones antes del lanzamiento.
+- Notificaciones, chat, soporte e incidentes son locales; conectar servidor, push y registro confiable.
+- E2E visual móvil/tablet/PC y test real con múltiples repartidores, restaurante y cliente todavía requieren Work.
+
+Para confirmar regresiones ejecutar `npm run test:courier`, todas las suites de PR y `npm run build`.

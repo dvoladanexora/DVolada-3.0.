@@ -1361,3 +1361,10 @@ body:has(.modal-backdrop) .mobile-nav.dv-compact-nav{visibility:hidden!important
 .dv-feature-loading{max-width:780px;margin:22px auto;padding:18px 22px;border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--muted);text-align:center;font-size:14px;line-height:1.5;font-weight:700}
 @media(max-width:760px){.dv-feature-loading{margin:14px 12px;padding:18px 12px}}
 @media(prefers-reduced-motion:reduce){.dv-feature-loading{animation:none;transition:none}}
+
+/* Navegación con teclado: saltar la cabecera y conservar foco visible. */
+.dv-skip-link{position:fixed;top:8px;left:8px;z-index:20000;display:inline-flex;align-items:center;min-height:44px;padding:11px 17px;border:2px solid var(--accent);border-radius:12px;background:var(--surface,#fff);color:var(--ink,#17212b);font-weight:850;font-size:14px;transform:translateY(-160%);box-shadow:0 8px 28px #0003}
+.dv-skip-link:focus-visible{transform:translateY(0);outline:3px solid var(--accent);outline-offset:3px}
+.dv32 :is(button,a,input,select,textarea,[role=slider]):focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.dv32 #dv-main-content:focus{outline:none}
+@media(prefers-reduced-motion:reduce){.dv-skip-link{transition:none}}

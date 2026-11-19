@@ -165,3 +165,13 @@ https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44522783117
 La revisión adicional corrigió un defecto que podía dar una sensación engañosa de funcionamiento: el estado operativo del restaurante ya no se limita al encabezado. En el navegador de demostración, cambiarlo a *Pausado* o *Cerrado* impide confirmar pedidos nuevos, de cualquier fecha. Los horarios configurados bloquean pedidos inmediatos fuera de turno, pero permiten programar a una fecha/hora permitida si el restaurante está habilitado. El encabezado avisa *Fuera de horario* cuando la apertura manual está activa, pero el turno ha terminado.
 
 Las preferencias de capacidad, avisos, espera e impresión se almacenan por identificador de restaurante. La experiencia se reinicia al cambiar de negocio ficticio para impedir que los ajustes operativos de uno queden visibles en otro. Work debe comprobar los mismos escenarios con tres dispositivos y autoridad del servidor; **localStorage no es el origen de verdad de producción**.
+
+
+### Verificación final ampliada (120 pruebas, 19/11/2026)
+La suite de regresiones volvió a aprobar: **120/120, 0 fallos y compilación Vite correcta**, ejecución GitHub Actions https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44523400502.
+
+Se agregó validación contra precios nulos, vacíos, negativos, infinitos, por encima del límite del editor o con más de dos decimales en el catálogo y en el carrito. Esto previene que versiones anteriores de datos locales den lugar a cobros incorrectos de demostración. No sustituye la validación obligatoria del backend en una venta real.
+
+Se corrigió igualmente que Caja indique *Fuera de horario* cuando un restaurante está marcado abierto, pero ya terminó su horario configurado. El cliente no podrá confirmar pedidos inmediatos en ese caso. Las operaciones de apertura/cierre y la capacidad de Cocina se mantienen aisladas por negocio ficticio en el mismo navegador.
+
+**Evidencia de prueba:** los tests del repositorio comprueban reglas de negocio y la compilación; no equivalen a un E2E visual real ni a un backend transaccional operativo. Work tiene que cerrar esos bloqueantes antes de realizar una venta pública.

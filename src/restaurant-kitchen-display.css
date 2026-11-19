@@ -61,3 +61,6 @@
 @media(max-width:760px){.dv-kitchen-lanes{grid-template-columns:1fr}.dv-kitchen-lane-ready{grid-column:auto}.dv-kitchen-lane-orders{max-height:none}.dv-kitchen-overview{padding:19px}.dv-kitchen-metrics{width:100%;grid-template-columns:repeat(3,minmax(0,1fr))}.dv-kitchen-status-strip{align-items:stretch}.dv-kitchen-pending{margin-left:0;flex:1;justify-content:center}.dv-kitchen-order{padding:14px}}
 @media(min-width:1650px){.ow-kitchen-full .dv-kitchen-lanes{gap:22px}.ow-kitchen-full .dv-kitchen-order{padding:22px}.ow-kitchen-full .dv-kitchen-products strong{font-size:19px}.ow-kitchen-full .dv-kitchen-order-top h3{font-size:25px}}
 @media(prefers-reduced-motion:reduce){.dv-kitchen-screen *{scroll-behavior:auto!important}}
+
+
+.dv-kitchen-filter-notice{margin:0;padding:10px 13px;border-radius:12px;background:var(--ow-card,var(--surface));border:1px solid var(--ow-line,var(--line));color:var(--ow-sub,var(--muted));font-size:12px}

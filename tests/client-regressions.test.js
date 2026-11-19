@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 const chat=readFileSync(new URL('../src/DraggableChatFab.jsx',import.meta.url),'utf8');
+const slideSource=readFileSync(new URL('../src/SlideConfirm.jsx',import.meta.url),'utf8');
+const discoverySource=readFileSync(new URL('../src/DiscoveryEnhancements.jsx',import.meta.url),'utf8');
+const receiptSource=readFileSync(new URL('../src/receipt-image.js',import.meta.url),'utf8');
+const delightSource=readFileSync(new URL('../src/DelightMotion.jsx',import.meta.url),'utf8');
+const pwaSource=readFileSync(new URL('../src/PwaUpdatePrompt.jsx',import.meta.url),'utf8');
 
 test('R10: catalog shows each item photo when available and a placeholder otherwise',()=>{
  assert.match(app,/item\.image\?<img src=\{item\.image\}/);
@@ -340,7 +345,100 @@ test('Auditoría carrito: malformed prices show warnings instead of silently pas
  assert.match(warnings,/precio actualizado o inválido/);
 });
 
-test('Auditoría persistencia: cart and orders recover from malformed storage',()=>{
- assert.match(app,/Array\.isArray\(saved\)\?saved\.filter\(item=>item&&typeof item==='object'\):\[\]/);
- assert.match(app,/Array\.isArray\(saved\)\?saved\.filter\(order=>order&&typeof order==='object'\):starterOrders/);
+test('Auditoría persistencia: cart, orders and customer collections recover from malformed storage',()=>{
+ assert.ok(app.includes("const asArray=(value,fallback=[])=>Array.isArray(value)?value:fallback"));
+ assert.ok(app.includes("const cleanItemList=value=>asArray(value).filter(item=>item&&typeof item==='object')"));
+ assert.ok(app.includes("[cart,setCart]=useState(()=>cleanItemList(stored('dv_cart',[])))"));
+ assert.ok(app.includes("items:cleanItemList(order.items)"));
+ assert.ok(app.includes("[savedCart,setSavedCart]=useState(()=>cleanItemList(stored('dv_saved_cart',[])))"));
+ assert.ok(app.includes("[savedAddresses,setSavedAddresses]=useState(()=>asArray(stored('dv_addresses',[])).filter(v=>typeof v==='string'))"));
+});
+
+
+test('Auditoría checkout: rejected slide confirmation unlocks and can be retried',()=>{
+ assert.ok(slideSource.includes("const result=onConfirm?.()"));
+ assert.ok(slideSource.includes("if(result===false){locked.current=false;setDone(false);setProgress(0);setDragging(false);return}"));
+ assert.ok(slideSource.includes("{done?'¡Listo!':label}"));
+ assert.ok(slideSource.includes("amount?'Total estimado: '+amount"));
+ const placeOrder=app.slice(app.indexOf('function placeOrder()'),app.indexOf('function sendMandado()'));
+ assert.ok(placeOrder.includes('return false'));
+ assert.ok(placeOrder.includes('return true'));
+ assert.ok(app.includes("disabled={isOffline||!cart.length||cartIssues.length>0"));
+});
+
+test('Auditoría checkout: immediate orders respect restaurant closed or paused state',()=>{
+ const placeOrder=app.slice(app.indexOf('function placeOrder()'),app.indexOf('function sendMandado()'));
+ assert.ok(placeOrder.includes("if(scheduleMode==='now'&&cart.length)"));
+ assert.ok(placeOrder.includes("live.tone==='closed'||live.tone==='paused'"));
+ assert.ok(placeOrder.includes("no está disponible en este momento"));
+});
+
+test('Auditoría volver a pedir: keeps full product IDs and merges with the current cart',()=>{
+ const repeat=app.slice(app.indexOf('function repeatOrder(o)'),app.indexOf('function toggleFavoriteOrder'));
+ assert.ok(repeat.includes("const baseId=String(item.productId??item.id)"));
+ assert.ok(!repeat.includes("split('-')[0]"));
+ assert.ok(repeat.includes("setCart(prev=>"));
+ assert.ok(repeat.includes("Math.min(99"));
+ assert.ok(!repeat.includes("setCart(reorderPreview.available)"));
+});
+
+test('Auditoría enlaces compartidos: restaurant and product deep links open the intended content',()=>{
+ const deep=app.slice(app.indexOf("useEffect(()=>{const params=new URLSearchParams(window.location.search)"),app.indexOf("const enter=p=>"));
+ assert.ok(deep.includes("itemId=params.get('dv_item')"));
+ assert.ok(deep.indexOf("navigate('restaurants')")<deep.indexOf("setSelected(place.id)"));
+ assert.ok(deep.includes("setFoodChoice({item,place})"));
+});
+
+test('Auditoría navegación: browser back closes active customer overlays before leaving the page',()=>{
+ const back=app.slice(app.indexOf('useEffect(()=>{const onBack='),app.indexOf('const notify='));
+ for(const state of ['setFoodChoice(null)','setHelpOpen(false)','setSupportOrder(null)','setReorderPreview(null)','setCancelOrder(null)','setOrderToRate(null)','setLocationOpen(false)','setChatOpen(false)','setCartDrawer(false)','setCheckout(false)'])assert.ok(back.includes(state),state);
+});
+
+test('Auditoría restaurantes: information dialog is reachable and keyboard visible',()=>{
+ assert.ok(restaurantProfile.includes("onClick={()=>setInfoOpen(true)}"));
+ assert.ok(restaurantProfile.includes("aria-label={'Ver información de '+place.name}"));
+ assert.ok(restaurantCss.includes('.dv-rp-info-button:focus-visible'));
+ assert.ok(restaurantProfile.includes("const menu=Array.isArray(place.items)?place.items.filter"));
+});
+
+test('Auditoría Flash y Club: promotions expire and refresh while the view stays open',()=>{
+ assert.ok(clubSource.includes("useEffect(()=>{const refresh=()=>{setNow(Date.now());setPromos(asArray(store('dv_flash_promos',[])))}"));
+ assert.ok(clubSource.includes('setInterval(refresh,30000)'));
+ assert.ok(clubSource.includes("window.addEventListener('dv-flash-updated',refresh)"));
+});
+
+test('Auditoría Group/Express and discovery: local storage failures or wrong shapes do not crash the client flow',()=>{
+ assert.ok(groupSource.includes("if(Array.isArray(initial))return Array.isArray(value)?value:initial"));
+ assert.ok(groupSource.includes("try{localStorage.setItem(key+name,JSON.stringify(val))}catch"));
+ assert.ok(discoverySource.includes('seen=Array.isArray(raw)?raw:[]'));
+ assert.ok(discoverySource.includes("try{localStorage.setItem('dv_seen_tips',JSON.stringify(next))}catch{}"));
+});
+
+test('Auditoría inicio y recibos: restricted storage and older Canvas APIs have fallbacks',()=>{
+ assert.ok(delightSource.includes("try{return !sessionStorage.getItem('dv_intro_seen')}catch{return true}"));
+ assert.ok(delightSource.includes("try{sessionStorage.setItem('dv_intro_seen','1')}catch{}"));
+ assert.ok(receiptSource.includes("if(typeof c.roundRect==='function')c.roundRect"));
+ assert.ok(receiptSource.includes('c.arcTo('));
+ assert.ok(receiptSource.includes('document.body.appendChild(a);a.click();a.remove()'));
+});
+
+test('Auditoría perfil: deleting the selected address also clears stale active/default references',()=>{
+ const addressFns=app.slice(app.indexOf('function saveAddress()'),app.indexOf('function orderChirp()'));
+ assert.ok(addressFns.includes("if(address===value)setAddress('')"));
+ assert.ok(addressFns.includes("setProfile(p=>p.address===value?{...p,address:''}:p)"));
+});
+
+test('Auditoría roles: the customer navigation stays customer-only and help remains directly accessible',()=>{
+ const nav=app.slice(app.indexOf('const nav='),app.indexOf(';return <><IntroMotion',app.indexOf('const nav=')));
+ assert.ok(!nav.includes("'delivery-panel','Panel repartidor'"));
+ const more=app.slice(app.indexOf('className="dv-more-sheet"'),app.indexOf('className="dv-more-appearance"',app.indexOf('className="dv-more-sheet"')));
+ assert.ok(more.includes("['help','Centro de ayuda',MessageCircle]"));
+ assert.ok(!more.includes("['courier-login','Panel repartidor'"));
+ assert.ok(app.includes("onClick={()=>enter('courier-login')}"));
+});
+
+test('Auditoría marca y PWA: Dvolada spelling stays consistent in customer-facing update UI',()=>{
+ assert.equal((app.match(/D Volada/g)||[]).length,0);
+ assert.equal((pwaSource.match(/D Volada/g)||[]).length,0);
+ assert.ok(pwaSource.includes('nueva actualización de Dvolada'));
 });

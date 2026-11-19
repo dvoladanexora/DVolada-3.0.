@@ -1,5 +1,7 @@
 name: Validar cambios Dvolada
 on:
+  push:
+    branches: [audit/online-integral-work-2026-11]
   pull_request:
     # Validar también los PR apilados sobre ramas de trabajo; nunca desplegar por este flujo.
     paths-ignore:
@@ -9,7 +11,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: validar-dvolada-${{ github.event.pull_request.number }}
+  group: validar-dvolada-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   verify:

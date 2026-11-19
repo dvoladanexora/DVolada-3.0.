@@ -5,6 +5,7 @@ import {runInNewContext} from 'node:vm';
 import {offeredExtrasFor,validateCartCatalog,splitRestaurantCart,cartCheckoutTotal} from '../src/customer-order-rules.js';
 import {canMoveRestaurantOrder,kitchenQueues,scheduledOrderState} from '../src/kitchen-operations.js';
 import {applyOrderStatus,decisionForOrder} from '../src/restaurant-order-flow.js';
+import {cancelDemoOrder,changeDemoRestaurantOrder} from '../src/order-demo-operations.js';
 import {courierQueues,applyCourierAction,courierViewOrder,validateCourierAction} from '../src/courier-workflow.js';
 
 const today=new Date('2026-11-19T10:00:00.000Z');
@@ -173,4 +174,91 @@ test('Cliente puede borrar únicamente datos locales Dvolada con confirmación e
  assert.ok(action.includes('localStorage.removeItem(key)'));
  assert.ok(action.includes('window.location.assign(import.meta.env.BASE_URL)'));
  assert.ok(src.includes('Borrar datos de prueba de este dispositivo'));
+});
+
+test('Cancelación abierta en Pendiente se reevalúa si Caja aceptó antes de confirmar',()=>{
+ const base={id:'stale-1',kind:'food',placeId:1,status:'Pendiente',delivery:'delivery'};
+ const accepted=applyOrderStatus(base,'Aceptado',{},today);
+ const result=cancelDemoOrder([accepted],base.id,'Me equivoqué al pedir',today);
+ assert.equal(result.ok,true);
+ assert.equal(result.immediate,false);
+ assert.equal(result.order.status,'Cancelación solicitada');
+ assert.equal(result.order.statusBeforeCancellation,'Aceptado');
+ assert.equal(result.order.cancelReason,'Me equivoqué al pedir');
+});
+test('Cancelación cliente no puede borrar pedidos listos, entregados ni ya cancelados',()=>{
+ for(const status of ['Listo','Recogido','En camino','En ubicación','Entregado','Cancelado','Rechazado','Cancelación solicitada']){
+  const current={id:'stale-2',kind:'food',placeId:1,status};
+  const result=cancelDemoOrder([current],current.id,'Cambio de dirección',today);
+  assert.equal(result.ok,false,status);
+  assert.strictEqual(result.orders[0],current);
+ }
+});
+test('Cancelar un pedido programado o pendiente conserva auditoría e inmediatez',()=>{
+ for(const status of ['Programado','Pendiente']){
+  const o={id:status,kind:'food',placeId:1,status};
+  const result=cancelDemoOrder([o],o.id,'El cliente ya no desea comer',today);
+  assert.equal(result.ok,true);
+  assert.equal(result.immediate,true);
+  assert.equal(result.order.status,'Cancelado');
+  assert.equal(result.order.statusBeforeCancellation,status);
+  assert.ok(result.order.cancelRequestedAt);
+  assert.ok(result.order.cancelledAt);
+ }
+});
+test('Caja rechaza aceptación duplicada y pedidos de otros negocios',()=>{
+ const original={id:'ca-1',kind:'food',placeId:1,status:'Pendiente'};
+ const accepted=changeDemoRestaurantOrder([original],{orderId:original.id,restaurantId:1,expectedStatus:'Pendiente',toStatus:'Aceptado',area:'cashier'},today);
+ assert.equal(accepted.ok,true);
+ assert.equal(accepted.order.status,'Aceptado');
+ const stale=changeDemoRestaurantOrder(accepted.orders,{orderId:original.id,restaurantId:1,expectedStatus:'Pendiente',toStatus:'Aceptado',area:'cashier'},today);
+ assert.equal(stale.ok,false);
+ assert.match(stale.reason,/cambió/);
+ const wrongBusiness=changeDemoRestaurantOrder([original],{orderId:original.id,restaurantId:2,expectedStatus:'Pendiente',toStatus:'Aceptado',area:'cashier'},today);
+ assert.equal(wrongBusiness.ok,false);
+ assert.match(wrongBusiness.reason,/restaurante/);
+});
+test('Cocina no puede saltar de Aceptado a Listo ni modificar órdenes canceladas',()=>{
+ const o={id:'k-1',kind:'food',placeId:1,status:'Aceptado'};
+ const skip=changeDemoRestaurantOrder([o],{orderId:o.id,restaurantId:1,expectedStatus:'Aceptado',toStatus:'Listo',area:'kitchen'},today);
+ assert.equal(skip.ok,false);
+ const first=changeDemoRestaurantOrder([o],{orderId:o.id,restaurantId:1,expectedStatus:'Aceptado',toStatus:'Preparando',area:'kitchen'},today);
+ assert.equal(first.ok,true);
+ const second=changeDemoRestaurantOrder(first.orders,{orderId:o.id,restaurantId:1,expectedStatus:'Preparando',toStatus:'Listo',area:'kitchen'},today);
+ assert.equal(second.ok,true);
+ assert.equal(second.order.status,'Listo');
+ const cancelled=changeDemoRestaurantOrder([{...o,status:'Cancelado'}],{orderId:o.id,restaurantId:1,expectedStatus:'Cancelado',toStatus:'Preparando',area:'kitchen'},today);
+ assert.equal(cancelled.ok,false);
+});
+test('Programados solo pueden activarse después de hora y desde Caja',()=>{
+ const o={id:'p-1',kind:'food',placeId:1,status:'Programado',scheduledFor:'2026-11-19T11:00:00.000Z'};
+ const before=changeDemoRestaurantOrder([o],{orderId:o.id,restaurantId:1,expectedStatus:'Programado',toStatus:'Pendiente',area:'cashier'},today);
+ assert.equal(before.ok,false);
+ const after=changeDemoRestaurantOrder([o],{orderId:o.id,restaurantId:1,expectedStatus:'Programado',toStatus:'Pendiente',area:'cashier'},new Date('2026-11-19T11:00:00Z'));
+ assert.equal(after.ok,true);
+ const kitchen=changeDemoRestaurantOrder([o],{orderId:o.id,restaurantId:1,expectedStatus:'Programado',toStatus:'Pendiente',area:'kitchen'},new Date('2026-11-19T11:00:00Z'));
+ assert.equal(kitchen.ok,false);
+});
+test('Rechazo y revisión de cancelación requieren motivo y etapa válida',()=>{
+ const pending={id:'r-1',kind:'food',placeId:1,status:'Pendiente'};
+ const noReason=changeDemoRestaurantOrder([pending],{orderId:pending.id,restaurantId:1,expectedStatus:'Pendiente',toStatus:'Rechazado',area:'cashier'},today);
+ assert.equal(noReason.ok,false);
+ const declined=changeDemoRestaurantOrder([pending],{orderId:pending.id,restaurantId:1,expectedStatus:'Pendiente',toStatus:'Rechazado',area:'cashier',metadata:{rejectionReason:'Fuera de cobertura'}},today);
+ assert.equal(declined.ok,true);
+ assert.equal(declined.order.rejectionReason,'Fuera de cobertura');
+ const cancelled={id:'r-2',kind:'food',placeId:1,status:'Cancelación solicitada',statusBeforeCancellation:'Preparando'};
+ const invalidRestore=changeDemoRestaurantOrder([cancelled],{orderId:cancelled.id,restaurantId:1,expectedStatus:'Cancelación solicitada',toStatus:'Aceptado',area:'cashier',metadata:{cancelResponseReason:'Pedido en curso'}},today);
+ assert.equal(invalidRestore.ok,false);
+ const denied=changeDemoRestaurantOrder([cancelled],{orderId:cancelled.id,restaurantId:1,expectedStatus:'Cancelación solicitada',toStatus:'Preparando',area:'cashier',metadata:{cancelResponseReason:'La comida ya está lista'}},today);
+ assert.equal(denied.ok,true);
+ assert.equal(denied.order.cancelResponse,'Rechazada');
+});
+test('Cliente, Caja y Cocina muestran conflicto en lugar de falso éxito',()=>{
+ const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ const restaurant=readFileSync(new URL('../src/OnlineWorkspace.jsx',import.meta.url),'utf8');
+ assert.ok(main.includes('cancelDemoOrder(current,cancelOrder.id,reason)'));
+ assert.ok(main.includes('changeDemoRestaurantOrder(current,{orderId:id,restaurantId,expectedStatus,toStatus:status,area,metadata})'));
+ assert.ok(restaurant.includes('if(!response?.ok)'));
+ assert.ok(restaurant.includes('currentOrder.status,area,business?.id'));
+ assert.ok(restaurant.includes("decisionOrder.status,'cashier',business?.id"));
 });

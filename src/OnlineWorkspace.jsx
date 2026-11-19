@@ -6,7 +6,7 @@ import RestaurantBusinessSettings from './RestaurantBusinessSettings.jsx';
 import RestaurantMenuEditor from './RestaurantMenuEditor.jsx';
 import RestaurantCashierConsole from './RestaurantCashierConsole.jsx';
 import RestaurantKitchenDisplay from './RestaurantKitchenDisplay.jsx';
-import {canMoveRestaurantOrder,openKitchenTicket,kitchenLineExtras} from './kitchen-operations.js';
+import {canMoveRestaurantOrder,openKitchenTicket,kitchenLineExtras,scheduledOrderState} from './kitchen-operations.js';
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {Bell,BellRing,ChefHat,CheckCircle2,Clock,LogOut,Search,Settings2,Store,PauseCircle,PlayCircle,Package,MessageCircle,Printer,AlertTriangle,SlidersHorizontal,History,ChevronDown,ChevronUp,X,WifiOff,HelpCircle,Volume2,Eye,ArrowRight,CalendarClock,Pin,PinOff,Sun,Moon,Monitor,Wifi,LayoutDashboard,BarChart3,UtensilsCrossed,PanelLeft,Maximize2,Minimize2,Headphones,Menu,ShieldCheck} from 'lucide-react';
 import './online-workspace.css';
@@ -41,10 +41,8 @@ export default function OnlineWorkspace({orders=[],places=[],restaurantId,onUpda
  useEffect(()=>{if(business?.id!==undefined)setShiftLog(get('shiftLog_'+String(business.id),[]))},[business?.id]);
  const list=orders.filter(o=>o.kind==='food'&&business&&String(o.placeId)===String(business.id));
  const active=list.filter(o=>!['Entregado','Cancelado','Rechazado','Cancelación solicitada'].includes(o.status));
- const todays=active.filter(o=>sameDay(dateOf(o)));
- const older=active.filter(o=>!sameDay(dateOf(o)));
- const scheduled=todays.filter(o=>o.scheduledFor&&new Date(o.scheduledFor)>new Date());
- const live=todays.filter(o=>!scheduled.includes(o));
+ const older=active.filter(o=>o.status!=='Programado'&&!sameDay(dateOf(o)));
+ const scheduled=active.filter(o=>scheduledOrderState(o,now)==='future');
  const groups={new:active.filter(o=>o.status==='Pendiente'),prep:active.filter(o=>['Aceptado','Preparando'].includes(o.status)),ready:active.filter(o=>o.status==='Listo')};
  const current=detail?list.find(o=>o.id===detail):null;
  const decisionOrder=decision?list.find(o=>String(o.id)===String(decision.id)):null;
@@ -85,9 +83,10 @@ export default function OnlineWorkspace({orders=[],places=[],restaurantId,onUpda
  if(!networkOnline){setNotice('Sin conexión: no se puede cambiar el pedido hasta recuperar la red.');return}
  const currentOrder=list.find(x=>String(x.id)===String(o.id));
  if(!currentOrder||currentOrder.status!==o.status){setNotice('Este pedido cambió. Revisá su estado antes de continuar.');setDetail(null);return}
- const area=['Aceptado','Rechazado'].includes(status)?'cashier':'kitchen';
+ const area=['Aceptado','Rechazado','Pendiente'].includes(status)?'cashier':'kitchen';
  const areaScreen=area==='cashier'?'inicio':'kitchen';
  if(screen!==areaScreen){setNotice('Esta acción pertenece al área '+(area==='cashier'?'Caja/Recepción':'Cocina')+'.');return}
+ if(status==='Pendiente'&&scheduledOrderState(currentOrder,now)!=='due'){setNotice('Este pedido todavía no está listo para activarse.');return}
  if(!canMoveRestaurantOrder(currentOrder.status,status,area)){setNotice('El cambio de estado no corresponde a esta etapa.');return}
  onUpdate(currentOrder.id,status);
  setNotice('Estado actualizado en esta demostración local: '+(currentOrder.orderNo||currentOrder.id)+' → '+status);
@@ -135,7 +134,7 @@ export default function OnlineWorkspace({orders=[],places=[],restaurantId,onUpda
  {scheduled.length>0&&<div className="ow-scheduled"><CalendarClock size={18}/><strong>Programados: {scheduled.length}</strong><span>{scheduled.map(o=>o.orderNo||o.id).join(', ')}</span></div>}
  {(cancellationQueue.length>0||recentCancelled.length>0)&&<section className="ow-cancel-notices" role="region" aria-label="Cancelaciones de pedidos"><h3>🔔 Cancelaciones y solicitudes</h3>{cancellationQueue.map(o=><div className="ow-cancel-row" key={o.id}><strong>{o.orderNo||o.id} · Solicitud del cliente</strong><span>Motivo: {o.cancelReason||'No indicado'}</span><div><button disabled={!networkOnline} onClick={()=>setDecision({id:o.id,action:'approve-cancel'})}>Aprobar cancelación</button><button disabled={!networkOnline} onClick={()=>setDecision({id:o.id,action:'deny-cancel'})}>Rechazar solicitud</button></div></div>)}{recentCancelled.map(o=><div className="ow-cancel-row" key={o.id}><strong>❌ {o.orderNo||o.id} · CANCELADO</strong><span>{o.cancelReason||'Cancelación registrada'} · No preparar ni despachar</span></div>)}</section>}
  {!networkOnline&&<div className="ow-paused-label">Vista sin conexión · Los cambios de pedidos están bloqueados</div>}
- <RestaurantCashierConsole orders={list} restaurantId={business?.id} restaurantName={business?.name||'Restaurante'} now={now} connected={networkOnline} query={search} capacity={settings.capacity} onAccept={o=>update(o,'Aceptado')} onDetail={o=>setDetail(o.id)} onPrint={print} onGoKitchen={()=>navigate('kitchen')}/>
+ <RestaurantCashierConsole orders={list} restaurantId={business?.id} restaurantName={business?.name||'Restaurante'} now={now} connected={networkOnline} query={search} capacity={settings.capacity} onActivate={o=>update(o,'Pendiente')} onAccept={o=>update(o,'Aceptado')} onDetail={o=>setDetail(o.id)} onPrint={print} onGoKitchen={()=>navigate('kitchen')}/>
  <div className="ow-activity"><h3>Actividad reciente</h3>{list.slice(-5).reverse().map(o=><div key={o.id}><span>{o.orderNo||o.id} · {o.name}</span><strong>{o.status}</strong></div>)}{!list.length&&<p>Aún no hay movimientos.</p>}</div></>}
  {screen==='kitchen'&&<div className="ow-kitchen-view"><div className="ow-kitchen-tools"><label>Alertar demora desde <select aria-label="Minutos para considerar una orden demorada" value={kitchenAlertMinutes} onChange={e=>setKitchenAlertMinutes(Number(e.target.value))}>{[10,15,20,30,45,60].map(n=><option key={n} value={n}>{n} minutos</option>)}</select></label><span>Preparación visible: pedidos aceptados, en curso y listos.</span></div><RestaurantKitchenDisplay orders={list} restaurantId={business?.id} restaurantName={business?.name||'Restaurante'} now={now} alertMinutes={kitchenAlertMinutes} connected={networkOnline} query={search} onChange={update} onPrint={print} onDetail={o=>setDetail(o.id)} onGoCashier={()=>navigate('inicio')}/></div>}
  {screen==='menu'&&<RestaurantMenuEditor restaurant={business} onChange={items=>business?onCatalogChange(business.id,items):false}/>}

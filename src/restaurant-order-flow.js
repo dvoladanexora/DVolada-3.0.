@@ -2,7 +2,7 @@
  * El servidor de producción deberá aplicar permisos, versión e idempotencia propios.
  */
 const statusStamps=Object.freeze({
- 'Aceptado':'acceptedAt','Preparando':'preparingAt','Listo':'readyAt',
+ 'Pendiente':'activatedAt','Aceptado':'acceptedAt','Preparando':'preparingAt','Listo':'readyAt',
  'Rechazado':'rejectedAt','Cancelado':'cancelledAt','Recogido':'pickedUpAt',
  'En camino':'onTheWayAt','En ubicación':'arrivedAt','Entregado':'deliveredAt',
 });
@@ -43,5 +43,5 @@ export function decisionForOrder(order,action,reason=''){
  if((action==='reject'||action==='deny-cancel')&&(message.length<5||message.length>220))throw Error('Indicá un motivo de 5 a 220 caracteres');
  if(action==='reject')return {status:'Rechazado',metadata:{rejectionReason:message}};
  if(action==='approve-cancel')return {status:'Cancelado',metadata:{}};
- return {status:'Preparando',metadata:{cancelResponseReason:message}};
+ return {status:order.statusBeforeCancellation==='Aceptado'?'Aceptado':'Preparando',metadata:{cancelResponseReason:message}};
 }

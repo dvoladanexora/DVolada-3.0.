@@ -3,7 +3,7 @@ export const KITCHEN_STAGES=Object.freeze(['Aceptado','Preparando','Listo']);
 const terminal=new Set(['Cancelado','Rechazado','Entregado']);
 /** Guardias de UX por área. En producción la API repetirá estas reglas con permisos y versión. */
 export const canMoveRestaurantOrder=(from,to,area='cashier')=>{
- if(area==='cashier')return from==='Pendiente'&&['Aceptado','Rechazado'].includes(to);
+ if(area==='cashier')return (from==='Pendiente'&&['Aceptado','Rechazado'].includes(to))||(from==='Programado'&&to==='Pendiente');
  if(area==='kitchen')return (from==='Aceptado'&&to==='Preparando')||(from==='Preparando'&&to==='Listo');
  return false;
 };
@@ -17,11 +17,21 @@ export function elapsedMinutes(order,now=Date.now()){
  return start===null?null:Math.max(0,Math.floor((now-start)/60000));
 }
 export const belongsToRestaurant=(o,id)=>Boolean(o?.kind==='food'&&id!==null&&id!==undefined&&String(o.placeId)===String(id));
+export const scheduledOrderState=(order,now=Date.now())=>{
+ if(order?.status!=='Programado')return null;
+ const scheduled=Date.parse(order?.scheduledFor||'');
+ if(!Number.isFinite(scheduled))return 'invalid';
+ return scheduled<=now?'due':'future';
+};
 export function kitchenQueues(orders,restaurantId,now=Date.now()){
- const relevant=(Array.isArray(orders)?orders:[]).filter(o=>belongsToRestaurant(o,restaurantId)&&!terminal.has(o.status)&&!(o.scheduledFor&&Date.parse(o.scheduledFor)>now));
+ const scoped=(Array.isArray(orders)?orders:[]).filter(o=>belongsToRestaurant(o,restaurantId)&&!terminal.has(o.status));
+ const relevant=scoped.filter(o=>!(o.scheduledFor&&Date.parse(o.scheduledFor)>now));
  const byAge=(a,b)=>(orderTime(a)??now)-(orderTime(b)??now);
  return {
   pending:relevant.filter(o=>o.status==='Pendiente').sort(byAge),
+  scheduledDue:scoped.filter(o=>scheduledOrderState(o,now)==='due').sort(byAge),
+  scheduledFuture:scoped.filter(o=>scheduledOrderState(o,now)==='future').sort((a,b)=>Date.parse(a.scheduledFor)-Date.parse(b.scheduledFor)),
+  scheduledInvalid:scoped.filter(o=>scheduledOrderState(o,now)==='invalid').sort(byAge),
   accepted:relevant.filter(o=>o.status==='Aceptado').sort(byAge),
   preparing:relevant.filter(o=>o.status==='Preparando').sort(byAge),
   ready:relevant.filter(o=>o.status==='Listo').sort(byAge),

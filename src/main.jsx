@@ -1,5 +1,5 @@
 import {withRestaurantStatus,withinBusinessHours,restaurantStatus} from './restaurant-availability.js';
-import {safeReadStored} from './browser-storage.js';
+import {safeReadStored,corruptDemoSnapshot} from './browser-storage.js';
 import {cancelDemoOrder,changeDemoRestaurantOrder,mutateDemoOrders} from './order-demo-operations.js';
 import {offeredExtrasFor,validateCartCatalog,splitRestaurantCart,cartCheckoutTotal,changeCartQuantity,changeCartInstruction} from './customer-order-rules.js';
 
@@ -66,6 +66,16 @@ useEffect(()=>{
   const serialized=JSON.stringify(value);
   // No marcar como persistido un dato si falló su escritura.
   if(previous&&previous[key]===serialized)continue;
+  // No borrar automáticamente pedidos/catálogos antiguos dañados al montar la demo.
+  if(!previous&&(key==='dv_orders'||key==='dv_places')){
+   try{
+    if(corruptDemoSnapshot(key,localStorage.getItem(key))){
+     next[key]=serialized;
+     if(!storageAlertShown.current){storageAlertShown.current=true;notify('Se detectaron datos locales de prueba dañados. Se conservan sin sobrescribir; esta vista usa datos temporales.')}
+     continue;
+    }
+   }catch{}
+  }
   try{localStorage.setItem(key,serialized);next[key]=serialized}
   catch{if(!storageAlertShown.current){storageAlertShown.current=true;notify('Almacenamiento local lleno. No se pudieron conservar todos los cambios de esta demostración.')}} 
  }

@@ -1,8 +1,26 @@
-import OnlineWorkspace from './OnlineWorkspace.jsx';
 import React,{useState} from 'react';
-import {Store,LogIn,LogOut,ShoppingBag,Clock,ChefHat,CheckCircle2,Package,ArrowRight,Eye,EyeOff,WifiOff} from 'lucide-react';
+import {Store,LogIn,ShieldAlert,WifiOff} from 'lucide-react';
+import OnlineWorkspace from './OnlineWorkspace.jsx';
 import './affiliate-online.css';
-const demoUser='restorres',demoPass='1326';
-export function AffiliateLogin({onLogin,onBack}){const [user,setUser]=useState(''),[pass,setPass]=useState(''),[error,setError]=useState(''),[show,setShow]=useState(false);const submit=e=>{e.preventDefault();if(user.trim().toLowerCase()===demoUser&&pass===demoPass){setError('');setPass('');onLogin()}else{setError('Usuario o contraseña incorrectos.');setPass('')}};return <section className="dv-affiliate-auth shell"><div className="dv-affiliate-auth-card"><div className="dv-affiliate-auth-symbol"><Store size={30}/></div><span className="kicker">DVOLADA · NEGOCIOS</span><h1>Bienvenido a tu negocio</h1><p>Ingresá al panel de pedidos en línea de tu restaurante o comedor.</p><form onSubmit={submit}><label htmlFor="dv-affiliate-user">Nickname</label><input id="dv-affiliate-user" autoComplete="username" value={user} onChange={e=>setUser(e.target.value)} placeholder="Tu usuario" required/><label htmlFor="dv-affiliate-pass">Contraseña</label><div className="dv-affiliate-password"><input id="dv-affiliate-pass" autoComplete="current-password" type={show?'text':'password'} value={pass} onChange={e=>setPass(e.target.value)} placeholder="Tu contraseña" required/><button type="button" aria-label={show?'Ocultar contraseña':'Mostrar contraseña'} onClick={()=>setShow(v=>!v)}>{show?<EyeOff size={19}/>:<Eye size={19}/>}</button></div>{error&&<p role="alert" className="dv-affiliate-error">{error}</p>}<button className="primary wide" type="submit"><LogIn size={18}/> Entrar al panel Online</button></form><div className="dv-affiliate-auth-notice"><WifiOff size={16}/><span>Acceso de demostración. La contraseña se verifica en este navegador; no protege datos reales ni sincroniza pedidos entre dispositivos.</span></div><button className="secondary wide" onClick={onBack}>Volver a Dvolada</button></div></section>}
-const stages=['Pendiente','Aceptado','Preparando','Listo','Recogido','En camino','En ubicación','Entregado'];
-export function AffiliateOnlinePanel({orders,places,onUpdate,onLogout}){return <OnlineWorkspace orders={orders} places={places} onUpdate={onUpdate} onLogout={onLogout}/>}
+
+/** La vista previa está aislada en Vite local. Nunca simula un login seguro. */
+export function AffiliateLogin({places=[],onLogin,onBack}){
+ const [restaurantId,setRestaurantId]=useState(()=>String(places[0]?.id??''));
+ const preview=Boolean(import.meta.env.DEV&&import.meta.env.VITE_DVOLADA_INTERNAL_PREVIEW==='true');
+ return <section className="dv-affiliate-auth shell"><div className="dv-affiliate-auth-card">
+  <div className="dv-affiliate-auth-symbol"><Store size={30}/></div>
+  <span className="kicker">DVOLADA · NEGOCIOS</span>
+  <h1>{preview?'Demostración de Restaurante Online':'Acceso para restaurantes'}</h1>
+  <p>{preview?'Este acceso es exclusivamente para probar Caja, Cocina y Mi menú en tu computadora.':'Estamos preparando el inicio de sesión seguro para restaurantes afiliados.'}</p>
+  {preview&&<div className="dv-affiliate-preview-selector"><label htmlFor="dv-affiliate-business">Restaurante de demostración</label>
+ <select id="dv-affiliate-business" value={restaurantId} onChange={e=>setRestaurantId(e.target.value)}>{places.map(p=><option key={p.id} value={String(p.id)}>{p.name}</option>)}</select>
+ <small>La selección permite revisar datos aislados de negocios ficticios. No representa una autorización de producción.</small>
+ <button className="primary wide" disabled={!restaurantId||!places.some(p=>String(p.id)===String(restaurantId))} type="button" onClick={()=>onLogin(restaurantId)}><LogIn size={18}/> Abrir panel de este negocio</button>
+ </div>}
+  <div className="dv-affiliate-auth-notice"><ShieldAlert size={18}/><span>El panel de pruebas no usa credenciales reales. Los cambios de menú y pedidos son locales y no se sincronizan con otros dispositivos.</span></div>
+  <button type="button" className="secondary wide" onClick={onBack}>Volver a Dvolada</button>
+ </div></section>;
+}
+export function AffiliateOnlinePanel({orders,places,restaurantId,onUpdate,onCatalogChange,onRestaurantChange,onLogout}){
+ return <OnlineWorkspace orders={orders} places={places} restaurantId={restaurantId} onUpdate={onUpdate} onCatalogChange={onCatalogChange} onRestaurantChange={onRestaurantChange} onLogout={onLogout}/>;
+}

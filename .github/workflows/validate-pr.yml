@@ -28,5 +28,13 @@ jobs:
         run: npm run test:preview
       - name: Pruebas de compartir, instalación y sonido
         run: npm run test:share
+      - name: Pruebas de Caja, Cocina y comandas
+        run: npm run test:restaurant
+      - name: Pruebas del editor de menú y fotos
+        run: npm run test:menu
+      - name: Pruebas de ficha y horarios de restaurante
+        run: npm run test:business
+      - name: Pruebas de flujo, cancelaciones, CSV y relevos
+        run: npm run test:hardening
       - name: Compilar aplicación
         run: npm run build

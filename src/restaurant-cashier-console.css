@@ -1,0 +1,80 @@
+/* Caja y Recepción Dvolada Cloud. Diseño independiente del punto de venta Local */
+.dv-cash-console{display:grid;gap:17px;min-width:0;color:var(--ow-ink,var(--ink))}
+.dv-cash-hero{display:flex;gap:20px;align-items:center;justify-content:space-between;border:1px solid var(--ow-line,var(--line));background:linear-gradient(118deg,color-mix(in srgb,var(--ow-card,var(--surface)) 89%,var(--accent) 11%),var(--ow-card,var(--surface)));padding:25px;border-radius:24px}
+.dv-cash-hero>div{max-width:700px}
+.dv-cash-eyebrow{display:inline-flex;align-items:center;gap:7px;color:var(--accent);font-size:10px;letter-spacing:.1em;font-weight:850}
+.dv-cash-hero h2{font-size:clamp(21px,2.5vw,30px);margin:11px 0 7px;line-height:1.15;letter-spacing:-.03em}
+.dv-cash-hero p{font-size:13px;line-height:1.55;margin:0;color:var(--ow-sub,var(--muted))}
+.dv-cash-goto-kitchen{display:flex;align-items:center;gap:10px;justify-content:center;white-space:nowrap;min-height:50px;padding:12px 17px;border:1px solid color-mix(in srgb,var(--accent) 33%,var(--ow-line,var(--line)));border-radius:15px;background:var(--ow-card,var(--surface));font-weight:800;font-size:13px;color:var(--ow-ink,var(--ink));cursor:pointer}
+.dv-cash-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.dv-cash-overview>div{padding:17px 20px;background:var(--ow-card,var(--surface));border:1px solid var(--ow-line,var(--line));border-radius:18px;display:grid;gap:7px}
+.dv-cash-overview span{font-size:12px;font-weight:750;display:flex;align-items:center;gap:8px}
+.dv-cash-overview span svg{color:var(--accent)}
+.dv-cash-overview strong{font-size:31px;line-height:1.12;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.dv-cash-overview small{color:var(--ow-sub,var(--muted));font-size:11px}
+.dv-cash-panels{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(285px,1fr);gap:15px;align-items:start}
+.dv-cash-pending,.dv-cash-production{background:var(--ow-card,var(--surface));border:1px solid var(--ow-line,var(--line));border-radius:21px;min-width:0;overflow:hidden}
+.dv-cash-pending>header,.dv-cash-production>header{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:22px 22px 16px;border-bottom:1px solid var(--ow-line,var(--line))}
+.dv-cash-pending h3,.dv-cash-production h3{margin:6px 0 0;font-size:22px;letter-spacing:-.025em}
+.dv-cash-pending h3 b{font-size:12px;font-weight:750;background:var(--ow-bg,var(--soft));padding:7px 10px;vertical-align:middle;border-radius:10px;margin-left:6px}
+.dv-cash-pending-caption{font-size:11px;color:var(--ow-sub,var(--muted))}
+.dv-cash-list{display:grid;gap:12px;padding:16px;max-height:740px;overflow-y:auto;scrollbar-width:thin}
+.dv-cash-order{background:color-mix(in srgb,var(--ow-card,var(--surface)) 92%,var(--ow-bg,var(--soft)) 8%);padding:16px;border:1px solid var(--ow-line,var(--line));border-radius:16px;display:grid;gap:10px}
+.dv-cash-order-top{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.dv-cash-order-top strong{font-size:19px;font-weight:850}
+.dv-cash-order-top span{font-size:12px;display:inline-flex;align-items:center;gap:7px;color:var(--ow-sub,var(--muted));font-variant-numeric:tabular-nums}
+.dv-cash-order-name{margin:0;color:var(--ow-sub,var(--muted));font-size:12px}
+.dv-cash-order-items{border-block:1px dashed var(--ow-line,var(--line));padding:10px 0;display:grid;gap:6px;font-size:13px}
+.dv-cash-order-items div b{color:var(--accent);padding-right:7px}
+.dv-cash-order-items small{font-size:11px;color:var(--ow-sub,var(--muted))}
+.dv-cash-order-note{padding:11px;font-size:12px;line-height:1.5;background:color-mix(in srgb,#e3a03a 11%,var(--ow-card,var(--surface)));border-radius:10px}
+.dv-cash-order-actions{display:grid;grid-template-columns:minmax(120px,.6fr) minmax(175px,1.4fr);gap:9px}
+.dv-cash-order-actions button{padding:11px 9px;border-radius:12px;min-height:47px;display:flex;justify-content:center;align-items:center;gap:8px;font-weight:780;font-size:12px}
+.dv-cash-detail{border:1px solid var(--ow-line,var(--line));background:var(--ow-card,var(--surface));color:var(--ow-ink,var(--ink))}
+.dv-cash-accept{border:1px solid var(--accent);background:var(--accent);color:#fff}
+.dv-cash-accept:disabled{opacity:.5;cursor:not-allowed}
+.dv-cash-empty{display:grid;justify-items:center;text-align:center;padding:65px 18px;color:var(--ow-sub,var(--muted))}
+.dv-cash-empty svg{color:var(--accent);opacity:.65}
+.dv-cash-empty strong{color:var(--ow-ink,var(--ink));font-size:18px;margin-top:13px}
+.dv-cash-empty p{max-width:360px;font-size:12px;line-height:1.55}
+.dv-cash-production{padding-bottom:16px}
+.dv-cash-production>header{display:block}
+.dv-cash-production header p{font-size:12px;color:var(--ow-sub,var(--muted));margin:7px 0 0}
+.dv-cash-production-group{padding:13px 18px}
+.dv-cash-production-group h4{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--ow-line,var(--line));padding:0 0 9px;margin:0 0 7px;font-size:13px}
+.dv-cash-production-group h4 b{background:var(--ow-bg,var(--soft));border-radius:8px;padding:5px 8px}
+.dv-cash-production-group>div{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0}
+.dv-cash-production-group>div>span{display:grid;gap:3px}
+.dv-cash-production-group>div b{font-size:13px}
+.dv-cash-production-group>div small{font-size:11px;color:var(--ow-sub,var(--muted))}
+.dv-cash-production-group>div button{border:1px solid var(--ow-line,var(--line));background:var(--ow-bg,var(--soft));border-radius:10px;display:grid;place-items:center;width:38px;height:36px;color:var(--ow-ink,var(--ink))}
+.dv-cash-production-open{display:flex;align-items:center;justify-content:center;gap:9px;margin:14px 18px 0;min-height:43px;width:calc(100% - 36px);border:1px solid var(--ow-line,var(--line));border-radius:13px;background:var(--ow-bg,var(--soft));color:var(--ow-ink,var(--ink));font-size:13px;font-weight:800}
+.dv-cash-safety{font-size:11px;line-height:1.55;color:var(--ow-sub,var(--muted));margin:0}
+.dv-cash-console button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:1000px){.dv-cash-panels{grid-template-columns:1fr}.dv-cash-hero{align-items:flex-start;flex-wrap:wrap}}
+@media(max-width:650px){.dv-cash-hero{padding:20px}.dv-cash-goto-kitchen{width:100%}.dv-cash-overview{gap:7px}.dv-cash-overview>div{padding:12px 10px}.dv-cash-overview span{font-size:10px}.dv-cash-overview strong{font-size:26px}.dv-cash-overview small{font-size:10px}.dv-cash-pending>header{flex-wrap:wrap}.dv-cash-order-actions{grid-template-columns:1fr}.dv-cash-list{max-height:none;padding:10px}}
+
+
+/* La capacidad informa, pero no promete bloquear pedidos sin servidor. */
+.dv-cash-capacity{display:flex;gap:11px;align-items:flex-start;padding:13px 15px;border-radius:14px;border:1px solid color-mix(in srgb,#d89e45 48%,var(--ow-line,var(--line)));background:color-mix(in srgb,#eda34a 12%,var(--ow-card,var(--surface)));font-size:12px;line-height:1.55;font-weight:700}
+.dv-cash-capacity svg{flex-shrink:0;color:#c67c29}
+
+
+@supports not (background:color-mix(in srgb,#fff,#000)){
+ .dv-cash-hero,.dv-cash-order,.dv-cash-overview>div,.dv-cash-pending,.dv-cash-production{background:var(--ow-card,var(--surface))}
+ .dv-cash-capacity{background:var(--ow-bg,var(--soft))}
+}
+/* Pedidos programados: Caja activa únicamente los vencidos. */
+.dv-cash-scheduled{border:1px solid var(--ow-line,var(--line));border-radius:20px;background:var(--ow-card,var(--surface));overflow:hidden}
+.dv-cash-scheduled>header{display:flex;align-items:center;gap:9px;padding:15px 18px;background:var(--ow-bg,var(--soft))}
+.dv-cash-scheduled>header svg{color:var(--accent)}
+.dv-cash-scheduled>header strong{font-size:14px}
+.dv-cash-scheduled>header span{margin-left:auto;font-size:11px;color:var(--ow-sub,var(--muted))}
+.dv-cash-scheduled-row{display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid var(--ow-line,var(--line));padding:12px 18px}
+.dv-cash-scheduled-row>div{display:grid;gap:5px;min-width:0}
+.dv-cash-scheduled-row strong{font-size:13px}
+.dv-cash-scheduled-row small,.dv-cash-scheduled-row>span{font-size:11px;color:var(--ow-sub,var(--muted))}
+.dv-cash-scheduled-row button{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;padding:11px 13px;min-height:43px;border-radius:12px;background:var(--accent);color:#fff;font-size:12px;font-weight:850}
+.dv-cash-scheduled-row button:disabled{opacity:.48}
+.dv-cash-scheduled>p{padding:8px 17px;color:#c36b34;font-size:12px}
+@media(max-width:620px){.dv-cash-scheduled>header,.dv-cash-scheduled-row{align-items:flex-start;flex-wrap:wrap}.dv-cash-scheduled>header span{margin-left:0}.dv-cash-scheduled-row button{width:100%;justify-content:center}}

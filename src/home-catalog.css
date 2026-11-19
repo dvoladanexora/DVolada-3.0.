@@ -83,3 +83,35 @@
 
 /* Mobile restaurant carousels: swipe naturally without a visible scrollbar */
 @media(max-width:900px){.dv-restaurant-shelves .dv-shelf-track{scrollbar-width:none!important;-ms-overflow-style:none!important;touch-action:pan-x pan-y!important;padding-bottom:8px!important}.dv-restaurant-shelves .dv-shelf-track::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}}
+
+/* Home visual audit 2/3: accessible controls, narrow screens and both themes */
+.dv-home-controls,.dv-home-catalog,.dv-home-discovery,.dv-restaurant-shelves{min-width:0}
+.dv-home-food-feed>*{min-width:0}
+.dv-food-feed-card{padding:0!important;cursor:default}
+.dv-food-feed-open{color:var(--ink);border-radius:inherit}
+.dv-food-feed-info strong,.dv-shelf-food>strong,.dv-preview-item strong{overflow-wrap:anywhere}
+.dv-food-feed-info small,.dv-food-feed-details span,.dv-preview-heading span{line-height:1.45}
+.dv-food-feed-details b,.dv-shelf-food-bottom b,.dv-preview-item small{color:var(--ink);font-weight:850}
+.dv-home-category-chip.active,.dv-catalog-switch button.active{background:var(--accent);color:#fff}
+.dv-home-category-chip:focus-visible,.dv-food-feed-open:focus-visible,.dv-food-feed-heart:focus-visible,.dv-preview-item:focus-visible,.dv-shelf-food:focus-visible,.dv-home-repeat-track button:focus-visible,.dv-home-discovery-actions button:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.dv-home-category-track,.dv-preview-scroll,.dv-shelf-track{overscroll-behavior-x:contain}
+.dv-home-category-chip,.dv-food-feed-heart,.dv-preview-item,.dv-shelf-food{touch-action:manipulation}
+[data-theme="dark"] .dv-food-feed-card,[data-theme="dark"] .dv-shelf-food,[data-theme="dark"] .dv-preview-item{color:var(--ink)}
+[data-theme="dark"] .dv-food-feed-heart{background:#24282e;color:#fff;border-color:#ffffff88}
+[data-theme="dark"] .dv-food-feed-heart.active{background:#fff;color:#b52e37}
+[data-theme="dark"] .dv-food-feed-promo{background:#b83e17;color:#fff}
+@media(max-width:360px){
+ .dv-home-food-feed{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+ .dv-food-feed-info{padding:9px 8px;gap:5px}
+ .dv-food-feed-info strong{font-size:12px;line-height:1.4}
+ .dv-food-feed-info small{font-size:11px}
+ .dv-food-feed-details{gap:4px}
+ .dv-food-feed-details b{font-size:14px}
+ .dv-food-feed-heart{width:36px;height:36px;top:5px;right:5px}
+ .dv-home-repeat{display:grid;gap:6px}
+ .dv-shelf-heading{align-items:flex-start;flex-wrap:wrap}
+}
+@media(prefers-reduced-motion:reduce){
+ .dv-food-feed-card,.dv-food-feed-card img,.dv-shelf-food,.dv-home-discovery-actions button{transition:none!important}
+ .dv-food-feed-card:hover,.dv-shelf-food:hover,.dv-home-discovery-actions button:hover{transform:none!important}
+}

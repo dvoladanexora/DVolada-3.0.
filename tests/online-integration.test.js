@@ -162,3 +162,15 @@ test('La ruta pública mantiene los accesos internos cerrados hasta autenticaci�
  assert.ok(main.includes("page==='delivery-panel'&&INTERNAL_PREVIEW_ENABLED&&previewCourierId"));
  assert.ok(main.includes("orders={courierViewOrders(orders,previewCourierId)}"));
 });
+
+test('Cliente puede borrar únicamente datos locales Dvolada con confirmación explícita',()=>{
+ const src=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ const start=src.indexOf('function clearLocalDemoData()'),end=src.indexOf("const nav=[['home'",start);
+ assert.ok(start>0&&end>start);
+ const action=src.slice(start,end);
+ assert.ok(action.includes('window.confirm(confirmation)'));
+ assert.ok(action.includes("key.startsWith('dv_')"));
+ assert.ok(action.includes('localStorage.removeItem(key)'));
+ assert.ok(action.includes('window.location.assign(import.meta.env.BASE_URL)'));
+ assert.ok(src.includes('Borrar datos de prueba de este dispositivo'));
+});

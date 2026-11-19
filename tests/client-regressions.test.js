@@ -101,3 +101,15 @@ test('Mis pedidos: empty states respect filters and canceled orders go to histor
  assert.equal((app.match(/title="Sin pedidos que coincidan"/g)||[]).length,2);
  assert.equal((app.match(/\.includes\(normalizeFoodSearch\(historyQuery\)\)\)\)\.length===0/g)||[]).length,2);
 });
+
+test('Mandados: submit button follows phone, address, budget and connectivity validation',()=>{
+ assert.match(app,/disabled=\{isOffline\|\|!list\.length/);
+ assert.match(app,/guestPhone\.replace\(\/\\D\/g,''\)\.length<8/);
+ assert.match(app,/address\.trim\(\)\.length<8/);
+ assert.match(app,/!Number\.isFinite\(Number\(budget\)\)/);
+});
+test('Mandados: list items are trimmed and removable by accessible name',()=>{
+ assert.match(app,/name:newItem\.trim\(\),qty:newQty\.trim\(\)/);
+ assert.match(app,/aria-label=\{'Quitar '\+i\.name\+' de la lista'\}/);
+ assert.match(app,/const id='DM-'\+Date\.now\(\)\.toString\(36\)/);
+});

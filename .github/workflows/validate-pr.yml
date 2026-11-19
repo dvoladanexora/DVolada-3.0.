@@ -38,5 +38,9 @@ jobs:
         run: npm run test:hardening
       - name: Pruebas de repartidores, asignaciones, PIN y GPS
         run: npm run test:courier
+      - name: Pruebas integrales de pedidos, extras y PWA
+        run: npm run test:integration
+      - name: Validar sintaxis del servidor preliminar
+        run: npm run check:server
       - name: Compilar aplicación
         run: npm run build

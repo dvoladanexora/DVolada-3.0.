@@ -332,3 +332,10 @@ test('Auditoría carrito: catalog validation preserves hyphenated product IDs',(
  assert.match(app,/String\(i\.id\)===String\(line\.productId\?\?line\.id\)/);
  assert.doesNotMatch(app,/line\.productId\?\?String\(line\.id\)\.split\('-'\)\[0\]/);
 });
+
+test('Auditoría carrito: malformed prices show warnings instead of silently passing',()=>{
+ const warnings=app.slice(app.indexOf('const cartIssues='),app.indexOf('const count=cart.reduce',app.indexOf('const cartIssues=')));
+ assert.match(warnings,/!Number\.isFinite\(currentPrice\)/);
+ assert.match(warnings,/!Number\.isFinite\(Number\(line\.price\)\)/);
+ assert.match(warnings,/precio actualizado o inválido/);
+});

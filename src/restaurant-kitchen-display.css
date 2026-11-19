@@ -1,0 +1,63 @@
+/* Dvolada Cloud: pantalla de producción KDS. Compatible con temas claro/oscuro. */
+.dv-kitchen-screen{display:grid;gap:16px;color:var(--ow-ink,var(--ink));min-width:0}
+.dv-kitchen-overview{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:24px;border-radius:24px;border:1px solid var(--ow-line,var(--line));background:linear-gradient(130deg,color-mix(in srgb,var(--ow-card,var(--surface)) 93%,var(--accent) 7%),var(--ow-card,var(--surface)));position:relative;overflow:hidden}
+.dv-kitchen-overview:after{content:'';position:absolute;pointer-events:none;right:-85px;top:-100px;width:260px;height:260px;background:radial-gradient(circle,color-mix(in srgb,var(--accent) 13%,transparent),transparent 70%);border-radius:50%}
+.dv-kitchen-heading{max-width:660px;position:relative;z-index:1}
+.dv-kitchen-eyebrow{font-size:11px;font-weight:850;letter-spacing:.11em;color:var(--accent);display:inline-flex;align-items:center;gap:8px}
+.dv-kitchen-heading h2{font-size:clamp(20px,2.2vw,29px);letter-spacing:-.035em;line-height:1.2;margin:12px 0 6px}
+.dv-kitchen-heading p{font-size:13px;color:var(--ow-sub,var(--muted));line-height:1.55;margin:0}
+.dv-kitchen-metrics{display:grid;grid-template-columns:repeat(3, minmax(72px,1fr));gap:10px;flex-shrink:0;z-index:1}
+.dv-kitchen-metrics>div{border-radius:16px;border:1px solid var(--ow-line,var(--line));background:var(--ow-card,var(--surface));text-align:center;padding:13px 12px;min-width:0}
+.dv-kitchen-metrics small{display:block;color:var(--ow-sub,var(--muted));font-size:10px;line-height:1.25;font-weight:700}
+.dv-kitchen-metrics strong{font-size:29px;display:block;line-height:1.2;margin-top:6px;letter-spacing:-.04em}
+.dv-kitchen-status-strip{display:flex;flex-wrap:wrap;align-items:center;gap:9px;padding:12px;border-radius:15px;border:1px solid var(--ow-line,var(--line));background:var(--ow-card,var(--surface))}
+.dv-kitchen-status-strip>span,.dv-kitchen-pending{font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:8px;padding:7px 10px;border-radius:11px;background:var(--ow-bg,var(--soft))}
+.dv-kitchen-live-dot{width:8px;height:8px;border-radius:50%;background:#16aa70;display:inline-block}
+.dv-kitchen-live-dot.inactive{background:#dd7937}
+.dv-kitchen-status-strip .dv-kitchen-warning{color:#b75e16;background:color-mix(in srgb,#e59b39 14%,var(--ow-card,var(--surface)))}
+.dv-kitchen-pending{margin-left:auto;border:1px solid color-mix(in srgb,var(--accent) 28%,var(--ow-line,var(--line)));color:var(--ow-ink,var(--ink));cursor:pointer}
+.dv-kitchen-lanes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+.dv-kitchen-lane{min-width:0;border:1px solid var(--ow-line,var(--line));border-radius:23px;background:color-mix(in srgb,var(--ow-card,var(--surface)) 93%,var(--ow-bg,var(--soft)) 7%);overflow:hidden}
+.dv-kitchen-lane>header{display:flex;align-items:center;gap:10px;padding:18px 15px;border-bottom:1px solid var(--ow-line,var(--line))}
+.dv-kitchen-lane-icon{width:42px;height:42px;border-radius:14px;background:color-mix(in srgb,var(--accent) 11%,var(--ow-card,var(--surface)));display:grid;place-items:center;flex-shrink:0;color:var(--accent)}
+.dv-kitchen-lane-preparing .dv-kitchen-lane-icon{background:color-mix(in srgb,#2884db 13%,var(--ow-card,var(--surface)));color:#3a91dc}
+.dv-kitchen-lane-ready .dv-kitchen-lane-icon{background:color-mix(in srgb,#21ab73 13%,var(--ow-card,var(--surface)));color:#17986d}
+.dv-kitchen-lane>header>div:nth-child(2){flex:1;min-width:0}
+.dv-kitchen-lane h3{font-size:16px;letter-spacing:-.025em;margin:0 0 4px}
+.dv-kitchen-lane>header span{font-size:11px;color:var(--ow-sub,var(--muted))}
+.dv-kitchen-count{font-size:17px;background:var(--ow-bg,var(--soft));border-radius:11px;min-width:35px;text-align:center;padding:8px 6px}
+.dv-kitchen-lane-orders{display:grid;gap:11px;padding:12px;max-height:min(78vh,1040px);overflow-y:auto;scrollbar-width:thin}
+.dv-kitchen-order{padding:16px;display:grid;gap:13px;border:1px solid var(--ow-line,var(--line));border-radius:17px;background:var(--ow-card,var(--surface));box-shadow:0 5px 22px #00000006;overflow-wrap:anywhere}
+.dv-kitchen-order.is-delayed{border-color:color-mix(in srgb,#ed9a43 70%,var(--ow-line,var(--line)));box-shadow:inset 3px 0 #e69c3c}
+.dv-kitchen-order-top{display:flex;align-items:flex-start;gap:8px;justify-content:space-between}
+.dv-kitchen-order-label{display:block;font-size:10px;font-weight:850;letter-spacing:.12em;color:var(--ow-sub,var(--muted))}
+.dv-kitchen-order-top h3{margin:4px 0 0;font-size:clamp(15px,1.7vw,20px);line-height:1.2;font-weight:850}
+.dv-kitchen-timer{display:inline-flex;align-items:center;gap:5px;border-radius:10px;background:var(--ow-bg,var(--soft));white-space:nowrap;padding:7px 9px;font-size:12px;font-weight:850;font-variant-numeric:tabular-nums}
+.dv-kitchen-timer.late{background:color-mix(in srgb,#eaa23b 17%,var(--ow-card,var(--surface)));color:#b56a20}
+.dv-kitchen-service{display:flex;gap:7px;justify-content:space-between;flex-wrap:wrap;font-size:11px;color:var(--ow-sub,var(--muted));font-weight:700}
+.dv-kitchen-service span:last-child{color:var(--ow-ink,var(--ink))}
+.dv-kitchen-products{list-style:none;margin:0;padding:7px 0;border-top:1px dashed var(--ow-line,var(--line));border-bottom:1px dashed var(--ow-line,var(--line));display:grid;gap:2px}
+.dv-kitchen-products li{display:flex;gap:12px;padding:8px 0;line-height:1.35;align-items:flex-start}
+.dv-kitchen-qty{display:grid;place-items:center;flex-shrink:0;width:33px;min-height:31px;border-radius:9px;background:color-mix(in srgb,var(--accent) 12%,var(--ow-card,var(--surface)));color:var(--accent);font-weight:850}
+.dv-kitchen-products li>div{min-width:0;display:grid;gap:5px}
+.dv-kitchen-products strong{font-size:15px}
+.dv-kitchen-products small{font-size:11px;line-height:1.4;color:var(--ow-sub,var(--muted))}
+.dv-kitchen-products .dv-kitchen-item-note{color:var(--ow-ink,var(--ink));background:var(--ow-bg,var(--soft));padding:6px 8px;border-radius:7px}
+.dv-kitchen-order-note{display:flex;gap:9px;align-items:flex-start;background:color-mix(in srgb,#ed9a43 13%,var(--ow-card,var(--surface)));border-radius:10px;padding:11px;font-size:12px;line-height:1.5}
+.dv-kitchen-order-note svg{flex-shrink:0;color:#c17a2d}
+.dv-kitchen-order-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.dv-kitchen-order-actions button{display:flex;align-items:center;gap:7px;justify-content:center;font-weight:750;font-size:12px;border-radius:10px;border:1px solid var(--ow-line,var(--line));background:var(--ow-bg,var(--soft));color:var(--ow-ink,var(--ink));min-height:42px;padding:9px}
+.dv-kitchen-progress{display:flex;align-items:center;justify-content:center;gap:7px;padding:12px 8px;min-height:50px;font-weight:850;border-radius:12px;background:var(--accent);color:white;cursor:pointer}
+.dv-kitchen-progress.dv-kitchen-preparing{background:#16795d;color:#fff}
+.dv-kitchen-progress:disabled{opacity:.45;cursor:not-allowed}
+.dv-kitchen-offline{color:var(--ow-sub,var(--muted));font-size:11px}
+.dv-kitchen-ready-message{display:flex;align-items:center;gap:8px;color:#18845e;font-weight:700;font-size:12px}
+.dv-kitchen-empty{display:grid;justify-items:center;gap:8px;padding:35px 14px;text-align:center;color:var(--ow-sub,var(--muted))}
+.dv-kitchen-empty svg{opacity:.4}
+.dv-kitchen-empty p{margin:0;max-width:210px;font-size:12px;line-height:1.5}
+.dv-kitchen-system-note{font-size:11px;color:var(--ow-sub,var(--muted));margin:0;line-height:1.5;padding:0 4px}
+.dv-kitchen-screen button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:1250px){.dv-kitchen-lanes{grid-template-columns:repeat(2,minmax(0,1fr))}.dv-kitchen-lane-ready{grid-column:1/-1}.dv-kitchen-overview{align-items:flex-start;flex-wrap:wrap}}
+@media(max-width:760px){.dv-kitchen-lanes{grid-template-columns:1fr}.dv-kitchen-lane-ready{grid-column:auto}.dv-kitchen-lane-orders{max-height:none}.dv-kitchen-overview{padding:19px}.dv-kitchen-metrics{width:100%;grid-template-columns:repeat(3,minmax(0,1fr))}.dv-kitchen-status-strip{align-items:stretch}.dv-kitchen-pending{margin-left:0;flex:1;justify-content:center}.dv-kitchen-order{padding:14px}}
+@media(min-width:1650px){.ow-kitchen-full .dv-kitchen-lanes{gap:22px}.ow-kitchen-full .dv-kitchen-order{padding:22px}.ow-kitchen-full .dv-kitchen-products strong{font-size:19px}.ow-kitchen-full .dv-kitchen-order-top h3{font-size:25px}}
+@media(prefers-reduced-motion:reduce){.dv-kitchen-screen *{scroll-behavior:auto!important}}

@@ -468,3 +468,14 @@ test('Tarjetas de restaurantes distinguen pausa, cierre y fuera de horario',()=>
  assert.equal(restaurantStatus(paused),'Pausado');
  assert.equal(restaurantOrderBlockReason(paused), 'El restaurante '+open.name+' está en pausa y no recibe pedidos nuevos.');
 });
+
+test('La tienda no importa los paneles internos en el paquete inicial',()=>{
+ const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(!app.includes("import {AffiliateLogin,AffiliateOnlinePanel} from './AffiliateOnline.jsx'"));
+ assert.ok(!app.includes("import CourierOnlineDashboard from './CourierOnlineDashboard.jsx'"));
+ assert.ok(app.includes("React.lazy(()=>import('./AffiliateOnline.jsx')"));
+ assert.ok(app.includes("React.lazy(()=>import('./CourierOnlineDashboard.jsx'))"));
+ assert.ok(app.includes('<React.Suspense fallback={panelLoading}><AffiliateOnlinePanel'));
+ assert.ok(app.includes('<React.Suspense fallback={panelLoading}><CourierOnlineDashboard'));
+ assert.ok(app.includes('role="status" aria-live="polite"'));
+});

@@ -1,7 +1,7 @@
 name: Validar cambios Dvolada
 on:
   pull_request:
-    branches: [main]
+    # Validar también los PR apilados sobre ramas de trabajo; nunca desplegar por este flujo.
     paths-ignore:
       - '**/*.md'
       - 'docs/**'

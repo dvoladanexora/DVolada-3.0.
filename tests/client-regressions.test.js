@@ -202,3 +202,15 @@ test('Invitar amigos: responsive layout and dark mode keep QR and buttons usable
  assert.match(customerStyles,/@media\(max-width:420px\)/);
  assert.match(customerStyles,/\.dv32 \.dv-invite-page button:focus-visible/);
 });
+
+const clubSource=readFileSync(new URL('../src/GrowthFeatures.jsx',import.meta.url),'utf8');
+test('Dvolada Club: demo points never become negative with malformed coupon data',()=>{
+ assert.match(clubSource,/const spentPoints=Array\.isArray\(coupon\)/);
+ assert.match(clubSource,/const availablePoints=Math\.max\(0,points-spentPoints\)/);
+ assert.match(clubSource,/if\(availablePoints<100\)return/);
+});
+test('Dvolada Club: rewards persist before success and remain explicitly demo',()=>{
+ assert.match(clubSource,/localStorage\.setItem\('dv_demo_coupons',JSON\.stringify\(next\)\)/);
+ assert.match(clubSource,/catch\{window\.alert\('No se pudo guardar el cupón de demostración/);
+ assert.match(clubSource,/Los cupones no modifican el total del pedido todavía/);
+});

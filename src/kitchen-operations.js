@@ -37,6 +37,15 @@ export function kitchenQueues(orders,restaurantId,now=Date.now()){
   ready:relevant.filter(o=>o.status==='Listo').sort(byAge),
  };
 }
+/** Renderizado incremental: mantiene el total y la cola real sin pintar todas las tarjetas.
+ * Solo limita tarjetas visibles; no altera estados ni oculta las métricas globales.
+ */
+export function kitchenVisibleBatch(rows,limit=20){
+ const list=Array.isArray(rows)?rows:[];
+ const size=Number.isInteger(limit)?Math.max(1,Math.min(500,limit)):20;
+ const visible=list.slice(0,size);
+ return {visible,shown:visible.length,total:list.length,remaining:Math.max(0,list.length-visible.length)};
+}
 export const matchesRestaurantOrder=(order,query)=>{
  const q=String(query||'').trim().toLocaleLowerCase('es');
  if(!q)return true;

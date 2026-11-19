@@ -241,3 +241,15 @@ test('Pedidos grupales: copy failures, empty state and removal are handled',()=>
  assert.match(groupSource,/Aún no creaste grupos en este dispositivo/);
  assert.match(groupSource,/¿Eliminar este grupo de demostración\?/);
 });
+
+const groupStyles=readFileSync(new URL('../src/operations-extras.css',import.meta.url),'utf8');
+test('Pedidos grupales: group-only layout wrapper is valid JSX',()=>{
+ assert.match(groupSource,/if\(type==='group'\)return <div className="ox-group-page">\{wrap\(/);
+ assert.match(groupSource,/Aún no creaste grupos en este dispositivo\.<\/p>\)\}<\/div>\);?\}<\/div>;/);
+});
+test('Pedidos grupales: responsive panels, dark theme and keyboard focus are scoped',()=>{
+ assert.match(groupStyles,/\.dv32 \.ox-group-page \.ox-grid\{display:grid/);
+ assert.match(groupStyles,/@media\(max-width:760px\)/);
+ assert.match(groupStyles,/\[data-theme="dark"\] \.dv32 \.ox-group-page \.ox-panel/);
+ assert.match(groupStyles,/\.dv32 \.ox-group-page \.ox-btn:focus-visible/);
+});

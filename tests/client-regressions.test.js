@@ -565,3 +565,53 @@ test('Pedido activo: repeat is not offered while an existing food order is still
  assert.ok(active.includes('Copiar PIN'));
  assert.ok(active.includes("navigator.clipboard.writeText(String(o.pin)).then"));
 });
+
+
+test('Cliente: unexpected render failures show a recovery screen instead of a blank app',()=>{
+ assert.ok(app.includes('class DvoladaErrorBoundary extends React.Component'));
+ assert.ok(app.includes("key?.startsWith('dv_')"));
+ assert.ok(app.includes('<DvoladaErrorBoundary><App/><PwaUpdatePrompt/></DvoladaErrorBoundary>'));
+ assert.ok(customerStyles.includes('.dv-fatal-recovery'));
+});
+
+test('Cliente: malformed profile fields are normalized before rendering forms',()=>{
+ assert.ok(app.includes("const cleanProfile=value=>"));
+ assert.ok(app.includes("name:typeof p.name==='string'?p.name:''"));
+ assert.ok(app.includes("[profile,setProfile]=useState(()=>cleanProfile(stored('dv_local_profile'"));
+});
+
+test('Ayuda: customer help modal exposes dialog semantics',()=>{
+ assert.ok(app.includes('role="dialog" aria-modal="true" aria-labelledby="dv-help-title"'));
+ assert.ok(app.includes('<h2 id="dv-help-title">Centro de ayuda del cliente</h2>'));
+});
+
+test('Restaurantes: ratings are isolated by stable restaurant ID with legacy-name fallback',()=>{
+ assert.ok(app.includes('placeId:orderToRate.placeId??null'));
+ assert.ok(app.includes("r.placeId!=null?String(r.placeId)===String(p.id):r.placeName===p.name"));
+ assert.ok(restaurantProfile.includes("r?.placeId!=null?String(r.placeId)===String(place.id):r?.placeName===place.name"));
+});
+
+test('Restaurantes: missing catalog images have visual fallbacks',()=>{
+ assert.ok(app.includes('dv-restaurant-image-placeholder'));
+ assert.ok(restaurantProfile.includes('dv-rp-cover-placeholder'));
+ assert.ok(customerStyles.includes('.dv-restaurant-image-placeholder'));
+ assert.ok(restaurantCss.includes('.dv-rp-cover-placeholder'));
+});
+
+test('Cliente: recent searches save completed queries instead of every keystroke',()=>{
+ assert.ok(app.includes("const rememberSearch=value=>"));
+ const header=app.slice(app.indexOf('<input maxLength={120} value={headerSearch}'),app.indexOf('placeholder="Buscar comida o restaurante"')+50);
+ assert.ok(header.includes("e.key==='Enter'"));
+ assert.ok(header.includes('rememberSearch(e.currentTarget.value)'));
+ assert.ok(!header.includes('setRecentSearches('));
+});
+
+test('Persistencia: Club, Flash, Group and Express discard malformed rows',()=>{
+ assert.ok(clubSource.includes("const asObjects=v=>asArray(v).filter(item=>item&&typeof item==='object')"));
+ assert.ok(clubSource.includes("useState(()=>asObjects(store('dv_flash_promos',[])))"));
+ assert.ok(groupSource.includes("value.filter(item=>item&&typeof item==='object')"));
+});
+
+test('Marca: Flash also uses the single-word Dvolada spelling',()=>{
+ assert.equal((clubSource.match(/D Volada/gi)||[]).length,0);
+});

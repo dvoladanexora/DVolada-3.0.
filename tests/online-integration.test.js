@@ -342,3 +342,16 @@ test('El estado se persiste en catálogo individual y ya no se usa solo como eti
  assert.ok(app.includes('onRestaurantStatusChange={saveRestaurantOperatingStatus}'));
  assert.ok(affiliate.includes('onRestaurantStatusChange={onRestaurantStatusChange}'));
 });
+
+test('Preferencias de Caja y Cocina se guardan por restaurante sin sobrescribir otro',()=>{
+ const ws=readFileSync(new URL('../src/OnlineWorkspace.jsx',import.meta.url),'utf8');
+ const af=readFileSync(new URL('../src/AffiliateOnline.jsx',import.meta.url),'utf8');
+ assert.ok(ws.includes("get('settings_'+prefId,{})"));
+ assert.ok(ws.includes("get('pauseUntil_'+prefId,null)"));
+ assert.ok(ws.includes("get('kitchenAlertMinutes_'+prefId,20)"));
+ assert.ok(ws.includes("savePreference('settings_'+prefId,settings)"));
+ assert.ok(ws.includes("savePreference('pauseUntil_'+prefId,pauseUntil)"));
+ assert.ok(ws.includes("savePreference('kitchenAlertMinutes_'+prefId,kitchenAlertMinutes)"));
+ assert.ok(af.includes("key={String(restaurantId??'')}"));
+ assert.ok(!ws.includes("localStorage.setItem('dv_online_settings'"));
+});

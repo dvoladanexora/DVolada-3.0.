@@ -88,3 +88,12 @@
  .dv-menu-product-image,.dv-menu-photo-preview,.dv-menu-fields input,.dv-menu-fields textarea,.dv-menu-fields select{background:var(--ow-bg,var(--soft))}
  .dv-menu-product-state.is-active{background:#16895e}.dv-menu-product-state.is-inactive{background:#6d6864}
 }
+/* Fase 2: navegación táctil y lectura clara de errores del formulario. */
+.dv-menu-load-more{width:100%;min-height:48px;padding:12px 16px;border:1px solid var(--ow-line,var(--line));border-radius:13px;background:var(--ow-card,var(--surface));color:var(--ow-ink,var(--ink));font-size:13px;font-weight:800;cursor:pointer}
+.dv-menu-load-more:hover{border-color:var(--accent)}
+.dv-menu-load-more:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.dv-menu-error-summary{padding:12px 14px;margin:0 0 14px;border-radius:12px;border:1px solid #d66c4f;background:color-mix(in srgb,#d66c4f 12%,var(--ow-card,var(--surface)));color:var(--ow-ink,var(--ink));font-size:13px;line-height:1.45;font-weight:750}
+.dv-menu-fields [aria-invalid=true]{border-color:#d66c4f!important;box-shadow:0 0 0 1px #d66c4f55}
+.dv-menu-management .dv-menu-product-actions button,.dv-menu-management .dv-menu-dialog-head button{min-height:44px;min-width:44px}
+.dv-menu-management .dv-menu-photo-upload:focus-within{outline:3px solid var(--accent);outline-offset:3px}
+@supports not (background:color-mix(in srgb,#fff,#000)){.dv-menu-error-summary{background:var(--ow-bg,var(--soft))}}

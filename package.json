@@ -9,7 +9,8 @@
     "test:online": "node --test tests/online-api.test.js",
     "test:preview": "node --test tests/preview-ui.test.js",
     "test:share": "node --test tests/share-sound.test.js",
-    "test:restaurant": "node --test tests/restaurant-cloud-flow.test.js"
+    "test:restaurant": "node --test tests/restaurant-cloud-flow.test.js",
+    "test:menu": "node --test tests/restaurant-menu.test.js"
   },
   "dependencies": {
     "react": "^18.3.1",

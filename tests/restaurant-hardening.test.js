@@ -93,7 +93,8 @@ test('La vista de Caja no debe modificar estados de Cocina y viceversa',()=>{
  assert.ok(src.includes("screen==='inicio'&&current.status==='Pendiente'"));
  assert.ok(src.includes("screen==='kitchen'&&current.status==='Aceptado'"));
  assert.ok(src.includes('RestaurantOrderDecisionDialog'));
- assert.ok(src.includes('onUpdate(decisionOrder.id,status,metadata)'));
+ assert.ok(src.includes("onUpdate(decisionOrder.id,status,metadata,decisionOrder.status,'cashier',business?.id)"));
+ assert.ok(src.includes('if(!response?.ok)'));
  assert.ok(src.includes('csvFromRows(historyCsvRows(records))'));
 });
 test('El guardado de pruebas es tolerante a fallas de almacenamiento',()=>{
@@ -115,7 +116,8 @@ test('Cancelación de un pedido aceptado puede volver a Aceptado al rechazar la 
 });
 test('Cancelaciones de pedidos aceptados se revisan en Caja, no se borran directamente',()=>{
  const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
- assert.ok(main.includes("const immediate=['Programado','Pendiente'].includes(cancelOrder.status)"));
+ assert.ok(main.includes('cancelDemoOrder(current,cancelOrder.id,reason)'));
+ assert.ok(main.includes('courierOrdersRef.current=outcome.orders'));
 });
 
 test('Preview local permite probar varios restaurantes sin exponer login ficticio en la web pública',()=>{

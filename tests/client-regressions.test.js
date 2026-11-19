@@ -190,3 +190,15 @@ test('Invitar amigos: copy and share give feedback for unsupported browsers and 
  assert.match(app,/No se pudo copiar el enlace/);
  assert.match(app,/e\?\.name!=='AbortError'/);
 });
+
+test('Invitar amigos: page and invitation code have accessible structure',()=>{
+ assert.match(app,/page-section dv-invite-page/);
+ assert.match(app,/className="dv-invite-code" aria-label=\{"Código de invitación "\+inviteCode\}/);
+});
+test('Invitar amigos: responsive layout and dark mode keep QR and buttons usable',()=>{
+ assert.match(customerStyles,/\.dv32 \.dv-invite-page \.dv-invite-panel\{display:grid/);
+ assert.match(customerStyles,/\.dv32 \.dv-invite-page \.dv-invite-qr img\{display:block/);
+ assert.match(customerStyles,/\[data-theme="dark"\] \.dv32 \.dv-invite-page \.dv-invite-panel/);
+ assert.match(customerStyles,/@media\(max-width:420px\)/);
+ assert.match(customerStyles,/\.dv32 \.dv-invite-page button:focus-visible/);
+});

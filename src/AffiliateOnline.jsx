@@ -22,5 +22,5 @@ export function AffiliateLogin({places=[],onLogin,onBack}){
  </div></section>;
 }
 export function AffiliateOnlinePanel({orders,places,restaurantId,onUpdate,onCatalogChange,onRestaurantChange,onRestaurantStatusChange,onLogout}){
- return <OnlineWorkspace orders={orders} places={places} restaurantId={restaurantId} onUpdate={onUpdate} onCatalogChange={onCatalogChange} onRestaurantChange={onRestaurantChange} onRestaurantStatusChange={onRestaurantStatusChange} onLogout={onLogout}/>;
+ return <OnlineWorkspace key={String(restaurantId??'')} orders={orders} places={places} restaurantId={restaurantId} onUpdate={onUpdate} onCatalogChange={onCatalogChange} onRestaurantChange={onRestaurantChange} onRestaurantStatusChange={onRestaurantStatusChange} onLogout={onLogout}/>;
 }

@@ -463,3 +463,10 @@ test('Auditoría notificaciones: local storage failures do not break notificatio
  const notices=app.slice(app.indexOf('className="dv-bell-wrap"'),app.indexOf('className="dv-cart-header-toggle"'));
  assert.ok(notices.includes("try{localStorage.setItem('dv_read_notifications',JSON.stringify(next))}catch{}"));
 });
+
+
+test('Auditoría arranque: invite code and animation preferences tolerate blocked localStorage',()=>{
+ assert.ok(app.includes("[inviteCode]=useState(()=>{try{let c=localStorage.getItem('dv_invite_code')"));
+ assert.ok(app.includes("catch{return 'DV'+Math.random().toString(36).slice(2,8).toUpperCase()}"));
+ assert.ok(app.includes("try{localStorage.setItem('dv_reduce_animations',JSON.stringify(reduceAnimations))}catch{}"));
+});

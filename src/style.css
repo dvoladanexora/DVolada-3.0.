@@ -1351,3 +1351,8 @@ body:has(.modal-backdrop) .mobile-nav.dv-compact-nav{visibility:hidden!important
 .dv32.dv-welcome-mode .welcome-actions .welcome-signup{border:0;background:none;color:var(--muted);font-size:13px;padding:8px 10px;text-align:center;font-weight:600;text-decoration:underline;text-underline-offset:3px}
 .dv32.dv-welcome-mode .welcome-actions .welcome-signup:hover{color:var(--accent)}
 @media(max-width:900px){.dv32.dv-welcome-mode .welcome-panel>.welcome-affiliates{display:grid!important}.dv32.dv-welcome-mode .welcome-panel>.welcome-actions .welcome-signup{display:block!important;min-height:38px}}
+
+/* Privacidad: eliminar datos de demostración voluntariamente, con confirmación. */
+.dv-more-delete-local{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:43px;margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--muted);font-size:12px;font-weight:800}
+.dv-more-delete-local:hover{color:var(--ink);border-color:var(--accent)}
+.dv-more-delete-local:focus-visible{outline:2px solid var(--accent);outline-offset:3px}

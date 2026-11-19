@@ -327,3 +327,8 @@ test('Auditoría carrito: customized products use collision-resistant line IDs',
  assert.doesNotMatch(app,/id:item\.id\+'-'\+Date\.now\(\),productId:item\.id/);
  assert.match(app,/String\(i\.id\)===String\(item\.id\)&&String\(i\.placeId\)===String\(place\.id\)/);
 });
+
+test('Auditoría carrito: catalog validation preserves hyphenated product IDs',()=>{
+ assert.match(app,/String\(i\.id\)===String\(line\.productId\?\?line\.id\)/);
+ assert.doesNotMatch(app,/line\.productId\?\?String\(line\.id\)\.split\('-'\)\[0\]/);
+});

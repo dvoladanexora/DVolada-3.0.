@@ -44,3 +44,31 @@ export function normalizeRestaurantShiftLog(raw,businessId){
   at:record.at,activeOrders:Number(record.activeOrders)
  }));
 }
+
+
+/** Aplica cambios de ficha/menú/estado sobre el catálogo local MÁS RECIENTE.
+ * Solo evita sobrescrituras secuenciales entre pestañas, no es atomicidad real.
+ */
+export function mutateDemoPlaces(storage,fallbackPlaces,change){
+ if(typeof storage?.getItem!=='function'||typeof storage?.setItem!=='function')
+  return {ok:false,reason:'El almacenamiento del navegador no está disponible.'};
+ let latest;
+ try{
+  const raw=storage.getItem('dv_places');
+  latest=raw===null?(Array.isArray(fallbackPlaces)?fallbackPlaces:[]):JSON.parse(raw);
+ }catch{return {ok:false,reason:'El catálogo local no se pudo leer. No se aplicaron cambios.'}}
+ if(!validStoredRestaurants(latest)||latest.length>500)
+  return {ok:false,reason:'El catálogo guardado está dañado o excede el límite permitido.'};
+ let next;
+ try{next=change(latest)}catch{
+  return {ok:false,reason:'No se pudo validar la modificación del restaurante.'};
+ }
+ if(!validStoredRestaurants(next)||next.length>500)
+  return {ok:false,reason:'La modificación contiene productos inválidos. No se guardó.'};
+ try{
+  const content=JSON.stringify(next);
+  if(content.length>3_200_000)throw Error('Almacenamiento local lleno');
+  storage.setItem('dv_places',content);
+  return {ok:true,places:next};
+ }catch{return {ok:false,reason:'No se pudo guardar el catálogo en este navegador. Revisá el espacio.'}}
+}

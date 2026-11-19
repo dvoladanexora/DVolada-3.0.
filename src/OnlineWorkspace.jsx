@@ -1,5 +1,5 @@
 import {restaurantStatus,withinBusinessHours} from './restaurant-availability.js';
-import {recordRestaurantShift,shiftLogKey} from './restaurant-demo-bridge.js';
+import {recordRestaurantShift,shiftLogKey,normalizeRestaurantShiftLog} from './restaurant-demo-bridge.js';
 import RestaurantOrderDecisionDialog from './RestaurantOrderDecisionDialog.jsx';
 import {allowedDecision} from './restaurant-order-flow.js';
 import {csvFromRows,historyCsvRows} from './restaurant-export.js';
@@ -32,7 +32,7 @@ export default function OnlineWorkspace({orders=[],places=[],restaurantId,onUpda
  const [kitchenAlertMinutes,setKitchenAlertMinutes]=useState(()=>get('kitchenAlertMinutes_'+prefId,20));
  const [historyStatus,setHistoryStatus]=useState('all'),[historyRange,setHistoryRange]=useState('all');
  const [quickPanel,setQuickPanel]=useState('');
- const [shiftLog,setShiftLog]=useState(()=>get('shiftLog_'+String(restaurantId??places[0]?.id),[]));
+ const [shiftLog,setShiftLog]=useState(()=>normalizeRestaurantShiftLog(get('shiftLog_'+String(restaurantId??places[0]?.id),[]),restaurantId??places[0]?.id));
  const [decision,setDecision]=useState(null);
  const seen=useRef(null),audio=useRef(null),lastReminder=useRef({}),fullscreenTarget=useRef(null);
  const apiBase=(import.meta.env.VITE_DVOLADA_API_URL||'').trim().replace(/\/$/,'');
@@ -51,7 +51,7 @@ export default function OnlineWorkspace({orders=[],places=[],restaurantId,onUpda
   setNotice('Estado '+next.toLowerCase()+' guardado en este navegador de prueba. Los demás dispositivos requieren el servidor.');
   setModal('');
  };
- useEffect(()=>{if(business?.id!==undefined)setShiftLog(get('shiftLog_'+String(business.id),[]))},[business?.id]);
+ useEffect(()=>{if(business?.id!==undefined)setShiftLog(normalizeRestaurantShiftLog(get('shiftLog_'+String(business.id),[]),business.id))},[business?.id]);
  const list=orders.filter(o=>o.kind==='food'&&business&&String(o.placeId)===String(business.id));
  const active=list.filter(o=>!['Entregado','Cancelado','Rechazado','Cancelación solicitada'].includes(o.status));
  const older=active.filter(o=>o.status!=='Programado'&&!sameDay(dateOf(o)));

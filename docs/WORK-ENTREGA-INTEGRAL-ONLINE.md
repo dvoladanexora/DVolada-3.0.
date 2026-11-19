@@ -134,3 +134,17 @@ El frontend de demostración utiliza algunos servicios externos. Work debe audit
 **Aprobado técnicamente mediante tests:** reglas del frontend y demostración local en GitHub Actions.  
 **Pendiente de verificación Work:** navegadores y teléfonos reales, concurrencia, desconexiones, accesibilidad y operación del backend.  
 **Bloqueante para lanzamiento público:** autenticación, datos compartidos, pedidos auténticos, permisos, PIN servidor, notificaciones y pruebas de extremo a extremo.
+
+## 9. Auditoría adicional: acciones sobre estados desactualizados
+Las pantallas de pedidos de demostración ahora vuelven a comprobar **el estado actual del pedido** antes de escribir una cancelación o confirmar una acción de Caja/Cocina. Se utiliza `src/order-demo-operations.js` para aplicar reglas puras:
+- Cliente: una cancelación iniciada mientras el pedido estaba Pendiente y confirmada cuando ya está Aceptado pasa a **Cancelación solicitada**, no cancela automáticamente la preparación.
+- Cliente: órdenes Listo, Recogido, En camino, Entregado, Cancelado y estados terminales no pueden cancelarse desde una tarjeta vieja.
+- Caja: no se acepta dos veces la misma orden; no puede modificarse una orden de otro restaurante; los pedidos programados se activan solo cuando corresponde.
+- Cocina: Aceptado → Preparando → Listo; nunca se salta una etapa ni se reactiva una orden cancelada.
+- Rechazos y cancelaciones: deben incluir motivos válidos; al denegar cancelación se restaura exclusivamente el estado anterior permitido.
+- Si la interfaz detecta conflicto, informa el error y **no muestra un mensaje de éxito engañoso**.
+
+Estas barreras protegen la demostración dentro de una pestaña. **No resuelven la simultaneidad real entre dispositivos**: Work debe usar versiones del servidor, permisos, transacciones y reintentos explícitos.
+
+### Pruebas nuevas de conflictos
+`tests/online-integration.test.js` incluye ocho casos adicionales: cancelación competida, órdenes terminales, activación programada, dos cajas, etapas de cocina, aislamiento de negocio, rechazo con motivo y aviso de conflicto en pantalla.

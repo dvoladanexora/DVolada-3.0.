@@ -23,3 +23,21 @@ export function recordRestaurantShift(businessId,note,orders=[],now=new Date()){
  };
 }
 export const shiftLogKey=id=>'dv_online_shiftLog_'+String(id??'');
+
+/** Evita bloquear Caja si una versión antigua dejó datos de relevo dañados.
+ * No trata los registros locales como datos autenticados.
+ */
+export function normalizeRestaurantShiftLog(raw,businessId){
+ if(!Array.isArray(raw))return [];
+ return raw.filter(record=>
+  record&&typeof record==='object'&&!Array.isArray(record)
+  &&(typeof record.id==='string'||typeof record.id==='number')
+  &&String(record.restaurantId)===String(businessId)
+  &&typeof record.note==='string'&&record.note.trim().length>=5&&record.note.length<=400
+  &&typeof record.at==='string'&&Number.isFinite(Date.parse(record.at))
+  &&Number.isSafeInteger(Number(record.activeOrders))&&Number(record.activeOrders)>=0
+ ).slice(0,25).map(record=>({
+  id:String(record.id),restaurantId:String(businessId),note:record.note.trim(),
+  at:record.at,activeOrders:Number(record.activeOrders)
+ }));
+}

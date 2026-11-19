@@ -43,7 +43,7 @@ export default function RestaurantCashierConsole({orders=[],restaurantId,restaur
        {order.notes&&<div className="dv-cash-order-note">Nota: {order.notes}</div>}
        <div className="dv-cash-order-actions"><button type="button" onClick={()=>onDetail(order)} className="dv-cash-detail"><Eye size={17}/> Ver detalle</button><button type="button" disabled={!connected} onClick={()=>onAccept(order)} className="dv-cash-accept"><Check size={17}/> Aceptar y enviar a cocina</button></div>
       </article>;
-     }):<div className="dv-cash-empty"><Check size={34}/><strong>¡No hay pedidos por aceptar!</strong><p>{query.trim()||pendingView!=='all'?'No hay pedidos que coincidan con los filtros.':'Los pedidos nuevos de prueba aparecerán aquí al registrarse en este navegador.'}</p></div>}
+     }):<div className="dv-cash-empty"><Check size={34}/><strong>{query.trim()||pendingView!=='all'?'No hay resultados con estos filtros':'¡No hay pedidos por aceptar!'}</strong><p>{query.trim()||pendingView!=='all'?'No hay pedidos que coincidan con los filtros.':'Los pedidos nuevos de prueba aparecerán aquí al registrarse en este navegador.'}</p></div>}
      {shownPending.length>shownLimit&&<button type="button" className="dv-cash-load-more" onClick={()=>setShownLimit(limit=>limit+20)}>Mostrar 20 pedidos más · {shownLimit} de {shownPending.length} visibles</button>}
     </div>
    </section>

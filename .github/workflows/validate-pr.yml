@@ -34,5 +34,7 @@ jobs:
         run: npm run test:menu
       - name: Pruebas de ficha y horarios de restaurante
         run: npm run test:business
+      - name: Pruebas de flujo, cancelaciones, CSV y relevos
+        run: npm run test:hardening
       - name: Compilar aplicación
         run: npm run build

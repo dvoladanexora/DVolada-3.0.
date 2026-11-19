@@ -104,3 +104,9 @@
  .ow-mode-switch,.ow-topactions button[aria-label="Activar sonido de pedidos"],.ow-topactions button[aria-label="Probar sonido de pedido"]{background:var(--ow-card,var(--surface));border-color:var(--ow-line,var(--line))}
  .ow-mode-switch button.selected{background:var(--ow-bg,var(--soft))}
 }
+/* Registro local de relevos: diseño útil y legible en turnos largos */
+.ow-shift-history{display:grid;gap:9px;margin-top:20px;border-top:1px solid var(--ow-line,var(--line));padding-top:16px}
+.ow-shift-history h3{font-size:15px;letter-spacing:-.02em;margin:0 0 4px}
+.ow-shift-history article{padding:12px 14px;border-radius:12px;border:1px solid var(--ow-line,var(--line));background:var(--ow-card,var(--surface))}
+.ow-shift-history article strong{display:block;font-size:11px;color:var(--ow-sub,var(--muted));margin-bottom:5px}
+.ow-shift-history article p{font-size:12px;line-height:1.55;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}

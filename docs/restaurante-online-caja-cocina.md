@@ -83,3 +83,15 @@ npm run build
 - Work debe decidir la arquitectura definitiva (la API actual usa PostgreSQL y aún no está conectada; la futura cuenta Cloudflare será independiente).
 
 Para aprobar, probar con A cliente, B caja, C cocina, D repartidor, incluyendo pedidos simultáneos, conflictos, fallos de red, cancelaciones, stock agotado, fotos, alertas y reimpresiones. La sincronización B/C todavía NO existe.
+
+
+## Auditoría operativa adicional
+- Solicitudes de cancelación durante preparación: Caja aprueba o rechaza desde diálogo con motivo, que se registra en el estado de prueba.
+- Rechazo de nuevos pedidos: confirmación accesible con motivo de 5 a 220 caracteres; no aceptar decisiones inválidas o con estado viejo.
+- Marcas de tiempo Aceptado/Preparando/Listo y cronómetros de cada etapa con respaldo en fecha original si el pedido es antiguo.
+- No se permite mover estados de Cocina desde Caja, ni aceptar pedidos desde Cocina.
+- CSV del historial neutraliza fórmulas peligrosas de Excel/Sheets.
+- Notas de relevo fechadas y aisladas por restaurante, guardadas únicamente en el navegador.
+- En Vite DEV, las **pestañas del mismo navegador/origen** actualizan pedidos/catálogo con eventos de almacenamiento. **No sincroniza teléfonos, tablets o equipos diferentes.**
+- Guardado local tolerante al error de cuota; no sobrescribe toda la lista de claves si una sola cambia en otra pestaña.
+- Ejecutar `npm run test:hardening` junto a los tests anteriores.

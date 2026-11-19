@@ -404,13 +404,13 @@ test('Auditoría restaurantes: information dialog is reachable and keyboard visi
 });
 
 test('Auditoría Flash y Club: promotions expire and refresh while the view stays open',()=>{
- assert.ok(clubSource.includes("useEffect(()=>{const refresh=()=>{setNow(Date.now());setPromos(asArray(store('dv_flash_promos',[])))}"));
+ assert.ok(clubSource.includes("useEffect(()=>{const refresh=()=>{setNow(Date.now());setPromos(asObjects(store('dv_flash_promos',[])))}"));
  assert.ok(clubSource.includes('setInterval(refresh,30000)'));
  assert.ok(clubSource.includes("window.addEventListener('dv-flash-updated',refresh)"));
 });
 
 test('Auditoría Group/Express and discovery: local storage failures or wrong shapes do not crash the client flow',()=>{
- assert.ok(groupSource.includes("if(Array.isArray(initial))return Array.isArray(value)?value:initial"));
+ assert.ok(groupSource.includes("if(Array.isArray(initial))return Array.isArray(value)?value.filter(item=>item&&typeof item==='object'):initial"));
  assert.ok(groupSource.includes("try{localStorage.setItem(key+name,JSON.stringify(val))}catch"));
  assert.ok(discoverySource.includes('seen=Array.isArray(raw)?raw:[]'));
  assert.ok(discoverySource.includes("try{localStorage.setItem('dv_seen_tips',JSON.stringify(next))}catch{}"));

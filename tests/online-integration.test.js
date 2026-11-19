@@ -47,7 +47,10 @@ test('Cambios de catálogo, extras inexistentes y productos agotados impiden con
  assert.match(validateCartCatalog([first],[{...a,isOpen:false}]),/cerrado/);
  assert.equal(validateCartCatalog([first],[{...a,isOpen:false}],{scheduleMode:'later'}),null);
  assert.match(validateCartCatalog([],[]),/vacío/);
- assert.deepEqual(offeredExtrasFor(item(1,'Fresco de limón',25)),['Azúcar extra','Leche extra','Sin hielo']);
+ assert.deepEqual(offeredExtrasFor({id:1,name:'Fresco de limón',price:25}),['Azúcar extra','Leche extra','Sin hielo']);
+ assert.deepEqual(offeredExtrasFor(item(1,'Fresco de limón',25,[])),[]);
+ const withoutExtras={...a,items:[{...a.items[0],extras:[]}]};
+ assert.match(validateCartCatalog([first],[withoutExtras]),/extras/);
 });
 test('El cliente y el editor de restaurante usan la misma fuente de extras',()=>{
  const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');

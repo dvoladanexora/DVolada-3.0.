@@ -8,7 +8,7 @@ export async function saveReceiptImage(order,base='/'){
  const c=canvas.getContext('2d');if(!c)throw new Error('Canvas no disponible');
  const dark='#123b30',orange='#fa621c',muted='#66746b',cream='#fffaf4';
  const rect=(x,y,a,b,color)=>{c.fillStyle=color;c.fillRect(x,y,a,b)};
- const round=(x,y,a,b,r,color)=>{c.fillStyle=color;c.beginPath();c.roundRect(x,y,a,b,r);c.fill()};
+ const round=(x,y,a,b,r,color)=>{c.fillStyle=color;c.beginPath();if(typeof c.roundRect==='function')c.roundRect(x,y,a,b,r);else{const rr=Math.min(r,a/2,b/2);c.moveTo(x+rr,y);c.lineTo(x+a-rr,y);c.arcTo(x+a,y,x+a,y+rr,rr);c.lineTo(x+a,y+b-rr);c.arcTo(x+a,y+b,x+a-rr,y+b,rr);c.lineTo(x+rr,y+b);c.arcTo(x,y+b,x,y+b-rr,rr);c.lineTo(x,y+rr);c.arcTo(x,y,x+rr,y,rr);c.closePath()}c.fill()};
  const txt=(v,x,y,size=22,color=dark,weight='400',align='left')=>{c.fillStyle=color;c.font=weight+' '+size+'px Arial, sans-serif';c.textAlign=align;c.fillText(String(v??''),x,y);c.textAlign='left'};
  const fit=(v,max,width,size=22,weight='400')=>{let text=String(v??'');c.font=weight+' '+size+'px Arial';while(c.measureText(text).width>width&&text.length>3)text=text.slice(0,-2)+'…';return text};
  const drawLogo=(img,x,y,maxW,maxH)=>{const r=Math.min(maxW/img.naturalWidth,maxH/img.naturalHeight);const a=img.naturalWidth*r,b=img.naturalHeight*r;c.drawImage(img,x,y+(maxH-b)/2,a,b)};
@@ -70,5 +70,5 @@ export async function saveReceiptImage(order,base='/'){
  txt('No válido como factura fiscal.',p,footerY+57,17,muted);
  try{const nexora=await loadImage(base+'nexora-logo-original.png');const r=Math.min(300/nexora.naturalWidth,100/nexora.naturalHeight);const a=nexora.naturalWidth*r,b=nexora.naturalHeight*r;c.drawImage(nexora,w-p-a,footerY+7,a,b)}catch{txt('Powered by NEXORA SYSTEMS',w-p,footerY+67,20,dark,'700','right')}
  round(0,h-38,w,38,0,dark);txt('DVOLADA  •  PEDÍ FÁCIL',w/2,h-12,16,'#fff','700','center');
- await new Promise((resolve,reject)=>canvas.toBlob(blob=>{if(!blob)return reject(new Error('No se pudo generar el comprobante'));const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Dvolada-'+number.replace(/[^a-z0-9-]/gi,'')+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);resolve()},'image/png'));
+ await new Promise((resolve,reject)=>canvas.toBlob(blob=>{if(!blob)return reject(new Error('No se pudo generar el comprobante'));const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Dvolada-'+number.replace(/[^a-z0-9-]/gi,'')+'.png';a.style.display='none';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);resolve()},'image/png'));
 }

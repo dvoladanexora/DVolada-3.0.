@@ -1,0 +1,37 @@
+
+/* Sonido y avisos, panel flotante sin invadir el contenido */
+.dv-sound-onboard{display:flex;align-items:center;gap:14px;padding:15px 18px;margin-top:13px;margin-bottom:17px;border:1px solid color-mix(in srgb,var(--accent) 28%,var(--line));background:linear-gradient(110deg,color-mix(in srgb,var(--surface) 92%,var(--accent) 8%),var(--surface));border-radius:19px}
+.dv-sound-onboard-icon,.dv-sound-setting-icon{flex-shrink:0;display:grid;place-items:center;width:44px;height:44px;border-radius:14px;background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent)}
+.dv-sound-onboard-info{flex:1;display:grid;gap:5px;min-width:0}
+.dv-sound-onboard-info strong{font-size:14px}
+.dv-sound-onboard-info span{color:var(--muted);font-size:12px;line-height:1.45}
+.dv-sound-onboard-actions{display:flex;gap:7px;flex-shrink:0}
+.dv-sound-onboard-actions button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);font-weight:750;font-size:12px;min-height:42px}
+.dv-sound-onboard-actions .dv-sound-onboard-enable{background:var(--accent);border-color:var(--accent);color:white}
+.dv-sound-overlay{position:fixed;inset:0;z-index:13000;display:grid;place-items:center;padding:14px;background:rgba(10,20,30,.5);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
+.dv-sound-dialog{box-sizing:border-box;width:min(100%,475px);max-height:calc(100dvh - 28px);overflow-y:auto;padding:25px;border-radius:25px;border:1px solid color-mix(in srgb,var(--surface) 75%,#fff);background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(22px) saturate(125%);-webkit-backdrop-filter:blur(22px) saturate(125%);color:var(--ink);box-shadow:0 20px 65px rgba(0,0,0,.2)}
+.dv-sound-dialog-head{display:flex;justify-content:space-between;align-items:start;gap:14px}
+.dv-sound-dialog-head span{font-size:10px;letter-spacing:.13em;font-weight:800;color:var(--accent)}
+.dv-sound-dialog-head h2{margin:9px 0;font-size:25px}
+.dv-sound-dialog-head p{font-size:13px;color:var(--muted);line-height:1.5;margin:0 0 15px}
+.dv-sound-close{width:38px;height:38px;flex-shrink:0;border:1px solid var(--line);border-radius:50%;display:grid;place-items:center;background:var(--surface)}
+.dv-sound-setting{display:flex;align-items:center;gap:13px;padding:16px 0;border-top:1px solid var(--line)}
+.dv-sound-setting-content{display:grid;gap:5px;flex:1;min-width:0}
+.dv-sound-setting-content strong{font-size:14px}
+.dv-sound-setting-content small{font-size:12px;color:var(--muted);line-height:1.45}
+.dv-sound-switch{position:relative;display:inline-block;width:46px;height:28px;flex-shrink:0}
+.dv-sound-switch input{opacity:0;width:100%;height:100%;margin:0;position:absolute;z-index:2;cursor:pointer}
+.dv-sound-switch span{position:absolute;inset:0;border-radius:30px;background:var(--line);transition:background .2s}
+.dv-sound-switch span:after{content:'';position:absolute;left:3px;top:3px;width:22px;height:22px;background:white;border-radius:50%;box-shadow:0 1px 4px #0002;transition:transform .2s}
+.dv-sound-switch input:checked+span{background:var(--accent)}
+.dv-sound-switch input:checked+span:after{transform:translateX(18px)}
+.dv-sound-test,.dv-sound-request{display:flex;justify-content:center;align-items:center;gap:9px;min-height:43px;width:100%;border:1px solid var(--line);border-radius:13px;padding:10px;font-size:13px;font-weight:750;background:var(--surface);color:var(--ink)}
+.dv-sound-test{margin-bottom:10px}
+.dv-sound-request{background:color-mix(in srgb,var(--accent) 9%,var(--surface));border-color:color-mix(in srgb,var(--accent) 25%,var(--line))}
+.dv-sound-request:disabled{opacity:.65;cursor:default}
+.dv-sound-message{font-size:12px;line-height:1.5;background:var(--soft);padding:11px;border-radius:12px;margin:12px 0 0}
+.dv-sound-disclaimer{display:flex;align-items:flex-start;gap:10px;margin-top:17px;font-size:11px;color:var(--muted);line-height:1.6}
+.dv-sound-disclaimer svg{flex-shrink:0}
+.dv-sound-dialog button:focus-visible,.dv-sound-switch input:focus-visible+span,.dv-sound-onboard button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:650px){.dv-sound-onboard{flex-wrap:wrap;padding:14px}.dv-sound-onboard-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.dv-sound-onboard-info{flex:1 1 calc(100% - 72px)}.dv-sound-dialog{padding:19px}}
+@media(prefers-reduced-motion:reduce){.dv-sound-switch span,.dv-sound-switch span:after{transition:none}}

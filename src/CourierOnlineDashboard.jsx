@@ -116,10 +116,14 @@ export default function CourierOnlineDashboard({orders=[],places=[],courierId='d
  const [message,setMessage]=useState(''),[issues,setIssues]=useState(()=>readRiderIssues(courierId));
  const [pinFailures,setPinFailures]=useState(()=>sanitizePinAttempts(read(pinAttemptKey(courierId),{}))),[audioEnabled,setAudioEnabled]=useState(false);
  const [pendingAccept,setPendingAccept]=useState(null);
- const audioRef=useRef(null),lastOffers=useRef(null),messageRef=useRef(null);
+ const audioRef=useRef(null),lastOffers=useRef(null),messageRef=useRef(null),persistedRiderRef=useRef(null);
  const [network,setNetwork]=useState(isOnline);
  useEffect(()=>{setOnline(read(riderKey(courierId),false)===true);setIssues(readRiderIssues(courierId));setTab(courierQueues(orders,courierId).active.length?'active':'offers');setPinFailures(sanitizePinAttempts(read(pinAttemptKey(courierId),{})));setPendingAccept(null);lastOffers.current=null},[courierId]);
- useEffect(()=>{if(!persist(riderKey(courierId),online))setMessage('No se pudo guardar la disponibilidad en este navegador.')},[online,courierId]);
+ useEffect(()=>{
+  // Al cambiar de identidad, el estado local de la identidad anterior nunca se copia a la nueva.
+  if(persistedRiderRef.current!==courierId){persistedRiderRef.current=courierId;return}
+  if(!persist(riderKey(courierId),online))setMessage('No se pudo guardar la disponibilidad en este navegador.');
+ },[online,courierId]);
  useEffect(()=>{const changed=()=>setNetwork(isOnline());window.addEventListener('online',changed);window.addEventListener('offline',changed);return()=>{window.removeEventListener('online',changed);window.removeEventListener('offline',changed)}},[]);
  const data=useMemo(()=>courierQueues(orders,courierId),[orders,courierId]);
  const offers=data.offers.filter(o=>!query.trim()||String(o.orderNo||o.id||'').toLocaleLowerCase('es').includes(query.toLocaleLowerCase('es'))||String(o.placeName||'').toLocaleLowerCase('es').includes(query.toLocaleLowerCase('es')));

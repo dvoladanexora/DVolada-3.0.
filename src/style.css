@@ -1460,3 +1460,8 @@ body:has(.modal-backdrop) .mobile-nav.dv-compact-nav{visibility:hidden!important
 @media(max-width:480px){.dv-more-backdrop{padding:10px!important}.dv-more-sheet{width:100%!important;max-width:100%!important;padding:18px 15px max(18px,env(safe-area-inset-bottom))!important;max-height:calc(100dvh - 20px)!important;border-radius:21px!important}.dv-more-sheet .dv-more-grid{gap:8px!important}.dv-more-sheet .dv-more-grid button{padding:10px!important;min-height:57px;font-size:12px}.dv-more-sheet .dv-more-appearance{padding:13px}}
 @media(max-width:350px){.dv-more-sheet .dv-more-theme-choices{grid-template-columns:minmax(0,1fr)}.dv-more-sheet .dv-more-theme-choices button{justify-content:flex-start;padding-left:12px}}
 @media(prefers-reduced-motion:reduce){.dv-more-sheet{animation:none!important}.dv-more-sheet button{transition:none!important}}
+
+
+/* Desktop utility: explicit refresh so users do not need Ctrl+F5. */
+.dv32 .dv-desktop-refresh{display:inline-grid;place-items:center}
+@media(max-width:760px){.dv32 .dv-desktop-refresh{display:none!important}}

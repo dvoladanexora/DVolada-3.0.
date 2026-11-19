@@ -7,7 +7,7 @@ import {offeredExtrasFor,validateCartCatalog,splitRestaurantCart,cartCheckoutTot
 import {canMoveRestaurantOrder,kitchenQueues,scheduledOrderState} from '../src/kitchen-operations.js';
 import {applyOrderStatus,decisionForOrder} from '../src/restaurant-order-flow.js';
 import {cancelDemoOrder,changeDemoRestaurantOrder,persistDemoOrders,mutateDemoOrders} from '../src/order-demo-operations.js';
-import {safeReadStored,validStoredOrders,validStoredRestaurants} from '../src/browser-storage.js';
+import {safeReadStored,validStoredOrders,validStoredRestaurants,corruptDemoSnapshot} from '../src/browser-storage.js';
 import {courierQueues,applyCourierAction,courierViewOrder,validateCourierAction} from '../src/courier-workflow.js';
 
 const today=new Date('2026-11-19T10:00:00.000Z');
@@ -651,4 +651,35 @@ test('Pedidos repetidos y restaurantes sin nombre no entran al estado restaurado
  }
  const good=[{id:1,name:'Negocio',items:[{id:11,name:'Café',price:25}]}];
  assert.equal(validStoredRestaurants(good),true);
+});
+
+test('Datos locales dañados sobreviven al arranque sin sobrescritura silenciosa',()=>{
+ assert.equal(corruptDemoSnapshot('dv_orders','{'),true);
+ assert.equal(corruptDemoSnapshot('dv_orders','[{"id":1,"status":"Pendiente"},{"id":1,"status":"Listo"}]'),true);
+ assert.equal(corruptDemoSnapshot('dv_places','[{"id":1,"items":[]}]'),true);
+ assert.equal(corruptDemoSnapshot('dv_orders','[]'),false);
+ assert.equal(corruptDemoSnapshot('dv_places','[]'),false);
+ assert.equal(corruptDemoSnapshot('dv_orders',null),false);
+ assert.equal(corruptDemoSnapshot('dv_cart','mal-formado'),false);
+ const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ const effect=main.slice(main.indexOf(' const values={dv_local_sales:'),main.indexOf(' persisted.current=next;'));
+ assert.ok(effect.includes("corruptDemoSnapshot(key,localStorage.getItem(key))"));
+ assert.ok(effect.indexOf("corruptDemoSnapshot(key,localStorage.getItem(key))")<effect.indexOf("localStorage.setItem(key,serialized)"));
+ assert.ok(effect.includes('next[key]=serialized;'),'el estado local temporal no debe forzar reescrituras');
+});
+
+test('Los cambios de órdenes y catálogos de todos los paneles pasan por guardado común',()=>{
+ const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ for(const name of ['function placeOrder(){','function confirmCancelOrder(){','function updateOrder(','function handleCourierAction(','function seedDemo(){','function adminChange(']){
+  const start=app.indexOf(name);
+  assert.ok(start>=0,'función ausente: '+name);
+  assert.ok(app.slice(start,start+4200).includes('mutateDemoOrders(localStorage,'),'mutación sin guardado: '+name);
+ }
+ for(const name of ['function saveRestaurantProfile(','function saveRestaurantOperatingStatus(','function saveRestaurantMenu(']){
+  const start=app.indexOf(name);
+  assert.ok(start>=0,'función ausente: '+name);
+  assert.ok(app.slice(start,start+1900).includes('mutateDemoPlaces(localStorage,'),'ficha sin guardado: '+name);
+ }
+ assert.ok(!app.includes('setOrders(prev=>prev.map'),'sin cambios de órdenes por estado obsoleto');
+ assert.ok(!app.includes('setOrders(previous=>[...samples'),'los pedidos demo se guardan antes de mostrar éxito');
 });

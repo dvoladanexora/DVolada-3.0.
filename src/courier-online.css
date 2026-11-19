@@ -152,3 +152,14 @@
 .dv-rider-accept-dialog button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 @media(max-width:610px){.dv-rider-payment{gap:14px;padding:15px}.dv-rider-payment>div{min-width:120px}.dv-rider-payment strong{font-size:14px}}
 @supports not (background:color-mix(in srgb,#fff,#000)){.dv-rider-payment,.dv-gps-arrival .dv-rider-gps-toggle{background:var(--rider-card)}}
+
+/* Mini guía de la jornada: una sola acción prioritaria, sin saturar la portada. */
+.dv-rider-next-task{display:flex;gap:13px;align-items:center;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--rider-line));border-radius:18px;padding:14px 16px;background:color-mix(in srgb,var(--accent) 7%,var(--rider-card))}
+.dv-rider-next-task-symbol{width:44px;height:44px;flex-shrink:0;display:grid;place-items:center;border-radius:14px;background:var(--accent);color:#fff}
+.dv-rider-next-task>div{flex:1;min-width:0;display:grid;gap:4px}
+.dv-rider-next-task>div>span{font-size:10px;font-weight:850;letter-spacing:.11em;color:var(--accent)}
+.dv-rider-next-task strong{font-size:14px;line-height:1.35}
+.dv-rider-next-task small{font-size:11px;color:var(--rider-muted);overflow-wrap:anywhere}
+.dv-rider-next-task>button{display:inline-flex;justify-content:center;align-items:center;gap:8px;border:1px solid var(--rider-line);border-radius:12px;padding:11px 13px;min-height:43px;background:var(--rider-card);color:var(--rider-ink);font-size:12px;font-weight:850;white-space:nowrap}
+@media(max-width:610px){.dv-rider-next-task{padding:13px;gap:10px;flex-wrap:wrap}.dv-rider-next-task-symbol{width:39px;height:39px}.dv-rider-next-task>button{width:100%}}
+@supports not (background:color-mix(in srgb,#fff,#000)){.dv-rider-next-task{background:var(--rider-card)}}

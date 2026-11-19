@@ -137,3 +137,16 @@ test('Favoritos: removal uses normalized product keys and an accessible label',(
  assert.match(app,/aria-label=\{'Quitar '\+x\.item\.name\+' de comidas favoritas'\}/);
  assert.match(app,/v\.filter\(k=>k!==String\(x\.place\.id\)\+'-'\+String\(x\.item\.id\)\)/);
 });
+
+test('Favoritos: cards show available photos and semantic controls',()=>{
+ assert.match(app,/className="surface dv-favorite-product-card"/);
+ assert.match(app,/className="dv-favorite-product-image"/);
+ assert.match(app,/alt=\{'Foto de '\+x\.item\.name\}/);
+ assert.match(app,/<article className="surface dv-favorite-product-card"/);
+});
+test('Favoritos: mobile, keyboard and dark theme styles are scoped',()=>{
+ assert.match(customerStyles,/\.dv32 \.dv-favorites-products\{display:grid/);
+ assert.match(customerStyles,/\.dv32 \.dv-favorite-product-image\{display:block/);
+ assert.match(customerStyles,/\.dv32 \.dv-favorites-page button:focus-visible/);
+ assert.match(customerStyles,/\[data-theme="dark"\] \.dv32 \.dv-favorite-product-card/);
+});

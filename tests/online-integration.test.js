@@ -1,3 +1,4 @@
+import {restaurantStatus,withRestaurantStatus,withinBusinessHours,restaurantOrderBlockReason} from '../src/restaurant-availability.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -46,7 +47,7 @@ test('Cambios de catálogo, extras inexistentes y productos agotados impiden con
  assert.match(validateCartCatalog([{...first,qty:100}],[a,b]),/cantidad/);
  assert.match(validateCartCatalog([first],[{...a,items:[{...a.items[0],soldOut:true}]}]),/agotado/);
  assert.match(validateCartCatalog([first],[{...a,isOpen:false}]),/cerrado/);
- assert.equal(validateCartCatalog([first],[{...a,isOpen:false}],{scheduleMode:'later'}),null);
+ assert.match(validateCartCatalog([first],[{...a,isOpen:false}],{scheduleMode:'later'}),/cerrado/);
  assert.match(validateCartCatalog([],[]),/vacío/);
  assert.deepEqual(offeredExtrasFor({id:1,name:'Fresco de limón',price:25}),['Azúcar extra','Leche extra','Sin hielo']);
  assert.deepEqual(offeredExtrasFor(item(1,'Fresco de limón',25,[])),[]);
@@ -288,4 +289,56 @@ test('Permisos de almacenamiento denegados y tipos no coincidentes usan valores 
  const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
  assert.ok(main.includes("safeReadStored(localStorage,key,fallback)"));
  assert.ok(main.includes("try{c=localStorage.getItem('dv_invite_code')||''}catch{}"));
+});
+
+test('Restaurante Abierto/Pausado/Cerrado controla checkout del mismo navegador por negocio',()=>{
+ const open=withRestaurantStatus(a,'Abierto');
+ const paused=withRestaurantStatus(open,'Pausado');
+ const closed=withRestaurantStatus(open,'Cerrado');
+ assert.equal(restaurantStatus(open),'Abierto');
+ assert.equal(restaurantStatus(paused),'Pausado');
+ assert.equal(restaurantStatus(closed),'Cerrado');
+ assert.equal(restaurantStatus(a),'Abierto');
+ assert.equal(open.isOpen,true);
+ assert.equal(paused.isPaused,true);
+ assert.equal(closed.isOpen,false);
+ assert.equal(validateCartCatalog([first],[open]),null);
+ assert.match(validateCartCatalog([first],[paused]),/pausa/);
+ assert.match(validateCartCatalog([first],[closed]),/cerrado/);
+ assert.match(validateCartCatalog([first],[paused],{scheduleMode:'later'}),/pausa/);
+ assert.match(validateCartCatalog([first],[closed],{scheduleMode:'later'}),/cerrado/);
+ assert.throws(()=>withRestaurantStatus(a,'Pausado '),/inválido/);
+});
+test('Estado de un restaurante no altera menús ni disponibilidad de otro',()=>{
+ const places=[withRestaurantStatus(a,'Pausado'),withRestaurantStatus(b,'Abierto')];
+ assert.match(validateCartCatalog([first],places),/pausa/);
+ assert.equal(validateCartCatalog([second],places),null);
+ const next=places.map(p=>p.id===1?withRestaurantStatus(p,'Abierto'):p);
+ assert.equal(validateCartCatalog([first,second],next),null);
+ assert.equal(restaurantStatus(next[1]),'Abierto');
+});
+test('Horario configurado bloquea pedido inmediato fuera de turno y admite programación futura',()=>{
+ const hours={4:{open:'08:00',close:'15:00'}};
+ const place={...a,hours};
+ const early=new Date('2026-11-19T07:30:00'); // jueves, zona local del test
+ const daytime=new Date('2026-11-19T13:00:00');
+ const late=new Date('2026-11-19T15:30:00');
+ assert.equal(withinBusinessHours(place,early),false);
+ assert.equal(withinBusinessHours(place,daytime),true);
+ assert.equal(withinBusinessHours(place,late),false);
+ assert.match(restaurantOrderBlockReason(place,{at:early}),/fuera de su horario/);
+ assert.equal(restaurantOrderBlockReason(place,{scheduleMode:'later',at:early}),null);
+ assert.equal(withinBusinessHours({...a,hours:null},early),null);
+});
+test('El estado se persiste en catálogo individual y ya no se usa solo como etiqueta visual',()=>{
+ const ws=readFileSync(new URL('../src/OnlineWorkspace.jsx',import.meta.url),'utf8');
+ const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ const affiliate=readFileSync(new URL('../src/AffiliateOnline.jsx',import.meta.url),'utf8');
+ assert.ok(ws.includes('const operatingStatus=restaurantStatus(business)'));
+ assert.ok(ws.includes("onRestaurantStatusChange(business.id,next)"));
+ assert.ok(!ws.includes("set('status')(s)"));
+ assert.ok(app.includes('function saveRestaurantOperatingStatus(restaurantId,status)'));
+ assert.ok(app.includes('withRestaurantStatus(place,status)'));
+ assert.ok(app.includes('onRestaurantStatusChange={saveRestaurantOperatingStatus}'));
+ assert.ok(affiliate.includes('onRestaurantStatusChange={onRestaurantStatusChange}'));
 });

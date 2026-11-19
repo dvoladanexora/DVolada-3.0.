@@ -350,9 +350,9 @@ test('Auditoría carrito: malformed prices show warnings instead of silently pas
 test('Auditoría persistencia: cart, orders and customer collections recover from malformed storage',()=>{
  assert.ok(app.includes("const asArray=(value,fallback=[])=>Array.isArray(value)?value:fallback"));
  assert.ok(app.includes("const cleanItemList=value=>asArray(value).filter(item=>item&&typeof item==='object')"));
- assert.ok(app.includes("[cart,setCart]=useState(()=>cleanItemList(stored('dv_cart',[])))"));
- assert.ok(app.includes("items:cleanItemList(order.items)"));
- assert.ok(app.includes("[savedCart,setSavedCart]=useState(()=>cleanItemList(stored('dv_saved_cart',[])))"));
+ assert.ok(app.includes("[cart,setCart]=useState(()=>cleanCartList(stored('dv_cart',[])))"));
+ assert.ok(app.includes("const cleanOrderList=value=>cleanItemList(value).filter(order=>hasStableId(order.id)).map(order=>({...order,items:cleanItemList(order.items)}))"));
+ assert.ok(app.includes("[savedCart,setSavedCart]=useState(()=>cleanCartList(stored('dv_saved_cart',[])))"));
  assert.ok(app.includes("[savedAddresses,setSavedAddresses]=useState(()=>asArray(stored('dv_addresses',[])).filter(v=>typeof v==='string'))"));
 });
 
@@ -635,4 +635,14 @@ test('Restaurantes: catalog cards expose visible availability states',()=>{
  assert.ok(homeCss.includes('.dv-card-availability.closed'));
  assert.ok(homeCss.includes('.dv-card-availability.paused'));
  assert.ok(homeCss.includes('.dv-card-availability.unknown'));
+});
+
+
+test('Persistencia: malformed cart, order and catalog rows with missing IDs are discarded',()=>{
+ assert.ok(app.includes("const hasStableId=value=>typeof value==='string'||typeof value==='number'"));
+ assert.ok(app.includes("const cleanCartList=value=>cleanItemList(value).filter(item=>hasStableId(item.id)&&hasStableId(item.placeId))"));
+ assert.ok(app.includes("const cleanOrderList=value=>cleanItemList(value).filter(order=>hasStableId(order.id))"));
+ assert.ok(app.includes("filter(p=>p&&typeof p==='object'&&hasStableId(p.id))"));
+ assert.ok(app.includes("cleanItemList(p.items).filter(i=>hasStableId(i.id))"));
+ assert.ok(app.includes("const count=cart.reduce((s,i)=>s+Math.max(0,Number(i.qty)||0),0)"));
 });

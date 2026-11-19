@@ -144,6 +144,9 @@ test('PWA cachea shell público, nunca intercepta llamadas API o version.json',a
  assert.equal(intercepted,false);
  events.fetch({request:mockRequest('/DVolada-3.0./version.json'),respondWith:()=>{intercepted=true}});
  assert.equal(intercepted,false);
+ events.fetch({request:{method:'GET',url:'https://dvoladanexora.github.io/DVolada-3.0./uploads/private-avatar.png',mode:'no-cors'},respondWith:()=>{intercepted=true}});
+ assert.equal(intercepted,false);
+ assert.ok(source.includes('STATIC_PUBLIC.has(url.pathname)'));
  let responsePromise;
  events.fetch({request:mockRequest('/DVolada-3.0./'),respondWith:p=>{responsePromise=p}});
  assert.ok(responsePromise);

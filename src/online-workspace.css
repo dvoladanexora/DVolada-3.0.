@@ -86,3 +86,10 @@
 .ow-kitchen-full .ow-kitchen-view .ow-kitchen-tools{padding:5px 2px}
 @media(max-width:720px){.ow-mode-switch{max-width:none;gap:5px;padding:5px;margin:10px 0 17px}.ow-mode-switch button{font-size:12px;gap:6px;min-height:50px;padding:9px 5px}.ow-mode-switch button small{display:none}.ow-mode-switch button svg{width:18px}.ow-kitchen-view .ow-kitchen-tools{justify-content:flex-start}}
 @media(prefers-reduced-motion:reduce){.ow-mode-switch button{transition:none}}
+
+
+/* Fullscreen real cuando lo permite el navegador; fallback a CSS en iOS antiguo. */
+.ow-shell.ow-redesign:fullscreen{width:100vw;height:100vh;max-width:none;overflow-y:auto;background:var(--ow-bg,var(--bg));padding:10px 20px 30px}
+.ow-shell.ow-redesign:fullscreen .ow-workarea{max-width:none}
+.ow-shell.ow-redesign:fullscreen .ow-kitchen-lanes{max-width:none}
+@media(max-width:720px){.ow-shell.ow-redesign:fullscreen{padding:8px 10px 24px}}

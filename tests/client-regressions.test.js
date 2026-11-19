@@ -94,3 +94,10 @@ test('Mis pedidos: small-screen, dark-theme and keyboard safeguards',()=>{
  assert.match(customerStyles,/@media\(max-width:420px\)/);
  assert.match(customerStyles,/\.dv32 \.dv-history-actions\{display:grid;grid-template-columns:1fr\}/);
 });
+
+test('Mis pedidos: empty states respect filters and canceled orders go to history',()=>{
+ assert.match(app,/setOrdersTab\(immediate\?'history':'pending'\)/);
+ assert.match(app,/setHistoryStatus\('Todos'\)/);
+ assert.equal((app.match(/title="Sin pedidos que coincidan"/g)||[]).length,2);
+ assert.equal((app.match(/\.includes\(normalizeFoodSearch\(historyQuery\)\)\)\)\.length===0/g)||[]).length,2);
+});

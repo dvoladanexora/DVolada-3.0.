@@ -1,4 +1,4 @@
-import React,{useMemo,useState} from 'react';
+import React,{useEffect,useMemo,useState} from 'react';
 import {RewardCelebration} from './DelightMotion.jsx';
 import {Gift,Clock,Copy,Share2,Zap,ArrowRight,Bike,CheckCircle,TicketPercent,Star,Printer,ShieldCheck} from 'lucide-react';
 import './growth-features.css';
@@ -11,6 +11,7 @@ export default function GrowthFeatures({mode,orders=[],places=[],onOrderStatus=(
  const [coupon,setCoupon]=useState(()=>asArray(store('dv_demo_coupons',[])));
  const [driver,setDriver]=useState(()=>asObject(store('dv_demo_driver',{})));
  const [now,setNow]=useState(Date.now());
+ useEffect(()=>{const refresh=()=>{setNow(Date.now());setPromos(asArray(store('dv_flash_promos',[])))};const timer=setInterval(refresh,30000);window.addEventListener('storage',refresh);window.addEventListener('dv-flash-updated',refresh);return()=>{clearInterval(timer);window.removeEventListener('storage',refresh);window.removeEventListener('dv-flash-updated',refresh)}},[]);
  const save=(k,v,set)=>{set(v);try{localStorage.setItem(k,JSON.stringify(v));if(k==='dv_flash_promos')window.dispatchEvent(new Event('dv-flash-updated'))}catch{window.alert('No se pudo guardar este cambio en el dispositivo')}};
  const available=promos.filter(p=>p.active!==false&&p.until>now&&(p.stock==null||Number(p.stock)>0));
  const eligible=orders.filter(o=>o.kind==='food'&&(o.status==='Entregado'||(o.delivery==='pickup'&&o.status==='Recogido')));

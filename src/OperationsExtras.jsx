@@ -1,9 +1,9 @@
 import React,{useState} from 'react';
 import './operations-extras.css';
-const read=(key,initial)=>{try{return JSON.parse(localStorage.getItem(key))??initial}catch{return initial}};
+const read=(key,initial)=>{try{const value=JSON.parse(localStorage.getItem(key))??initial;if(Array.isArray(initial))return Array.isArray(value)?value:initial;if(initial&&typeof initial==='object')return value&&typeof value==='object'&&!Array.isArray(value)?value:initial;return value}catch{return initial}};
 const money=n=>'L '+Number(n||0).toFixed(2);
 const key='dv_extended_ops_';
-const usePersist=(name,initial)=>{const [v,set]=useState(()=>read(key+name,initial));return [v,next=>{set(old=>{const val=typeof next==='function'?next(old):next;localStorage.setItem(key+name,JSON.stringify(val));return val})}]};
+const usePersist=(name,initial)=>{const [v,set]=useState(()=>read(key+name,initial));return [v,next=>{set(old=>{const val=typeof next==='function'?next(old):next;try{localStorage.setItem(key+name,JSON.stringify(val))}catch{window.alert('No se pudo guardar este cambio en el dispositivo')}return val})}]};
 const id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 export default function OperationsExtras({type,orders=[],sales=[],products=[],onCreateKitchenOrder=()=>{}}){
  const [recipes,setRecipes]=usePersist('recipes',[]);

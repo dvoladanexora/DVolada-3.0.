@@ -116,7 +116,7 @@ test('Cancelación de un pedido aceptado puede volver a Aceptado al rechazar la 
 });
 test('Cancelaciones de pedidos aceptados se revisan en Caja, no se borran directamente',()=>{
  const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
- assert.ok(main.includes('cancelDemoOrder(current,cancelOrder.id,reason)'));
+ assert.ok(main.includes('cancelDemoOrder(latest,cancelOrder.id,reason)'));
  assert.ok(main.includes('courierOrdersRef.current=outcome.orders'));
 });
 

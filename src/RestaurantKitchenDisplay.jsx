@@ -1,3 +1,4 @@
+import {stageElapsedMinutes} from './restaurant-order-flow.js';
 import React from 'react';
 import {AlertTriangle,ArrowRight,ChefHat,CheckCheck,CheckCircle2,Clock3,Monitor,Printer,ShoppingBag,UtensilsCrossed} from 'lucide-react';
 import {elapsedMinutes,kitchenLineExtras,kitchenQueues,matchesRestaurantOrder} from './kitchen-operations.js';
@@ -10,11 +11,11 @@ const stages=[
 ];
 
 function KitchenOrderCard({order,stage,now,alertMinutes,connected,onChange,onPrint,onDetail}){
- const minutes=elapsedMinutes(order,now),delayed=minutes!==null&&minutes>=alertMinutes&&stage.key!=='ready';
+ const minutes=stageElapsedMinutes(order,stage.key,now),totalMinutes=elapsedMinutes(order,now),delayed=minutes!==null&&minutes>=alertMinutes&&stage.key!=='ready';
  const items=Array.isArray(order.items)?order.items:[];
  return <article className={'dv-kitchen-order '+(delayed?'is-delayed ':'')+'is-'+stage.key} aria-label={'Orden '+(order.orderNo||order.id)}>
-  <div className="dv-kitchen-order-top"><div><span className="dv-kitchen-order-label">ORDEN</span><h3>{order.orderNo||order.id}</h3></div><div className={'dv-kitchen-timer '+(delayed?'late':'')}><Clock3 size={16}/>{minutes===null?'Sin hora':minutes+' min'}</div></div>
-  <div className="dv-kitchen-service"><span>{order.delivery==='delivery'?'🛵 A domicilio':'🏪 Para retirar'}</span><span>{order.status}</span></div>
+  <div className="dv-kitchen-order-top"><div><span className="dv-kitchen-order-label">ORDEN</span><h3>{order.orderNo||order.id}</h3></div><div className={'dv-kitchen-timer '+(delayed?'late':'')}><Clock3 size={16}/>{minutes===null?'Sin hora':minutes+' min en etapa'}</div></div>
+  <div className="dv-kitchen-service"><span>{order.delivery==='delivery'?'🛵 A domicilio':'🏪 Para retirar'}</span><span>{order.status}{totalMinutes!==null&&' · '+totalMinutes+' min desde pedido'}</span></div>
   <ul className="dv-kitchen-products">{items.map((item,i)=>{
    const extra=kitchenLineExtras(item),notes=item.instructions||item.note||'';
    return <li key={item.id||i}><span className="dv-kitchen-qty">{Math.max(1,Number(item.qty)||1)}×</span><div><strong>{item.name||'Producto'}</strong>{extra&&<small>Extras: {extra}</small>}{notes&&<small className="dv-kitchen-item-note">Indicaciones: {notes}</small>}</div></li>;
@@ -33,7 +34,7 @@ export default function RestaurantKitchenDisplay({
 }){
  const q=kitchenQueues(orders,restaurantId,now);
  const active=q.accepted.length+q.preparing.length;
- const delayed=q.accepted.concat(q.preparing).filter(o=>{const m=elapsedMinutes(o,now);return m!==null&&m>=alertMinutes}).length;
+ const delayed=q.accepted.filter(o=>{const m=stageElapsedMinutes(o,'accepted',now);return m!==null&&m>=alertMinutes}).length+q.preparing.filter(o=>{const m=stageElapsedMinutes(o,'preparing',now);return m!==null&&m>=alertMinutes}).length;
  return <div className="dv-kitchen-screen">
   <header className="dv-kitchen-overview">
    <div className="dv-kitchen-heading"><span className="dv-kitchen-eyebrow"><Monitor size={16}/> MODO COCINA · {restaurantName}</span><h2>Prepará cada orden, sin distracciones.</h2><p>Solo aparecen pedidos aceptados en Caja. Las nuevas solicitudes se revisan exclusivamente allí.</p></div>

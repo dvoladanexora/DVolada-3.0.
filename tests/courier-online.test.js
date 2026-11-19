@@ -133,7 +133,8 @@ test('Panel visual expone tres vistas, consentimiento GPS, PIN y test de demo ex
  assert.ok(main.includes("page==='delivery-panel'&&INTERNAL_PREVIEW_ENABLED&&previewCourierId"));
  assert.ok(main.includes("onAction={handleCourierAction}"));
  assert.ok(main.includes("orders={courierViewOrders(orders,previewCourierId)}"));
- assert.ok(main.includes('applyCourierAction(current,orderId,action,riderId,options)'));
+ assert.ok(main.includes('applyCourierAction(latest,orderId,action,riderId,options)'));
+ assert.ok(main.includes('mutateDemoOrders(localStorage,current,latest=>applyCourierAction('));
  assert.ok(main.includes('courierOrdersRef.current=result.orders'));
  assert.ok(main.includes("String(riderId)!==String(previewCourierId)"));
  assert.ok(login.includes('import.meta.env.DEV'));

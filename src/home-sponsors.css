@@ -1,0 +1,64 @@
+/* Inventario publicitario suave, sin superposiciones ni pop-ups. */
+.dv-sponsor-slot{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:22px;padding:18px 20px;background:color-mix(in srgb,var(--surface) 92%,var(--accent) 8%);color:var(--ink);overflow:hidden}
+.dv-sponsor-head{display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--muted);font-weight:750;font-size:10px;letter-spacing:.09em}
+.dv-sponsor-head span{display:inline-flex;align-items:center;gap:7px}
+.dv-sponsor-head small{font-size:10px;letter-spacing:normal}
+.dv-sponsor-content{display:flex;justify-content:space-between;align-items:center;gap:20px;min-height:85px}
+.dv-sponsor-content strong{font-size:clamp(16px,2vw,20px);display:block;margin:10px 0 3px}
+.dv-sponsor-content p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+.dv-sponsor-content button{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:10px 13px;border-radius:13px;background:var(--surface);border:1px solid var(--line);color:var(--ink);font-weight:700;cursor:pointer}
+.dv-sponsor-content button:hover{border-color:var(--accent)}
+.dv-sponsor-controls{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:4px}
+.dv-sponsor-controls>button{width:30px;height:30px;display:grid;place-items:center;border:0;border-radius:999px;background:transparent;color:var(--muted);cursor:pointer}
+.dv-sponsor-controls>button:hover{background:var(--surface);color:var(--ink)}
+.dv-sponsor-dots{display:flex;gap:6px;align-items:center}
+.dv-sponsor-dots button{width:7px;height:7px;border-radius:999px;background:var(--muted);opacity:.4;border:0;padding:0;cursor:pointer}
+.dv-sponsor-dots button.selected{width:19px;background:var(--accent);opacity:1}
+.dv-sponsor-compact{padding:13px 16px}
+.dv-sponsor-compact .dv-sponsor-content{min-height:58px}
+.dv-sponsor-compact .dv-sponsor-content strong{font-size:15px;margin:7px 0 2px}
+.dv-sponsor-compact .dv-sponsor-content p{font-size:12px}
+.dv-sponsor-compact .dv-sponsor-content button{font-size:12px}
+@media(max-width:600px){.dv-sponsor-slot{padding:14px}.dv-sponsor-content{gap:10px;align-items:flex-start;flex-direction:column}.dv-sponsor-content button{align-self:flex-start}.dv-sponsor-compact .dv-sponsor-content{min-height:0}.dv-sponsor-head{font-size:9px}}
+
+
+/* Publicidad Dvolada: espacios Liquid Glass ligeros y no intrusivos */
+.dv-sponsor-slot{position:relative;isolation:isolate;background:linear-gradient(120deg,color-mix(in srgb,var(--surface) 91%,var(--accent) 9%),var(--surface));border-radius:24px;box-shadow:0 6px 24px rgba(12,25,40,.045)}
+.dv-sponsor-slot::before{content:'';position:absolute;right:-65px;top:-95px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--accent) 15%,transparent),transparent 70%);pointer-events:none;z-index:-1}
+.dv-sponsor-head{position:relative;z-index:1}
+.dv-sponsor-content{animation:dv-ad-slide-in .38s ease both}
+.dv-sponsor-message{min-width:0}
+.dv-sponsor-message strong{letter-spacing:-.025em}
+.dv-sponsor-note{display:inline-block;margin-top:9px;font-size:11px;color:var(--muted);opacity:.8}
+.dv-sponsor-content .dv-sponsor-cta{border-color:color-mix(in srgb,var(--accent) 26%,var(--line));white-space:nowrap;transition:border-color .2s,transform .2s,box-shadow .2s}
+.dv-sponsor-content .dv-sponsor-cta:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(12,25,40,.08)}
+.dv-sponsor-play{margin-left:5px!important}
+.dv-sponsor-slot button:focus-visible,.dv-ad-modal button:focus-visible,.dv-ad-modal input:focus-visible,.dv-ad-modal select:focus-visible,.dv-ad-modal textarea:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@keyframes dv-ad-slide-in{from{opacity:.35;transform:translateX(10px)}to{opacity:1;transform:translateX(0)}}
+.dv-ad-modal-overlay{position:fixed;inset:0;z-index:12000;display:grid;place-items:center;padding:18px;background:rgba(14,22,35,.53);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
+.dv-ad-modal{width:min(100%,555px);max-height:calc(100dvh - 36px);overflow-y:auto;box-sizing:border-box;padding:26px;border:1px solid color-mix(in srgb,var(--surface) 75%,white);border-radius:26px;background:color-mix(in srgb,var(--surface) 93%,transparent);backdrop-filter:blur(22px) saturate(135%);-webkit-backdrop-filter:blur(22px) saturate(135%);box-shadow:0 24px 70px rgba(0,0,0,.25);color:var(--ink)}
+.dv-ad-modal-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.dv-ad-eyebrow{font-size:10px;letter-spacing:.14em;font-weight:800;color:var(--accent)}
+.dv-ad-modal h2{font-size:clamp(21px,3vw,28px);line-height:1.15;margin:9px 0}
+.dv-ad-modal-header p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 18px}
+.dv-ad-close{flex-shrink:0;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);display:grid;place-items:center}
+.dv-ad-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.dv-ad-form-grid label{font-size:12px;font-weight:750;display:flex;flex-direction:column;gap:6px;min-width:0}
+.dv-ad-form-grid label span,.dv-ad-consent strong{color:var(--accent)}
+.dv-ad-form-grid input,.dv-ad-form-grid textarea,.dv-ad-form-grid select,.dv-ad-copy-text{width:100%;min-width:0;box-sizing:border-box;padding:11px 12px;border:1px solid var(--line);border-radius:13px;background:var(--surface);color:var(--ink);font-size:14px;font-family:inherit}
+.dv-ad-form-grid input[aria-invalid=true],.dv-ad-consent input[aria-invalid=true]{outline:2px solid #d64e47;outline-offset:1px}
+.dv-ad-form-grid textarea{resize:vertical;max-height:180px}
+.dv-ad-full{grid-column:1/-1}
+.dv-ad-consent{display:flex;align-items:flex-start;gap:10px;margin-top:15px;font-size:12px;line-height:1.45;color:var(--muted)}
+.dv-ad-consent input{margin:3px 0 0;flex-shrink:0;accent-color:var(--accent)}
+.dv-ad-modal-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:17px}
+.dv-ad-modal-actions button{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:11px 14px;border-radius:14px;border:1px solid var(--line);font-weight:750;font-size:13px;cursor:pointer}
+.dv-ad-action-primary{background:var(--accent);border-color:var(--accent)!important;color:white}
+.dv-ad-action-secondary{background:var(--surface);color:var(--ink)}
+.dv-ad-feedback{font-size:12px;padding:10px 11px;border-radius:12px;background:color-mix(in srgb,var(--accent) 9%,var(--surface));color:var(--ink);margin:13px 0 0}
+.dv-ad-copy-text{margin-top:11px;resize:vertical}
+.dv-ad-privacy{display:flex;align-items:flex-start;gap:7px;color:var(--muted);font-size:11px;line-height:1.5;margin:15px 0 0}
+.dv-ad-privacy svg{flex-shrink:0}
+.dv-ad-recipient{font-size:11px;color:var(--muted);margin:9px 0 0;overflow-wrap:anywhere}
+@media(max-width:600px){.dv-ad-modal-overlay{padding:10px}.dv-ad-modal{padding:19px 17px;max-height:calc(100dvh - 20px);border-radius:22px}.dv-ad-form-grid{grid-template-columns:1fr;gap:10px}.dv-ad-modal-actions{display:grid;grid-template-columns:1fr}.dv-sponsor-content .dv-sponsor-cta{white-space:normal}}
+@media(prefers-reduced-motion:reduce){.dv-sponsor-content{animation:none}.dv-sponsor-content .dv-sponsor-cta{transition:none}}

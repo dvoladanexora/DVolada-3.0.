@@ -139,3 +139,16 @@
 @media(max-width:360px){.dv-rider-tabs button{gap:3px;font-size:10px}.dv-rider-tabs svg{width:14px}.dv-rider-offer-card h3{font-size:17px}.dv-rider-offer-facts{font-size:11px}.dv-rider-kpis strong{font-size:23px}}
 @media(prefers-reduced-motion:reduce){.dv-rider-app *,.dv-courier-preview-access *{scroll-behavior:auto!important;transition:none!important}}
 @supports not (background:color-mix(in srgb,#fff,#000)){.dv-rider-hero,.dv-rider-offer-card,.dv-rider-active-card,.dv-rider-availability,.dv-rider-kpis>div,.dv-rider-tabs button.selected,.dv-rider-status,.dv-rider-history article,.dv-courier-access-symbol{background:var(--surface)}.dv-rider-wait,.dv-rider-hold,.dv-rider-demo-hint{background:var(--soft)}}
+
+/* Segunda pasada: PIN protegido, pagos referenciales y consentimientos GPS */
+.dv-rider-payment{display:flex;flex-wrap:wrap;gap:15px;align-items:start;justify-content:space-between;padding:15px 17px;border:1px solid var(--rider-line);border-radius:15px;background:color-mix(in srgb,var(--accent) 5%,var(--rider-card))}
+.dv-rider-payment>div{display:grid;gap:7px;min-width:160px}
+.dv-rider-payment>div>span{display:inline-flex;align-items:center;gap:7px;color:var(--rider-muted);letter-spacing:.055em;font-size:10px;font-weight:850}
+.dv-rider-payment strong{font-size:15px;line-height:1.35}
+.dv-rider-payment>small{flex-basis:100%;color:var(--rider-muted);font-size:11px;line-height:1.55;border-top:1px dashed var(--rider-line);padding-top:10px}
+.dv-rider-pin-visibility{width:fit-content;min-height:39px;display:flex;gap:8px;align-items:center;justify-content:center;padding:8px 10px;border:1px solid var(--rider-line);border-radius:10px;background:var(--rider-card);color:var(--rider-ink);font-size:12px;font-weight:800}
+.dv-gps-arrival .dv-rider-gps-toggle{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:45px;border:1px solid var(--accent);border-radius:12px;background:color-mix(in srgb,var(--accent) 8%,var(--rider-card));color:var(--rider-ink);font-size:12px;font-weight:850}
+.dv-gps-arrival button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.dv-rider-accept-dialog button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:610px){.dv-rider-payment{gap:14px;padding:15px}.dv-rider-payment>div{min-width:120px}.dv-rider-payment strong{font-size:14px}}
+@supports not (background:color-mix(in srgb,#fff,#000)){.dv-rider-payment,.dv-gps-arrival .dv-rider-gps-toggle{background:var(--rider-card)}}

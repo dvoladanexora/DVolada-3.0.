@@ -355,3 +355,17 @@ test('Preferencias de Caja y Cocina se guardan por restaurante sin sobrescribir 
  assert.ok(af.includes("key={String(restaurantId??'')}"));
  assert.ok(!ws.includes("localStorage.setItem('dv_online_settings'"));
 });
+
+test('Carrito rechaza precios nulos, negativos, infinitos o con más de dos decimales',()=>{
+ const badBases=[null,undefined,'',-5,0,10.005,'Infinity','NaN',10000.01];
+ for(const invalidPrice of badBases){
+  const malformed={...a,items:[{...a.items[0],price:invalidPrice}]};
+  const orderLine={...first,price:Number(invalidPrice)+10};
+  assert.match(validateCartCatalog([orderLine],[malformed]),/precio/i,JSON.stringify(invalidPrice));
+ }
+ for(const invalidLine of [null,'',-1,Infinity,105.005,Number.NaN]){
+  assert.match(validateCartCatalog([{...first,price:invalidLine}],[a]),/precio/i,String(invalidLine));
+ }
+ const maxBase={...a,items:[{...a.items[0],price:10000,extras:['Queso extra']}]};
+ assert.equal(validateCartCatalog([{...first,price:10010}],[maxBase]),null);
+});

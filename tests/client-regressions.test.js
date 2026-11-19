@@ -76,3 +76,12 @@ test('Restaurantes: profile search handles accents and structured extras',()=>{
  assert.match(restaurantProfile,/normalizeQuery\(query\)/);
  assert.match(restaurantProfile,/item\.extras\.map\(extra=>typeof extra==='string'/);
 });
+
+test('Mis pedidos: filter includes intermediate delivery statuses',()=>{
+ for(const status of ['Aceptado','Preparando','Listo','Recogido','En camino','En ubicación']){
+  assert.ok(app.includes('<option>'+status+'</option>'),'Missing filter '+status);
+ }
+});
+test('Mis pedidos: searches order identifiers and products without accent sensitivity',()=>{
+ assert.equal((app.match(/normalizeFoodSearch\(historyQuery\)/g)||[]).length,2);
+});

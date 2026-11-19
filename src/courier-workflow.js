@@ -136,12 +136,20 @@ export function courierRestaurantCoords(place){
  const lng=Number(value?.lng??value?.longitude??value?.lon);
  return Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180&&(lat!==0||lng!==0)?{lat,lng}:null;
 }
+export const COURIER_INCIDENT_CATEGORIES=Object.freeze([
+ 'No encuentro al cliente',
+ 'Problema con la dirección',
+ 'Pedido incorrecto o dañado',
+ 'Avería o accidente',
+ 'Otro',
+]);
 export const cleanCourierIssue=message=>{
  const note=String(message||'').trim().replace(/\s+/g,' ');
  if(note.length<8||note.length>300)throw Error('Describí el problema en 8 a 300 caracteres.');
  return note;
 };
-export function buildCourierIssue(order,riderId,message,at=new Date()){
+export function buildCourierIssue(order,riderId,message,at=new Date(),category='Otro'){
  if(!isRiderOwner(order,riderId))throw Error('Solo podés reportar problemas de tus entregas.');
- return {id:'inc-'+Date.now()+'-'+Math.random().toString(36).slice(2,7),orderId:String(order.id),courierId:String(riderId),note:cleanCourierIssue(message),createdAt:at.toISOString(),status:'Borrador local · sin enviar'};
+ if(!COURIER_INCIDENT_CATEGORIES.includes(category))throw Error('Seleccioná una categoría válida de incidencia.');
+ return {id:'inc-'+Date.now()+'-'+Math.random().toString(36).slice(2,7),orderId:String(order.id),courierId:String(riderId),category,note:cleanCourierIssue(message),createdAt:at.toISOString(),status:'Borrador local · sin enviar'};
 }

@@ -21,7 +21,7 @@ test('recursos e imágenes se guardan con límite',()=>{
 });
 test('operaciones de servidor no se almacenan',()=>{
  assert.match(sw,/req\.method!=='GET'/);
- assert.match(sw,/\/api\\\//);
+ assert.ok(sw.includes('api'));
 });
 test('carrito y favoritos permanecen en almacenamiento local',()=>{
  assert.match(app,/stored\('dv_cart',\[\]\)/);

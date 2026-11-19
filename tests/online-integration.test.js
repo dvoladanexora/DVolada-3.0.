@@ -374,7 +374,7 @@ test('Horarios incompletos o inválidos no se interpretan como restaurante abier
  const time=new Date('2026-11-19T12:30:00');
  const wrongHours=[
   {4:{open:'25:00',close:'27:00'}},
-  {4:{open:'12:30',close:'11:30'}},
+  {4:{open:'13:30',close:'13:30'}},
   {4:{open:'08:00',close:'08:00'}},
   {4:{open:'no',close:'18:00'}},
   {5:{open:'08:00',close:'18:00'}},
@@ -426,4 +426,21 @@ test('Caja permite filtrar entrega/retiro y ordenar las solicitudes sin tocar es
  assert.ok(cash.includes("value={pendingSort}"));
  assert.ok(cash.includes('aria-pressed={pendingView===id}'));
  assert.ok(cash.includes('Los pedidos nuevos de prueba aparecerán'));
+});
+
+test('Horarios nocturnos: jueves abierto hasta viernes de madrugada, con límites exactos',()=>{
+ const place={...a,hours:{4:{open:'18:00',close:'01:30'}}};
+ for(const date of ['2026-11-19T18:00:00','2026-11-19T23:59:00','2026-11-20T01:29:00'])
+  assert.equal(withinBusinessHours(place,new Date(date)),true,date);
+ for(const date of ['2026-11-19T17:59:00','2026-11-20T01:30:00','2026-11-20T19:00:00'])
+  assert.equal(withinBusinessHours(place,new Date(date)),false,date);
+ assert.equal(restaurantOrderBlockReason(place,{at:new Date('2026-11-20T00:30:00')}),null);
+ assert.match(restaurantOrderBlockReason(place,{at:new Date('2026-11-20T02:00:00')}),/fuera de su horario/);
+});
+test('Turno de sábado a domingo conserva el cierre del domingo y no abre días vacíos',()=>{
+ const place={...a,hours:{6:{open:'21:00',close:'02:00'}}};
+ assert.equal(withinBusinessHours(place,new Date('2026-11-21T23:00:00')),true);
+ assert.equal(withinBusinessHours(place,new Date('2026-11-22T01:59:00')),true);
+ assert.equal(withinBusinessHours(place,new Date('2026-11-22T02:00:00')),false);
+ assert.equal(withinBusinessHours(place,new Date('2026-11-22T21:00:00')),false);
 });

@@ -111,3 +111,26 @@ La API Node/PostgreSQL en `server/` es un esqueleto **incompleto y aislado**. Su
 
 ### Privacidad de datos en la vista previa
 La sección **Más opciones** tiene «Borrar datos de prueba de este dispositivo», con confirmación explícita. El control borra únicamente claves del dominio con prefijo `dv_` y reinicia la PWA; no borra cuentas o pedidos del servidor. Se ha añadido para que usuarios de QA puedan limpiar datos locales ficticios y preservar su privacidad. Work debe sustituir el borrado por gestión de derechos de datos y sesiones reales cuando exista backend.
+
+
+## 7. Servicios externos y revisión antes de producción
+El frontend de demostración utiliza algunos servicios externos. Work debe auditar qué se comparte y adoptar proveedores apropiados, contratos, políticas de retención y una CSP restrictiva antes de poner el producto en venta:
+- **Mapas y rutas:** Leaflet desde un CDN público, teselas OpenStreetMap y rutas OSRM demo; no asumir disponibilidad garantizada ni enviar ubicación sin consentimiento.
+- **Google Maps:** abrir navegación externa es una acción explícita del repartidor.
+- **QR de invitaciones:** servicio público para generar QR de la URL pública; si se añaden códigos individuales conviene generarlos localmente, sin enviarlos a terceros.
+- **Fuentes e imágenes:** Google Fonts e imágenes de demostración externas; sustituir fotografías de prueba por imágenes autorizadas y decidir una estrategia de hospedaje/optimización.
+- **PWA:** el shell público puede estar en caché, pero los pedidos y operaciones requieren API autenticada y nunca deben darse por enviados offline.
+
+## 8. Decisiones comerciales y operativas que faltan
+- Cobertura geográfica por restaurante y repartidor, tarifa de envío por zona/distancia y quién cobra al cliente.
+- Métodos de pago permitidos, comprobantes, reembolsos y conciliación del efectivo.
+- Esquema definitivo de comisiones o suscripciones de repartidores independientes, sin simular ingresos inexistentes.
+- Horarios y festivos, capacidad de cocina, pedidos programados, suspensión de servicio y límites de cancelación.
+- Requisitos de afiliación, verificación y autorización de restaurantes y repartidores.
+- Procedimiento ante incidentes de seguridad, accidente, pedido incompleto o cliente ausente.
+- Términos, privacidad, retención de datos y soporte al consumidor conforme a las leyes aplicables.
+
+### Semáforo de preparación
+**Aprobado técnicamente mediante tests:** reglas del frontend y demostración local en GitHub Actions.  
+**Pendiente de verificación Work:** navegadores y teléfonos reales, concurrencia, desconexiones, accesibilidad y operación del backend.  
+**Bloqueante para lanzamiento público:** autenticación, datos compartidos, pedidos auténticos, permisos, PIN servidor, notificaciones y pruebas de extremo a extremo.

@@ -89,3 +89,8 @@
 .dv-cash-filters label{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ow-sub,var(--muted));font-weight:700}
 .dv-cash-filters select{max-width:200px;border:1px solid var(--ow-line,var(--line));border-radius:10px;background:var(--ow-card,var(--surface));color:var(--ow-ink,var(--ink));padding:9px 8px;font:inherit}
 @media(max-width:620px){.dv-cash-filters{padding:12px}.dv-cash-filters>div{width:100%}.dv-cash-filters button{flex:1;min-width:83px}.dv-cash-filters label{width:100%;justify-content:space-between}.dv-cash-filters select{max-width:65%}}
+
+/* Más pedidos sin cargar de golpe cientos de tarjetas en móviles antiguos. */
+.dv-cash-load-more{display:block;width:100%;min-height:44px;margin:12px 0 3px;padding:11px 14px;border-radius:12px;border:1px solid var(--ow-line,var(--line));background:var(--ow-bg,var(--soft));color:var(--ow-ink,var(--ink));font-size:12px;font-weight:800;cursor:pointer}
+.dv-cash-load-more:hover{border-color:var(--accent)}
+.dv-cash-load-more:focus-visible{outline:2px solid var(--accent);outline-offset:2px}

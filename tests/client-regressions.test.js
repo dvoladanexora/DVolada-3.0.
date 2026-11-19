@@ -315,6 +315,7 @@ test('Más opciones: appearance controls have dark and keyboard styling',()=>{
 
 test('Auditoría cliente: route permissions are applied before writing browser history',()=>{
  const navigate=app.slice(app.indexOf('const navigate=p=>'),app.indexOf('function addItem(',app.indexOf('const navigate=p=>')));
+ assert.ok(navigate.includes("if(isPubliclyHidden(p))p='home'"));
  assert.ok(navigate.indexOf("if(guestMode&&")>=0);
  assert.ok(navigate.indexOf("if(['business','partner-plus','partner-hub'].includes(p)&&!affiliateSession)")>=0);
  assert.ok(navigate.indexOf('window.history.pushState')>navigate.indexOf("if(['partner-plus','partner-hub'].includes(p))"));
@@ -698,4 +699,25 @@ test('Publicidad: valida contacto y construye enlaces seguros sin envío fictici
  assert.equal(sponsorEmailLink(lead,'invalid'),null);
  assert.equal(sponsorWhatsappLink(lead,'abc'),null);
  assert.ok(sponsorWhatsappLink(lead,'+504 9999-9999').startsWith('https://wa.me/50499999999?text='));
+});
+
+test('Publicación: menú cliente oculta servicios pendientes y paneles internos',()=>{
+ const releaseFlags=readFileSync(new URL('../src/release-flags.js',import.meta.url),'utf8');
+ const sidebar=app.slice(app.indexOf('const nav='),app.indexOf(';return <><IntroMotion',app.indexOf('const nav=')));
+ const mobile=app.slice(app.indexOf('<nav className="mobile-nav dv-compact-nav">'),app.indexOf('</nav>',app.indexOf('<nav className="mobile-nav dv-compact-nav">')));
+ const more=app.slice(app.indexOf('className="dv-more-sheet"'),app.indexOf('className="dv-more-appearance"',app.indexOf('className="dv-more-sheet"')));
+ const home=app.slice(app.indexOf("{page==='home'&&<>"),app.indexOf("{page==='favorites'&&",app.indexOf("{page==='home'&&<>")));
+ for(const forbidden of ["'groceries'","'express'","'rewards'","'driver'","'invite'","'group'","'admin'","'delivery-panel'"]){
+  assert.ok(!sidebar.includes(forbidden),'menú lateral: '+forbidden);
+  assert.ok(!mobile.includes(forbidden),'menú móvil: '+forbidden);
+  assert.ok(!more.includes(forbidden),'Más: '+forbidden);
+ }
+ assert.ok(!home.includes("navigate('groceries')"));
+ assert.ok(app.includes('if(isPubliclyHidden(p))p=\'home\''));
+ assert.ok(releaseFlags.includes("import.meta.env.DEV&&import.meta.env.VITE_DVOLADA_INTERNAL_PREVIEW==='true'"));
+ assert.ok(app.includes("page==='admin'&&INTERNAL_PREVIEW_ENABLED"));
+ assert.ok(app.includes("page==='delivery-panel'&&INTERNAL_PREVIEW_ENABLED"));
+ assert.ok(app.includes("page==='business'&&INTERNAL_PREVIEW_ENABLED&&affiliateSession"));
+ assert.ok(app.includes("page==='partner-login'&&(INTERNAL_PREVIEW_ENABLED?"));
+ assert.ok(app.includes("page==='courier-login'&&(INTERNAL_PREVIEW_ENABLED?"));
 });

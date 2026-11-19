@@ -1376,3 +1376,20 @@ body:has(.modal-backdrop) .mobile-nav.dv-compact-nav{visibility:hidden!important
  .dv-groceries-page .grocery-line{padding:13px 0}
 }
 @media(prefers-reduced-motion:reduce){.dv-groceries-page input,.dv-groceries-page button{transition:none!important}}
+
+/* Favoritos pass 2: responsive image cards and accessible controls */
+.dv32 .dv-favorites-page,.dv32 .dv-favorites-products{min-width:0;max-width:100%;box-sizing:border-box}
+.dv32 .dv-favorites-products{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:clamp(12px,2vw,18px)}
+.dv32 .dv-favorite-product-card{display:flex;flex-direction:column;gap:8px;min-width:0;overflow:hidden;border-radius:20px;padding:14px}
+.dv32 .dv-favorite-product-card strong,.dv32 .dv-favorite-product-card p{overflow-wrap:anywhere;margin:0}
+.dv32 .dv-favorite-product-image{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:12px;background:var(--bg)}
+.dv32 .dv-favorite-product-card button{width:100%;min-height:44px;margin:0;white-space:normal}
+.dv32 .dv-favorite-product-card button:first-of-type{margin-top:auto}
+.dv32 .dv-favorites-page button:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+[data-theme="dark"] .dv32 .dv-favorite-product-card{background:var(--surface);color:var(--ink);border-color:var(--line)}
+@media(max-width:520px){
+ .dv32 .dv-favorites-products{grid-template-columns:minmax(0,1fr);gap:12px}
+ .dv32 .dv-favorite-product-card{padding:14px}
+ .dv32 .dv-favorites-page .page-heading h1{flex-wrap:wrap}
+}
+@media(prefers-reduced-motion:reduce){.dv32 .dv-favorite-product-card button{transition:none!important}}

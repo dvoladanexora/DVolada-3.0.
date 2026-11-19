@@ -84,11 +84,33 @@ export function applyCourierAction(orders,orderId,action,riderId,options={},at=n
  });
  return {ok:true,orders:next,order:next.find(o=>String(o.id)===String(orderId))};
 }
+/** Proyección mínima para que la UI de ofertas no reciba datos de clientes.
+ * El navegador de demostración conserva los originales para validar acciones;
+ * en producción la API debe devolver esta proyección desde el servidor.
+ */
 export function courierPublicOrder(order){
  if(!order)return null;
- // El componente no necesita leer el PIN real: el validador local lo conoce en el padre.
- const {pin,identity,dni,...rest}=order;
+ const {pin,identity,dni,customerId,rnp,...rest}=order;
  return {...rest};
+}
+export function courierViewOrder(order,riderId){
+ if(isRiderOwner(order,riderId))return courierPublicOrder(order);
+ if(!isCourierOffer(order,riderId))return null;
+ const {id,orderNo,kind,delivery,status,placeId,placeName,createdAt,date,items}=order;
+ return {id,orderNo,kind,delivery,status,placeId,placeName,createdAt,date,
+  items:Array.isArray(items)?items.map(item=>({qty:Math.min(50,Math.max(1,Number(item?.qty)||1))})):[]};
+}
+export const courierViewOrders=(orders,riderId)=>(Array.isArray(orders)?orders:[]).map(order=>courierViewOrder(order,riderId)).filter(Boolean);
+export const pinAttemptKey=id=>'dv_courier_pin_attempts_'+String(id||'');
+export function sanitizePinAttempts(value){
+ if(!value||typeof value!=='object'||Array.isArray(value))return {};
+ const entries=Object.entries(value).filter(([key,count])=>key.length>0&&key.length<120&&Number.isInteger(count)&&count>0);
+ return Object.fromEntries(entries.slice(-100).map(([key,count])=>[key,Math.min(3,count)]));
+}
+export function incrementPinAttempt(value,orderId){
+ const previous=sanitizePinAttempts(value),key=String(orderId||'');
+ if(!key||key.length>=120)return previous;
+ return sanitizePinAttempts({...previous,[key]:Math.min(3,(previous[key]||0)+1)});
 }
 export function courierOrderCoords(order){
  const value=order?.deliveryCoordinates||order?.customerCoords||order?.customerLocation||order?.location;

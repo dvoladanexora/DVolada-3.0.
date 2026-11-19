@@ -74,6 +74,6 @@ test('Separación de pantallas y estados en el panel Online',()=>{
  assert.ok(kitchen.includes("kitchenQueues(orders,restaurantId,now)"));
  assert.ok(kitchen.includes("onChange(order,stage.next)"));
  assert.ok(kitchen.includes('Comanda'));
- assert.ok(kitchen.includes('Los nuevos pedidos'));
+ assert.ok(kitchen.includes('Las nuevas solicitudes'));
  assert.ok(kitchen.includes('se requiere la conexión segura del servidor'));
 });

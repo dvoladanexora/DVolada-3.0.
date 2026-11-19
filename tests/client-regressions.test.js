@@ -69,3 +69,10 @@ test('Restaurantes: responsive shelves, dark theme and keyboard focus',()=>{
  assert.match(restaurantCss,/\.dv-rp-item-title:focus-visible/);
  assert.match(restaurantCss,/@media\(max-width:360px\)/);
 });
+
+const restaurantProfile=readFileSync(new URL('../src/RestaurantProfile.jsx',import.meta.url),'utf8');
+test('Restaurantes: profile search handles accents and structured extras',()=>{
+ assert.match(restaurantProfile,/const normalizeQuery=value=>/);
+ assert.match(restaurantProfile,/normalizeQuery\(query\)/);
+ assert.match(restaurantProfile,/item\.extras\.map\(extra=>typeof extra==='string'/);
+});

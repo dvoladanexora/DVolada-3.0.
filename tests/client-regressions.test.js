@@ -321,3 +321,9 @@ test('Auditoría checkout: scheduled dates must be valid before confirming',()=>
  assert.match(app,/!Number\.isFinite\(new Date\(scheduleAt\)\.getTime\(\)\)/);
  assert.match(app,/address\.trim\(\)\.length<8/);
 });
+
+test('Auditoría carrito: customized products use collision-resistant line IDs',()=>{
+ assert.match(app,/id:item\.id\+'-'\+\(typeof crypto!=='undefined'&&typeof crypto\.randomUUID==='function'\?crypto\.randomUUID\(\)/);
+ assert.doesNotMatch(app,/id:item\.id\+'-'\+Date\.now\(\),productId:item\.id/);
+ assert.match(app,/String\(i\.id\)===String\(item\.id\)&&String\(i\.placeId\)===String\(place\.id\)/);
+});

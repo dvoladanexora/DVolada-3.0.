@@ -1,13 +1,19 @@
-import React from 'react';
+import React,{useState} from 'react';
 import {ArrowRight,Bell,ChefHat,Check,CheckCheck,Clock3,Eye,Printer,Store,Truck} from 'lucide-react';
 import {elapsedMinutes,kitchenQueues,matchesRestaurantOrder} from './kitchen-operations.js';
 import './restaurant-cashier-console.css';
 
 const number=o=>o.orderNo||o.id;
 export default function RestaurantCashierConsole({orders=[],restaurantId,restaurantName='Restaurante',now=Date.now(),connected=true,query='',capacity=10,onActivate=()=>{},onAccept=()=>{},onDetail=()=>{},onPrint=()=>{},onGoKitchen=()=>{}}){
+ const [pendingView,setPendingView]=useState('all');
+ const [pendingSort,setPendingSort]=useState('oldest');
  const q=kitchenQueues(orders,restaurantId,now);
  const working=q.accepted.length+q.preparing.length;
- const shownPending=q.pending.filter(order=>matchesRestaurantOrder(order,query));
+ const shownPending=q.pending.filter(order=>matchesRestaurantOrder(order,query)&&(pendingView==='all'||(pendingView==='delivery'?order.delivery==='delivery':order.delivery!=='delivery'))).sort((a,b)=>{
+  const left=new Date(a.createdAt||a.date||0).getTime(),right=new Date(b.createdAt||b.date||0).getTime();
+  const validLeft=Number.isFinite(left)?left:Number.MAX_SAFE_INTEGER,validRight=Number.isFinite(right)?right:Number.MAX_SAFE_INTEGER;
+  return pendingSort==='oldest'?validLeft-validRight:validRight-validLeft;
+ });
  const atCapacity=working>=Math.max(1,Number(capacity)||10);
  return <div className="dv-cash-console">
   <header className="dv-cash-hero"><div><span className="dv-cash-eyebrow"><Store size={16}/> CAJA / RECEPCIÓN · DVOLADA CLOUD</span><h2>Una caja organizada, una cocina en marcha.</h2><p>Revisá las solicitudes nuevas y decidí cuáles aceptar. La cocina recibe únicamente las que el negocio haya aceptado.</p></div><button type="button" onClick={onGoKitchen} className="dv-cash-goto-kitchen"><ChefHat size={21}/> Abrir cocina <ArrowRight size={17}/></button></header>
@@ -24,6 +30,7 @@ export default function RestaurantCashierConsole({orders=[],restaurantId,restaur
   </section>}
   <div className="dv-cash-panels">
    <section className="dv-cash-pending" aria-labelledby="dv-cash-pending-title"><header><div><span className="dv-cash-eyebrow">BANDEJA DE ENTRADA</span><h3 id="dv-cash-pending-title">Nuevos pedidos <b>{q.pending.length}</b></h3></div><span className="dv-cash-pending-caption">Revisá antes de aceptar</span></header>
+    <div className="dv-cash-filters" aria-label="Filtros de nuevos pedidos"><div role="group" aria-label="Tipo de entrega">{[['all','Todos'],['delivery','A domicilio'],['pickup','Retiro en local']].map(([id,label])=><button key={id} type="button" className={pendingView===id?'active':''} aria-pressed={pendingView===id} onClick={()=>setPendingView(id)}>{label}</button>)}</div><label>Ordenar<select aria-label="Orden de pedidos" value={pendingSort} onChange={e=>setPendingSort(e.target.value)}><option value="oldest">Más antiguos primero</option><option value="recent">Más recientes primero</option></select></label></div>
     <div className="dv-cash-list">
      {shownPending.length?shownPending.map(order=>{
       const elapsed=elapsedMinutes(order,now),items=Array.isArray(order.items)?order.items:[];
@@ -34,7 +41,7 @@ export default function RestaurantCashierConsole({orders=[],restaurantId,restaur
        {order.notes&&<div className="dv-cash-order-note">Nota: {order.notes}</div>}
        <div className="dv-cash-order-actions"><button type="button" onClick={()=>onDetail(order)} className="dv-cash-detail"><Eye size={17}/> Ver detalle</button><button type="button" disabled={!connected} onClick={()=>onAccept(order)} className="dv-cash-accept"><Check size={17}/> Aceptar y enviar a cocina</button></div>
       </article>;
-     }):<div className="dv-cash-empty"><Check size={34}/><strong>¡No hay pedidos por aceptar!</strong><p>{query.trim()?'No hay pedidos que coincidan con tu búsqueda.':'Los nuevos pedidos aparecerán aquí cuando el servidor esté conectado al restaurante.'}</p></div>}
+     }):<div className="dv-cash-empty"><Check size={34}/><strong>¡No hay pedidos por aceptar!</strong><p>{query.trim()||pendingView!=='all'?'No hay pedidos que coincidan con los filtros.':'Los pedidos nuevos de prueba aparecerán aquí al registrarse en este navegador.'}</p></div>}
     </div>
    </section>
    <aside className="dv-cash-production" aria-label="Estado de cocina"><header><span className="dv-cash-eyebrow">PRODUCCIÓN</span><h3>Así va tu cocina</h3><p>Seguimiento rápido de las órdenes aceptadas.</p></header>

@@ -64,3 +64,17 @@
  .dv-cash-hero,.dv-cash-order,.dv-cash-overview>div,.dv-cash-pending,.dv-cash-production{background:var(--ow-card,var(--surface))}
  .dv-cash-capacity{background:var(--ow-bg,var(--soft))}
 }
+/* Pedidos programados: Caja activa únicamente los vencidos. */
+.dv-cash-scheduled{border:1px solid var(--ow-line,var(--line));border-radius:20px;background:var(--ow-card,var(--surface));overflow:hidden}
+.dv-cash-scheduled>header{display:flex;align-items:center;gap:9px;padding:15px 18px;background:var(--ow-bg,var(--soft))}
+.dv-cash-scheduled>header svg{color:var(--accent)}
+.dv-cash-scheduled>header strong{font-size:14px}
+.dv-cash-scheduled>header span{margin-left:auto;font-size:11px;color:var(--ow-sub,var(--muted))}
+.dv-cash-scheduled-row{display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid var(--ow-line,var(--line));padding:12px 18px}
+.dv-cash-scheduled-row>div{display:grid;gap:5px;min-width:0}
+.dv-cash-scheduled-row strong{font-size:13px}
+.dv-cash-scheduled-row small,.dv-cash-scheduled-row>span{font-size:11px;color:var(--ow-sub,var(--muted))}
+.dv-cash-scheduled-row button{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;padding:11px 13px;min-height:43px;border-radius:12px;background:var(--accent);color:#fff;font-size:12px;font-weight:850}
+.dv-cash-scheduled-row button:disabled{opacity:.48}
+.dv-cash-scheduled>p{padding:8px 17px;color:#c36b34;font-size:12px}
+@media(max-width:620px){.dv-cash-scheduled>header,.dv-cash-scheduled-row{align-items:flex-start;flex-wrap:wrap}.dv-cash-scheduled>header span{margin-left:0}.dv-cash-scheduled-row button{width:100%;justify-content:center}}

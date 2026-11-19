@@ -102,3 +102,18 @@ test('El guardado de pruebas es tolerante a fallas de almacenamiento',()=>{
  assert.ok(src.includes("window.addEventListener('storage',syncDemoTab)"));
  assert.ok(src.includes('storageAlertShown.current'));
 });
+
+test('Cancelación de un pedido aceptado puede volver a Aceptado al rechazar la solicitud',()=>{
+ const accepted=applyOrderStatus(sample,'Aceptado',{},at);
+ const requested=applyOrderStatus(accepted,'Cancelación solicitada',{},new Date('2026-11-19T06:10:00Z'));
+ const result=decisionForOrder(requested,'deny-cancel','Ya empezó la preparación');
+ assert.equal(result.status,'Aceptado');
+ const saved=applyOrderStatus(requested,result.status,result.metadata,new Date('2026-11-19T06:15:00Z'));
+ assert.equal(saved.status,'Aceptado');
+ assert.equal(saved.acceptedAt,at.toISOString());
+ assert.equal(saved.cancelResponse,'Rechazada');
+});
+test('Cancelaciones de pedidos aceptados se revisan en Caja, no se borran directamente',()=>{
+ const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(main.includes("const immediate=['Programado','Pendiente'].includes(cancelOrder.status)"));
+});

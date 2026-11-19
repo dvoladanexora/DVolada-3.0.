@@ -4,7 +4,7 @@ import {elapsedMinutes,kitchenQueues,matchesRestaurantOrder} from './kitchen-ope
 import './restaurant-cashier-console.css';
 
 const number=o=>o.orderNo||o.id;
-export default function RestaurantCashierConsole({orders=[],restaurantId,restaurantName='Restaurante',now=Date.now(),connected=true,query='',capacity=10,onAccept=()=>{},onDetail=()=>{},onPrint=()=>{},onGoKitchen=()=>{}}){
+export default function RestaurantCashierConsole({orders=[],restaurantId,restaurantName='Restaurante',now=Date.now(),connected=true,query='',capacity=10,onActivate=()=>{},onAccept=()=>{},onDetail=()=>{},onPrint=()=>{},onGoKitchen=()=>{}}){
  const q=kitchenQueues(orders,restaurantId,now);
  const working=q.accepted.length+q.preparing.length;
  const shownPending=q.pending.filter(order=>matchesRestaurantOrder(order,query));
@@ -17,6 +17,11 @@ export default function RestaurantCashierConsole({orders=[],restaurantId,restaur
    <div><span><CheckCheck size={18}/> Listos</span><strong>{q.ready.length}</strong><small>Para retiro o repartidor</small></div>
   </div>
   {atCapacity&&<div className="dv-cash-capacity" role="status"><ChefHat size={18}/><span>La cocina llegó a su capacidad configurada ({capacity} pedidos). Revisá tiempos antes de aceptar más. Esta alerta no bloquea pedidos automáticamente hasta conectar el servidor.</span></div>}
+  {(q.scheduledDue.length>0||q.scheduledFuture.length>0||q.scheduledInvalid.length>0)&&<section className="dv-cash-scheduled" aria-label="Pedidos programados"><header><Clock3 size={19}/><strong>Pedidos programados</strong><span>{q.scheduledDue.length} por activar · {q.scheduledFuture.length} futuros</span></header>
+   {q.scheduledDue.map(order=><div className="dv-cash-scheduled-row" key={order.id}><div><strong>{number(order)} · Hora de preparar</strong><small>{order.name||'Cliente'} · {order.scheduledFor?new Date(order.scheduledFor).toLocaleString('es-HN'):'Sin hora'}</small></div><button type="button" disabled={!connected} onClick={()=>onActivate(order)}><Check size={16}/> Activar pedido</button></div>)}
+   {q.scheduledFuture.slice(0,5).map(order=><div className="dv-cash-scheduled-row future" key={order.id}><div><strong>{number(order)} · Próximamente</strong><small>{new Date(order.scheduledFor).toLocaleString('es-HN')} · {order.name||'Cliente'}</small></div><span>No disponible todavía</span></div>)}
+   {q.scheduledInvalid.length>0&&<p role="alert">{q.scheduledInvalid.length} pedido(s) sin fecha válida: requieren revisión antes de activarse.</p>}
+  </section>}
   <div className="dv-cash-panels">
    <section className="dv-cash-pending" aria-labelledby="dv-cash-pending-title"><header><div><span className="dv-cash-eyebrow">BANDEJA DE ENTRADA</span><h3 id="dv-cash-pending-title">Nuevos pedidos <b>{q.pending.length}</b></h3></div><span className="dv-cash-pending-caption">Revisá antes de aceptar</span></header>
     <div className="dv-cash-list">

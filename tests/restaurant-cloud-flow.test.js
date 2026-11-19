@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {kitchenQueues,elapsedMinutes,kitchenTicketHtml,belongsToRestaurant,openKitchenTicket,canMoveRestaurantOrder,matchesRestaurantOrder} from '../src/kitchen-operations.js';
+import {kitchenQueues,elapsedMinutes,kitchenTicketHtml,belongsToRestaurant,openKitchenTicket,canMoveRestaurantOrder,matchesRestaurantOrder,scheduledOrderState} from '../src/kitchen-operations.js';
 
 const order=(id,status,placeId='r1',options={})=>({
  id,orderNo:'#DV-'+id,kind:'food',placeId,status,delivery:'delivery',name:'Cliente',
@@ -117,4 +117,18 @@ test('Comanda adaptable a papel térmico 58 y 80 mm sin inyección de estilo',()
  assert.ok(b.includes('size:80mm auto'));
  assert.ok(b.includes('max-width:76mm'));
  assert.ok(kitchenTicketHtml(o,'Restaurante',new Date(now),'invalido').includes('size:80mm auto'));
+});
+
+test('Pedidos programados: Caja separa los futuros, vencidos y sin fecha válida',()=>{
+ const future=order('future','Programado','r1',{scheduledFor:'2026-11-20T18:00:00Z'});
+ const due=order('due','Programado','r1',{scheduledFor:'2026-11-18T18:30:00Z'});
+ const invalid=order('invalid','Programado','r1',{scheduledFor:'sin fecha'});
+ const q=kitchenQueues([future,due,invalid],'r1',now);
+ assert.deepEqual(q.scheduledFuture.map(x=>x.id),['future']);
+ assert.deepEqual(q.scheduledDue.map(x=>x.id),['due']);
+ assert.deepEqual(q.scheduledInvalid.map(x=>x.id),['invalid']);
+ assert.equal(scheduledOrderState(future,now),'future');
+ assert.equal(scheduledOrderState(due,now),'due');
+ assert.equal(canMoveRestaurantOrder('Programado','Pendiente','cashier'),true);
+ assert.equal(canMoveRestaurantOrder('Programado','Aceptado','cashier'),false);
 });

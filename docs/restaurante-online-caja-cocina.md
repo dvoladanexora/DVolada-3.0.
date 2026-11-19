@@ -95,3 +95,10 @@ Para aprobar, probar con A cliente, B caja, C cocina, D repartidor, incluyendo p
 - En Vite DEV, las **pestañas del mismo navegador/origen** actualizan pedidos/catálogo con eventos de almacenamiento. **No sincroniza teléfonos, tablets o equipos diferentes.**
 - Guardado local tolerante al error de cuota; no sobrescribe toda la lista de claves si una sola cambia en otra pestaña.
 - Ejecutar `npm run test:hardening` junto a los tests anteriores.
+
+
+## Programaciones y cancelaciones aceptadas
+- Los pedidos Programado se agrupan en futuros, vencidos y con fecha inválida; Caja solo puede activar los vencidos. Al activarlos pasan a Pendiente y requieren aceptación.
+- Si el cliente cancela cuando está Pendiente o Programado, se cancela directamente solo en esta demostración. Si está Aceptado o Preparando, el restaurante debe aprobar o rechazar desde Caja.
+- Al rechazar la solicitud, la orden vuelve al estado original Aceptado/Preparando con sus marcas de tiempo y motivo de revisión.
+- Work deberá fijar política comercial de cancelaciones, programación automática servidor y relojes confiables, no depender de la hora modificable del navegador.

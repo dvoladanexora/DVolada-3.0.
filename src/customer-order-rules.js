@@ -70,11 +70,14 @@ export const sameCartLine=(line,itemId,placeId)=>Boolean(
 );
 export function changeCartQuantity(cart,itemId,placeId,delta){
  if(!Array.isArray(cart)||!Number.isInteger(delta)||delta===0)return Array.isArray(cart)?cart:[];
- return cart.map(line=>{
-  if(!sameCartLine(line,itemId,placeId))return line;
+ const updated=[];
+ for(const line of cart){
+  if(!sameCartLine(line,itemId,placeId)){updated.push(line);continue}
   const quantity=Number(line.qty);
-  return {...line,qty:Math.min(99,(Number.isInteger(quantity)?quantity:1)+delta)};
- }).filter(line=>Number(line?.qty)>0);
+  const next=Math.min(99,(Number.isInteger(quantity)&&quantity>=1?quantity:1)+delta);
+  if(next>0)updated.push({...line,qty:next});
+ }
+ return updated;
 }
 export function changeCartInstruction(cart,itemId,placeId,value){
  if(!Array.isArray(cart))return [];

@@ -149,3 +149,20 @@ test('Accesibilidad y controles de tamaño móvil siguen presentes',()=>{
  assert.ok(ui.includes('aria-label="PIN de seis dígitos"'));
  assert.ok(ui.includes('role="status"'));
 });
+
+test('El seeder de reparto genera números distintos y limita exceso de pedidos ficticios',()=>{
+ const src=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(src.includes("const count=orders.filter(o=>o.demo"));
+ assert.ok(src.includes("if(count>=8)"));
+ assert.ok(src.includes("orderNo:prefix+'-1'"));
+ assert.ok(src.includes("orderNo:prefix+'-2'"));
+ assert.ok(src.includes("createdAt,acceptedAt:createdAt,readyAt:createdAt"));
+});
+test('La UI reanuda progreso de Preparando y no confunde errores de red con PIN malo',()=>{
+ const ui=readFileSync(new URL('../src/CourierOnlineDashboard.jsx',import.meta.url),'utf8');
+ assert.ok(ui.includes("status==='Preparando'||status==='Cancelación solicitada'?'Aceptado'"));
+ assert.ok(ui.includes("includes('PIN incorrecto')"));
+ assert.ok(ui.includes('failedPinAttempts>=3'));
+ assert.ok(ui.includes('readRiderIssues(courierId)'));
+ assert.ok(ui.includes("if(result?.ok)setShowArrival(false)"));
+});

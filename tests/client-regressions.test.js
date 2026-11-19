@@ -291,3 +291,16 @@ test('Más opciones: theme and motion controls remain explicit',()=>{
  assert.match(app,/checked=\{reduceAnimations\}/);
  assert.match(app,/aria-label="Buscar actualizaciones y recargar Dvolada"/);
 });
+
+const moreStyles=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
+test('Más opciones: responsive modal stays within viewport',()=>{
+ assert.match(moreStyles,/\.dv-more-sheet\{box-sizing:border-box;min-width:0;width:min\(94vw,480px\)/);
+ assert.match(moreStyles,/@media\(max-width:480px\)\{\.dv-more-backdrop/);
+ assert.match(moreStyles,/max-height:calc\(100dvh - 20px\)/);
+});
+test('Más opciones: appearance controls have dark and keyboard styling',()=>{
+ assert.match(moreStyles,/\.dv-more-sheet \.dv-more-theme-choices\{display:grid/);
+ assert.match(moreStyles,/\[data-theme="dark"\] \.dv-more-sheet \.dv-more-appearance/);
+ assert.match(moreStyles,/\.dv-more-sheet button:focus-visible/);
+ assert.match(moreStyles,/@media\(prefers-reduced-motion:reduce\)\{\.dv-more-sheet/);
+});

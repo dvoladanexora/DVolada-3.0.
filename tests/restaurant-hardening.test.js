@@ -215,3 +215,26 @@ test('Eventos de pestañas no admiten IDs de pedido repetidos',()=>{
  assert.equal(decodeDemoStorageEvent({key:'dv_orders',newValue:JSON.stringify([{id:1,status:'Pendiente'},{id:'1',status:'Pendiente'}])}),null);
  assert.ok(decodeDemoStorageEvent({key:'dv_orders',newValue:JSON.stringify([order])}));
 });
+
+test('Choque sobre el mismo menú devuelve conflicto y deja intactos los datos',()=>{
+ const original=[{id:1,name:'Negocio',items:[{id:10,name:'Baleada',price:50}]}];
+ let disk=JSON.stringify(original),writes=0;
+ const storage={getItem:()=>disk,setItem:(key,content)=>{disk=content;writes++}};
+ const stateBefore=structuredClone(original);
+ const first=mutateDemoPlaces(storage,stateBefore,latest=>latest.map(p=>({...p,items:[{id:10,name:'Baleada',price:55}]})));
+ assert.equal(first.ok,true);
+ assert.equal(writes,1);
+ const conflicting=mutateDemoPlaces(storage,stateBefore,latest=>{
+  if(JSON.stringify(latest[0].items)!==JSON.stringify(stateBefore[0].items))
+   return {ok:false,reason:'El menú cambió en otra pestaña.'};
+  return latest.map(p=>({...p,items:[{id:10,name:'Baleada',price:60}]}));
+ });
+ assert.equal(conflicting.ok,false);
+ assert.match(conflicting.reason,/otra pestaña/);
+ assert.equal(writes,1,'no se sobrescribe el cambio remoto');
+ assert.equal(JSON.parse(disk)[0].items[0].price,55);
+ const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(ui.includes('JSON.stringify(current.items)!==JSON.stringify(visible.items)'));
+ assert.ok(ui.includes('JSON.stringify(visible?.[key])!==JSON.stringify(current[key])'));
+ assert.ok(ui.includes('restaurantStatus(visible)!==restaurantStatus(current)'));
+});

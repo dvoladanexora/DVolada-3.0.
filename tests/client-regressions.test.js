@@ -214,3 +214,16 @@ test('Dvolada Club: rewards persist before success and remain explicitly demo',(
  assert.match(clubSource,/catch\{window\.alert\('No se pudo guardar el cupón de demostración/);
  assert.match(clubSource,/Los cupones no modifican el total del pedido todavía/);
 });
+
+const clubStyles=readFileSync(new URL('../src/growth-features.css',import.meta.url),'utf8');
+test('Dvolada Club: dashboard and redemption are scoped to Club',()=>{
+ assert.match(clubSource,/page-section gx gx-club/);
+ assert.match(clubSource,/className="gx-card gx-club-redeem"/);
+ assert.match(clubSource,/aria-label="Resumen de puntos Dvolada Club"/);
+});
+test('Dvolada Club: responsive stats and dark mode styles are present',()=>{
+ assert.match(clubStyles,/\.dv32 \.gx-club \.gx-stats\{display:grid/);
+ assert.match(clubStyles,/@media\(max-width:420px\)/);
+ assert.match(clubStyles,/\[data-theme="dark"\] \.dv32 \.gx-club \.gx-stats article/);
+ assert.match(clubStyles,/\.dv32 \.gx-club button:focus-visible/);
+});

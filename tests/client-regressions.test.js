@@ -253,3 +253,17 @@ test('Pedidos grupales: responsive panels, dark theme and keyboard focus are sco
  assert.match(groupStyles,/\[data-theme="dark"\] \.dv32 \.ox-group-page \.ox-panel/);
  assert.match(groupStyles,/\.dv32 \.ox-group-page \.ox-btn:focus-visible/);
 });
+
+test('Dvolada Express: validates demo delivery fields and distinct addresses',()=>{
+ assert.match(groupSource,/name\.length<2\|\|name\.length>80/);
+ assert.match(groupSource,/pickup\.length<5\|\|pickup\.length>180/);
+ assert.match(groupSource,/dropoff\.length<5\|\|dropoff\.length>180/);
+ assert.match(groupSource,/description\.length>500/);
+ assert.match(groupSource,/pickup\.toLocaleLowerCase\('es'\)===dropoff\.toLocaleLowerCase\('es'\)/);
+});
+test('Dvolada Express: local requests have distinct IDs, empty state and safe removal',()=>{
+ assert.match(groupSource,/id:'EX-'\+id\(\),status:'Sin asignar'/);
+ assert.match(groupSource,/No hay solicitudes de Express guardadas en este dispositivo/);
+ assert.match(groupSource,/¿Eliminar esta solicitud local de demostración\?/);
+ assert.match(groupSource,/No se envían a repartidores ni calculan tarifas reales/);
+});

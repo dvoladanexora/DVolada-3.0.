@@ -1,4 +1,4 @@
-import {validStoredRestaurants} from './browser-storage.js';
+import {validStoredRestaurants,validStoredOrders} from './browser-storage.js';
 /** Sincronización limitada a otras pestañas del MISMO navegador/origen de la demo.
  * No sustituye API, autenticación, sincronización entre equipos ni base de datos.
  */
@@ -9,7 +9,7 @@ export function decodeDemoStorageEvent(event){
   const rows=JSON.parse(event.newValue);
   if(!Array.isArray(rows)||rows.length>500||!rows.every(v=>v&&typeof v==='object'&&!Array.isArray(v)&&v.id!==undefined))return null;
   if(event.key==='dv_places'&&!validStoredRestaurants(rows))return null;
-  if(event.key==='dv_orders'&&!rows.every(row=>typeof row.status==='string'))return null;
+  if(event.key==='dv_orders'&&!validStoredOrders(rows))return null;
   return {key:event.key,rows};
  }catch{return null}
 }

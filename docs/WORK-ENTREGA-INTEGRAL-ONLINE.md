@@ -278,3 +278,36 @@ Esta etapa refuerza la demostración de Cliente, Restaurante y Caja sin agregar 
 - Revisar aceptación visual en Android, iOS y PC, restablecimiento tras almacenamiento lleno y varios pedidos simultáneos.
 - Mantener PR #74 como borrador. **Sin cambios en main ni despliegue Cloudflare** hasta aprobar integraciones reales.
 - Las metas **Cliente 98% y Restaurante/Caja 99%** siguen siendo objetivos de preparación de frontend; no porcentajes validados de producto comercial.
+
+
+## 14. Fase 1 — Estabilidad del código de demostración (19/11/2026)
+
+**Corte auditado:** [GitHub Actions #44638054358](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44638054358) — **150/150 pruebas de nueve suites aprobadas**, sin fallos ni pruebas omitidas, comprobación preliminar del servidor y compilación Vite exitosa.
+
+### Cambios de estabilidad
+1. `mutateDemoOrders`: Cliente, Caja/Cocina, Repartidor, administración, pedidos ficticios, solicitud opcional y calificación parten del último lote guardado, no de un cierre de React desactualizado. Exige guardado completo antes de anunciar éxito. Las acciones sobre tarjetas antiguas se rechazan mediante las guardas de estado, sin modificar el lote actual.
+2. Confirmación de compra: `checkoutCommittedRef` impide una segunda confirmación de la misma sesión tras el éxito, hasta iniciar una nueva compra. Se conserva el carrito si la escritura falla.
+3. `changeCartQuantity`: reducir o eliminar un producto afecta **únicamente la línea seleccionada**; no descarta otras líneas antiguas o inválidas.
+4. `mutateDemoPlaces`: guardado de ficha, horarios, abierto/pausado/cerrado, menú y edición rápida de precios sobre el catálogo más reciente. Las ediciones obsoletas del **mismo menú, ficha o estado** reciben un conflicto visible, en lugar de sobrescribir la otra pestaña. Los cambios en apartados distintos se conservan.
+5. `validStoredOrders` y `validStoredRestaurants`: rechazan órdenes de IDs duplicados, entradas dañadas, productos con identificadores repetidos, negocios sin nombre y catálogos demasiado grandes, tanto al restaurar como en eventos entre pestañas.
+6. Arranque: `corruptDemoSnapshot` detecta lotes `dv_orders`/`dv_places` dañados; la demo puede mostrar datos temporales, pero **no los reemplaza automáticamente al iniciar**. El usuario recibe aviso.
+7. Preferencias y avisos: escrituras `localStorage` no esenciales quedan protegidas ante bloqueo de almacenamiento.
+8. Sembrador del repartidor: identificadores aleatorizados, límite de pedidos ficticios activos comprobado sobre el lote más reciente, guardado antes de notificar.
+9. Operaciones de administración, calificación y pedido opcional: eliminadas las escrituras ciegas de `setOrders(previous => ...)` que podían pisar actualizaciones.
+
+### Pruebas incorporadas y escenarios comprobados
+- Dos pestañas secuenciales actualizando pedidos diferentes preservan ambos cambios.
+- Aceptación duplicada, estado desactualizado, cancelación y orden ya cambiada devuelven error, sin modificar el archivo local.
+- Pedido repetido en la misma sesión no se vuelve a guardar; cesta conserva productos no seleccionados.
+- Restauración y notificaciones entre pestañas descartan registros malformados e IDs repetidos.
+- Guardado simultáneo de nombre + catálogo conserva apartados independientes; choque sobre el mismo menú se rechaza.
+- Denegación de permisos, cuota llena, lotes corruptos, excedentes y excepciones dejan las modificaciones sin aplicar.
+- Cambios de catálogo, estados de negocio y administración utilizan el guardado compartido.
+
+### Restricciones conocidas que solo resuelve la integración real
+- `localStorage` no ofrece transacciones ni bloqueo atómico entre pestañas. La lectura antes de escribir **mitiga conflictos secuenciales**, pero **no garantiza operaciones simultáneas**. La API debe implementar control de versión, idempotencia de checkout, restricciones de dos entregas por repartidor, PIN y operaciones transaccionales.
+- No hay sesiones comerciales autenticadas, sincronización multi-dispositivo, comprobación real de GPS, cobro de tarjetas ni servidor de producción comprobado.
+- GitHub Actions ejecuta pruebas de código/compilación, **no** certifica UX, impresoras, redes intermitentes o compatibilidad iPhone/Android/PC. Estas son pruebas funcionales y visuales de Work.
+- No se implementaron pagos reales ni se desplegó en `main` / Cloudflare.
+
+**Criterio de cierre de la Fase 1 de tres:** se aplicaron las correcciones detectadas en el alcance local; 150/150 pruebas aprobadas y compilación válida. La fase 2 se concentrará en rendimiento, interfaz, accesibilidad y compatibilidad, y la fase 3 en auditoría integral y entrega. No afirmar “100% de producción” ni los porcentajes 98/99 como certificados.

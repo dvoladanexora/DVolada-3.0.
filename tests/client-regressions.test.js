@@ -615,3 +615,24 @@ test('Persistencia: Club, Flash, Group and Express discard malformed rows',()=>{
 test('Marca: Flash also uses the single-word Dvolada spelling',()=>{
  assert.equal((clubSource.match(/D Volada/gi)||[]).length,0);
 });
+
+
+test('Restaurantes: hours support paused, string descriptions and overnight ranges safely',()=>{
+ assert.ok(app.includes("const dvTimeMinutes=v=>"));
+ assert.ok(app.includes("const dvInsideHours=(minutes,open,close)=>"));
+ assert.ok(app.includes("return b>a?minutes>=a&&minutes<b:minutes>=a||minutes<b"));
+ assert.ok(app.includes("if(!p.hours||typeof p.hours==='string')return null"));
+ assert.ok(app.includes("typeof p?.hours==='string'?p.hours"));
+ assert.ok(app.includes("live.tone==='closed'||live.tone==='paused'"));
+ assert.ok(app.includes("p.hours&&typeof p.hours==='object'"));
+ assert.ok(app.includes("if(inside!==true)"));
+});
+
+test('Restaurantes: catalog cards expose visible availability states',()=>{
+ assert.ok(app.includes("const restaurantState=dvRestaurantToday(p)"));
+ assert.ok(app.includes("className={'dv-card-availability '+restaurantState.tone}"));
+ assert.ok(homeCss.includes('.dv-card-availability.open'));
+ assert.ok(homeCss.includes('.dv-card-availability.closed'));
+ assert.ok(homeCss.includes('.dv-card-availability.paused'));
+ assert.ok(homeCss.includes('.dv-card-availability.unknown'));
+});

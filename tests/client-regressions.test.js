@@ -83,7 +83,7 @@ test('Mis pedidos: filter includes intermediate delivery statuses',()=>{
  }
 });
 test('Mis pedidos: searches order identifiers and products without accent sensitivity',()=>{
- assert.equal((app.match(/normalizeFoodSearch\(historyQuery\)/g)||[]).length,2);
+ assert.equal((app.match(/normalizeFoodSearch\(historyQuery\)/g)||[]).length,4);
 });
 
 const customerStyles=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');

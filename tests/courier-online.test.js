@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {
  MAX_ACTIVE_DELIVERIES,DEMO_RIDERS,courierQueues,isCourierOffer,isRiderOwner,
  validateCourierAction,applyCourierAction,courierPublicOrder,courierOrderCoords,
- courierRestaurantCoords,buildCourierIssue,cleanCourierIssue,riderKey
+ courierRestaurantCoords,buildCourierIssue,cleanCourierIssue,riderKey,courierViewOrders,courierViewOrder,sanitizePinAttempts,incrementPinAttempt,pinAttemptKey
 } from '../src/courier-workflow.js';
 
 const now=new Date('2026-11-19T09:00:00.000Z');
@@ -132,8 +132,10 @@ test('Panel visual expone tres vistas, consentimiento GPS, PIN y test de demo ex
  for(const text of ["Disponibles","Mis entregas","Historial","Confirmar que recogí el pedido","Iniciar recorrido","Confirmar llegada al destino","Verificar PIN y finalizar entrega","Simular llegada · SOLO DEMO LOCAL","Reportar problema","Activar y probar sonido"])assert.ok(ui.includes(text),text);
  assert.ok(main.includes("page==='delivery-panel'&&INTERNAL_PREVIEW_ENABLED&&previewCourierId"));
  assert.ok(main.includes("onAction={handleCourierAction}"));
- assert.ok(main.includes("orders={orders.map(courierPublicOrder)}"));
- assert.ok(main.includes('applyCourierAction(previous,orderId,action,riderId,options)'));
+ assert.ok(main.includes("orders={courierViewOrders(orders,previewCourierId)}"));
+ assert.ok(main.includes('applyCourierAction(current,orderId,action,riderId,options)'));
+ assert.ok(main.includes('courierOrdersRef.current=result.orders'));
+ assert.ok(main.includes("String(riderId)!==String(previewCourierId)"));
  assert.ok(login.includes('import.meta.env.DEV'));
  assert.ok(!login.includes("password==='1326'"));
  assert.ok(gps.includes("Activar mi GPS para trazar la ruta"));
@@ -165,4 +167,66 @@ test('La UI reanuda progreso de Preparando y no confunde errores de red con PIN 
  assert.ok(ui.includes('failedPinAttempts>=3'));
  assert.ok(ui.includes('readRiderIssues(courierId)'));
  assert.ok(ui.includes("if(result?.ok)setShowArrival(false)"));
+});
+
+test('La proyección de ofertas no transmite datos privados antes de aceptar',()=>{
+ const offer=order('privada','Aceptado',{
+  address:'Casa privada, calle 4',name:'Persona protegida',phone:'99998888',pin:'654321',
+  payment:'Efectivo',total:500,dni:'0801199912345',notes:'No tocar timbre'
+ });
+ const exposed=courierViewOrder(offer,riderA);
+ assert.ok(exposed);
+ for(const key of ['address','name','phone','pin','dni','notes','payment','total','courierId']){
+  assert.equal(Object.hasOwn(exposed,key),false,key);
+ }
+ assert.equal(exposed.items[0].qty,1);
+ assert.equal(Object.hasOwn(exposed.items[0],'name'),false);
+ const claimed=applyCourierAction([offer],offer.id,'accept',riderA,{online:true},now).order;
+ assert.equal(courierViewOrder(claimed,riderB),null);
+ const assigned=courierViewOrder(claimed,riderA);
+ assert.equal(assigned.name,'Persona protegida');
+ assert.equal(assigned.address,'Casa privada, calle 4');
+ assert.equal(assigned.pin,undefined);
+ assert.deepEqual(courierViewOrders([offer,claimed,order('otro','Pendiente')],riderB).map(o=>o.id),['privada']);
+});
+test('Contador de fallos PIN se sanea, se limita a tres y se separa por identidad',()=>{
+ assert.deepEqual(sanitizePinAttempts({a:1,b:30,c:-1,d:'mal',e:2}),{a:1,b:3,e:2});
+ assert.deepEqual(sanitizePinAttempts('texto'),{});
+ assert.deepEqual(sanitizePinAttempts(null),{});
+ assert.equal(incrementPinAttempt({},'p1').p1,1);
+ assert.equal(incrementPinAttempt({p1:1},'p1').p1,2);
+ assert.equal(incrementPinAttempt({p1:3},'p1').p1,3);
+ assert.notEqual(pinAttemptKey(riderA),pinAttemptKey(riderB));
+});
+test('La confirmación de aceptación y controles de PIN funcionan como flujo táctil accesible',()=>{
+ const ui=readFileSync(new URL('../src/CourierOnlineDashboard.jsx',import.meta.url),'utf8');
+ const modal=readFileSync(new URL('../src/CourierAcceptDialog.jsx',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../src/courier-accept-dialog.css',import.meta.url),'utf8');
+ assert.ok(ui.includes('setPendingAccept(String(x.id))'));
+ assert.ok(ui.includes('<CourierAcceptDialog order={chosenOffer||null}'));
+ assert.ok(modal.includes('role="dialog"'));
+ assert.ok(modal.includes("e.key==='Escape'"));
+ assert.ok(modal.includes('Confirmar aceptación'));
+ assert.ok(css.includes('@media(max-width:450px)'));
+ assert.ok(ui.includes("type={showPin?'text':'password'}"));
+ assert.ok(ui.includes('Ocultar PIN'));
+ assert.ok(ui.includes('incrementPinAttempt(state,order.id)'));
+ assert.ok(ui.includes('persist(pinAttemptKey(courierId),next)'));
+});
+test('Pago y confirmación de llegada se muestran con advertencias y GPS voluntario',()=>{
+ const ui=readFileSync(new URL('../src/CourierOnlineDashboard.jsx',import.meta.url),'utf8');
+ const component=readFileSync(new URL('../src/CourierGpsArrival.jsx',import.meta.url),'utf8');
+ assert.ok(ui.includes('INDICACIONES DE PAGO'));
+ assert.ok(ui.includes('No cobrés ni confirmés un pago sin las instrucciones'));
+ assert.ok(component.includes("if(!enabled||!target)return"));
+ assert.ok(component.includes('Activar GPS para verificar'));
+ assert.ok(component.includes('tick-fix.timestamp<30000'));
+ assert.ok(component.includes('Confirmar llegada al cliente'));
+});
+test('Dos toques de aceptar usan un estado adelantado inmediatamente y no anuncian un doble éxito',()=>{
+ const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ const block=main.slice(main.indexOf('function handleCourierAction('),main.indexOf('function repeatOrder('));
+ assert.ok(block.includes('courierOrdersRef.current??orders'));
+ assert.ok(block.includes('courierOrdersRef.current=result.orders'));
+ assert.ok(!block.includes('setOrders(previous=>'));
 });

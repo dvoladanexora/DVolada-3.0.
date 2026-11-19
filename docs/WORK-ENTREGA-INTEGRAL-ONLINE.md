@@ -175,3 +175,31 @@ Se agregó validación contra precios nulos, vacíos, negativos, infinitos, por 
 Se corrigió igualmente que Caja indique *Fuera de horario* cuando un restaurante está marcado abierto, pero ya terminó su horario configurado. El cliente no podrá confirmar pedidos inmediatos en ese caso. Las operaciones de apertura/cierre y la capacidad de Cocina se mantienen aisladas por negocio ficticio en el mismo navegador.
 
 **Evidencia de prueba:** los tests del repositorio comprueban reglas de negocio y la compilación; no equivalen a un E2E visual real ni a un backend transaccional operativo. Work tiene que cerrar esos bloqueantes antes de realizar una venta pública.
+
+
+## 10. Refuerzo Cliente y Caja/Recepción — 19/11/2026, después de las 120 pruebas anteriores
+
+Esta tanda mejora la **preparación del frontend** de Cliente y Restaurante/Caja para Work; **no representa un backend operativo ni un porcentaje certificado**.
+
+### Cliente
+- La cantidad y las instrucciones del carrito ahora identifican la línea por **ID de restaurante + ID de producto**. Dos negocios pueden usar el mismo identificador de plato sin afectarse mutuamente.
+- En la bandeja lateral se usan claves compuestas para evitar colisiones de React; muestra la cantidad de restaurantes en lugar del nombre engañoso del primero cuando el carrito es múltiple.
+- Antes de vaciar el carrito, el checkout de demostración debe persistir el lote de órdenes en localStorage. Si falla por cuota/bloqueo, devuelve error, mantiene el carrito y no anuncia un pedido registrado.
+- El efecto de persistencia no marca una escritura fallida como exitosa: podrá reintentarse en el siguiente cambio de estado.
+- Pedidos programados utilizan `withinBusinessHours` (la regla compartida del restaurante), incluyendo rechazo de horas inválidas o días cerrados.
+- «Volver a pedir» comprueba extras y precios vigentes; si un extra desapareció, identifica el artículo para revisión en vez de asumir que puede venderse.
+- La dirección para envío debe tener al menos 8 caracteres y se generan identificadores de variantes únicos con UUID cuando esté disponible.
+
+### Restaurante / Caja
+- La bandeja de pendientes incorpora filtros «Todos», «A domicilio» y «Retiro en local», más orden por antigüedad, con botones accesibles y presentación móvil.
+- Se aclaró el estado vacío para que nunca implique que ya existe conexión autenticada al servidor.
+- El CI `.github/workflows/validate-pr.yml` se configuró para ramas apiladas y para pushes de **esta rama de auditoría solamente**. El flujo de despliegue continúa limitado a `main`.
+
+### Evidencia y restricciones
+- **Referencia anterior confirmada:** 120/120 tests + compilación en el commit anterior a esta tanda (ejecución #44523400502).
+- **Después de esta tanda:** se añadieron 3 tests a `tests/online-integration.test.js`. El resultado agregado debe comprobarse en GitHub Actions; no presentar todavía las nuevas pruebas como aprobadas sin ver el resultado.
+- Las verificaciones de CI en PR apilados pueden depender de la configuración de la rama base; el evento `push` de la rama integral se añadió para proporcionar validación independiente.
+- **Work debe repetir**: dos restaurantes con el mismo SKU; carrito multinegocio; cuota local llena durante checkout; horarios de pedidos programados; extras eliminados al repetir; filtros de Caja en tablet y móvil; orden antigua aceptada desde otra Caja; desconexión y restablecimiento.
+- **Bloqueos no resueltos por esta tanda:** cuentas, permisos, precios y PIN en servidor, persistencia transaccional, sincronización multidispositivo, fotos reales, pagos, chat y notificaciones. No fusionar en `main` ni desplegar Cloudflare antes de aprobación expresa.
+
+**Meta del usuario:** dejar Cliente cercano al 98% y Restaurante/Caja cercano al 99% de preparación del frontend para Work. Estas cifras son **objetivos** y deben validarse con criterios de aceptación y pruebas visuales, nunca inferirse solo de los tests unitarios.

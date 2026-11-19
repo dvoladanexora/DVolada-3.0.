@@ -1,6 +1,12 @@
 /** Lógica pura de producción: utilizada por la pantalla de cocina y probada sin React. */
 export const KITCHEN_STAGES=Object.freeze(['Aceptado','Preparando','Listo']);
 const terminal=new Set(['Cancelado','Rechazado','Entregado']);
+/** Guardias de UX por área. En producción la API repetirá estas reglas con permisos y versión. */
+export const canMoveRestaurantOrder=(from,to,area='cashier')=>{
+ if(area==='cashier')return from==='Pendiente'&&['Aceptado','Rechazado'].includes(to);
+ if(area==='kitchen')return (from==='Aceptado'&&to==='Preparando')||(from==='Preparando'&&to==='Listo');
+ return false;
+};
 export const orderTime=(o)=>{
  const stamp=o?.createdAt||o?.date;
  const d=new Date(stamp||0);

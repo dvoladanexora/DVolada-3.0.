@@ -2,6 +2,17 @@
  * La vista previa usa localStorage; no sustituye migraciones de servidor.
  */
 const idLists=new Set(['dv_orders','dv_places','dv_cart']);
+/** Valida la estructura mínima antes de usar datos heredados o emitidos por otra pestaña.
+ * No sustituye la validación del catálogo ni la autorización del servidor.
+ */
+export function validStoredRestaurants(rows){
+ return Array.isArray(rows)&&rows.every(place=>place&&typeof place==='object'&&!Array.isArray(place)
+  &&place.id!==null&&place.id!==undefined&&Array.isArray(place.items)
+  &&place.items.every(item=>item&&typeof item==='object'&&!Array.isArray(item)
+   &&item.id!==null&&item.id!==undefined&&typeof item.name==='string'
+   &&typeof item.price!=='object'&&item.price!==null&&item.price!==undefined
+   &&Number.isFinite(Number(item.price))));
+}
 export function safeReadStored(storage,key,fallback){
  try{
   const raw=storage?.getItem?.(key);
@@ -13,7 +24,7 @@ export function safeReadStored(storage,key,fallback){
    if(idLists.has(key)&&!value.every(row=>row&&typeof row==='object'&&!Array.isArray(row)&&row.id!==null&&row.id!==undefined))
     return fallback;
    if(key==='dv_orders'&&!value.every(row=>typeof row.status==='string'))return fallback;
-   if(key==='dv_places'&&!value.every(row=>Array.isArray(row.items)))return fallback;
+   if(key==='dv_places'&&!validStoredRestaurants(value))return fallback;
    return value;
   }
   if(fallback&&typeof fallback==='object')return value&&typeof value==='object'&&!Array.isArray(value)?value:fallback;

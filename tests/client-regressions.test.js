@@ -113,3 +113,17 @@ test('Mandados: list items are trimmed and removable by accessible name',()=>{
  assert.match(app,/aria-label=\{'Quitar '\+i\.name\+' de la lista'\}/);
  assert.match(app,/const id='DM-'\+Date\.now\(\)\.toString\(36\)/);
 });
+
+test('Mandados: fields are labeled and phone keyboard is appropriate',()=>{
+ for(const field of ['dv-grocery-budget','dv-grocery-substitute','dv-grocery-name','dv-grocery-phone','dv-grocery-address']){
+  assert.ok(app.includes('htmlFor="'+field+'"'));
+  assert.ok(app.includes('id="'+field+'"'));
+ }
+ assert.match(app,/id="dv-grocery-phone" type="tel" inputMode="tel"/);
+});
+test('Mandados: responsive panels and dark theme are scoped',()=>{
+ assert.match(customerStyles,/\.dv-groceries-layout\{grid-template-columns:minmax\(0,1\.15fr\)/);
+ assert.match(customerStyles,/@media\(max-width:850px\)\{\.dv-groceries-layout/);
+ assert.match(customerStyles,/\.dv-groceries-page \.add-grid\{grid-template-columns:minmax\(0,1fr\)/);
+ assert.match(customerStyles,/\[data-theme="dark"\] \.dv-groceries-page \.surface/);
+});

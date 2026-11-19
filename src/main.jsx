@@ -108,8 +108,12 @@ function saveRestaurantProfile(restaurantId,changes){
  if(!places.some(p=>String(p.id)===String(restaurantId))||!changes||typeof changes!=='object')return false;
  const keys=['name','type','description','address','phone','image','hours'];
  const patch=Object.fromEntries(keys.filter(k=>Object.prototype.hasOwnProperty.call(changes,k)).map(k=>[k,changes[k]]));
+ const visible=places.find(p=>String(p.id)===String(restaurantId));
  const outcome=mutateDemoPlaces(localStorage,places,latest=>{
-  if(!latest.some(p=>String(p.id)===String(restaurantId)))throw Error('Restaurante eliminado');
+  const current=latest.find(p=>String(p.id)===String(restaurantId));
+  if(!current)return {ok:false,reason:'El restaurante ya no existe en el catálogo.'};
+  if(Object.keys(patch).some(key=>JSON.stringify(visible?.[key])!==JSON.stringify(current[key])))
+   return {ok:false,reason:'La ficha cambió en otra pestaña. Revisá la información antes de guardarla.'};
   return latest.map(p=>String(p.id)===String(restaurantId)?{...p,...patch}:p);
  });
  if(!outcome.ok){notify('No se guardó la ficha de prueba. '+outcome.reason);return false}
@@ -119,8 +123,12 @@ function saveRestaurantProfile(restaurantId,changes){
 function saveRestaurantOperatingStatus(restaurantId,status){
  if(!INTERNAL_PREVIEW_ENABLED||!affiliateSession||String(restaurantId)!==String(previewRestaurantId??places[0]?.id))
   return false;
+ const visible=places.find(place=>String(place.id)===String(restaurantId));
  const outcome=mutateDemoPlaces(localStorage,places,latest=>{
-  if(!latest.some(place=>String(place.id)===String(restaurantId)))throw Error('Restaurante eliminado');
+  const current=latest.find(place=>String(place.id)===String(restaurantId));
+  if(!current)return {ok:false,reason:'El restaurante ya no existe en el catálogo.'};
+  if(restaurantStatus(visible)!==restaurantStatus(current))
+   return {ok:false,reason:'El restaurante cambió de estado en otra pestaña. Revisá antes de continuar.'};
   return latest.map(place=>String(place.id)===String(restaurantId)?withRestaurantStatus(place,status):place);
  });
  if(!outcome.ok){notify('No se guardó el estado del restaurante. '+outcome.reason);return false}
@@ -133,8 +141,12 @@ function saveRestaurantMenu(restaurantId,items){
  }
  const available=items.filter(item=>item.available!==false&&item.soldOut!==true);
  const minimum=available.length?Math.min(...available.map(item=>Number(item.price)||Infinity)):null;
+ const visible=places.find(p=>String(p.id)===String(restaurantId));
  const outcome=mutateDemoPlaces(localStorage,places,latest=>{
-  if(!latest.some(p=>String(p.id)===String(restaurantId)))throw Error('Restaurante eliminado');
+  const current=latest.find(p=>String(p.id)===String(restaurantId));
+  if(!current)return {ok:false,reason:'El restaurante ya no existe en el catálogo.'};
+  if(JSON.stringify(current.items)!==JSON.stringify(visible.items))
+   return {ok:false,reason:'El menú cambió en otra pestaña. Revisá los productos antes de guardarlos.'};
   return latest.map(p=>String(p.id)===String(restaurantId)?{...p,items,
    price:Number.isFinite(minimum)?'Desde L '+minimum.toLocaleString('es-HN'):'Sin productos disponibles'}:p);
  });

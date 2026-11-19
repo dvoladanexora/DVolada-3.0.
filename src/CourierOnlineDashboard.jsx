@@ -3,7 +3,7 @@ import {AlertCircle,ArrowLeft,ArrowRight,Bike,Check,CheckCheck,ChevronRight,Cloc
 import CourierMap from './CourierMap.jsx';
 import CourierGpsArrival from './CourierGpsArrival.jsx';
 import CourierAcceptDialog from './CourierAcceptDialog.jsx';
-import {DEMO_RIDERS,MAX_ACTIVE_DELIVERIES,courierQueues,courierPublicOrder,courierOrderCoords,courierRestaurantCoords,riderKey,riderIssueKey,buildCourierIssue,pinAttemptKey,sanitizePinAttempts,incrementPinAttempt} from './courier-workflow.js';
+import {DEMO_RIDERS,MAX_ACTIVE_DELIVERIES,courierQueues,courierPublicOrder,courierOrderCoords,courierRestaurantCoords,riderKey,riderIssueKey,buildCourierIssue,pinAttemptKey,sanitizePinAttempts,incrementPinAttempt,courierNextTask} from './courier-workflow.js';
 import './courier-online.css';
 
 const isOnline=()=>typeof navigator==='undefined'||navigator.onLine!==false;
@@ -112,13 +112,13 @@ function ActiveCard({order,place,onAction,onIssue,onPinError,onPinSuccess,failed
 }
 
 export default function CourierOnlineDashboard({orders=[],places=[],courierId='demo-rider-1',onAction=()=>({ok:false}),onSeed=()=>{},onLogout=()=>{}}){
- const [tab,setTab]=useState('offers'),[online,setOnline]=useState(()=>read(riderKey(courierId),false)===true),[query,setQuery]=useState('');
+ const [tab,setTab]=useState(()=>courierQueues(orders,courierId).active.length?'active':'offers'),[online,setOnline]=useState(()=>read(riderKey(courierId),false)===true),[query,setQuery]=useState('');
  const [message,setMessage]=useState(''),[issues,setIssues]=useState(()=>readRiderIssues(courierId));
  const [pinFailures,setPinFailures]=useState(()=>sanitizePinAttempts(read(pinAttemptKey(courierId),{}))),[audioEnabled,setAudioEnabled]=useState(false);
  const [pendingAccept,setPendingAccept]=useState(null);
  const audioRef=useRef(null),lastOffers=useRef(null),messageRef=useRef(null);
  const [network,setNetwork]=useState(isOnline);
- useEffect(()=>{setOnline(read(riderKey(courierId),false)===true);setIssues(readRiderIssues(courierId));setTab('offers');setPinFailures(sanitizePinAttempts(read(pinAttemptKey(courierId),{})));setPendingAccept(null);lastOffers.current=null},[courierId]);
+ useEffect(()=>{setOnline(read(riderKey(courierId),false)===true);setIssues(readRiderIssues(courierId));setTab(courierQueues(orders,courierId).active.length?'active':'offers');setPinFailures(sanitizePinAttempts(read(pinAttemptKey(courierId),{})));setPendingAccept(null);lastOffers.current=null},[courierId]);
  useEffect(()=>{if(!persist(riderKey(courierId),online))setMessage('No se pudo guardar la disponibilidad en este navegador.')},[online,courierId]);
  useEffect(()=>{const changed=()=>setNetwork(isOnline());window.addEventListener('online',changed);window.addEventListener('offline',changed);return()=>{window.removeEventListener('online',changed);window.removeEventListener('offline',changed)}},[]);
  const data=useMemo(()=>courierQueues(orders,courierId),[orders,courierId]);
@@ -167,11 +167,13 @@ export default function CourierOnlineDashboard({orders=[],places=[],courierId='d
  const placeOf=order=>places.find(p=>String(p.id)===String(order.placeId));
  const delivered=history.filter(o=>o.status==='Entregado').length;
  const chosenOffer=pendingAccept===null?null:data.offers.find(o=>String(o.id)===String(pendingAccept));
+ const nextTask=courierNextTask(orders,courierId);
  return <section className="shell section page-section dv-rider-app" aria-labelledby="dv-rider-main-title">
   <header className="dv-rider-hero"><div className="dv-rider-hero-glow" aria-hidden="true"/><div className="dv-rider-hero-head"><span className="dv-rider-eyebrow"><Bike size={16}/> DVOLADA ONLINE · REPARTIDOR INDEPENDIENTE</span><button type="button" className="dv-rider-exit" onClick={onLogout}><ArrowLeft size={17}/> Salir</button></div>
    <div className="dv-rider-hero-core"><div><h1 id="dv-rider-main-title">Tu ruta. Tu ritmo.</h1><p>¡Hola, {riderName(courierId)}! Organizá tus entregas sin perderte entre pantallas.</p></div><div className="dv-rider-availability"><div><strong>{online?'Disponible para pedidos':'Fuera de servicio'}</strong><small>{online?'Podés aceptar nuevas ofertas':'No recibirás asignaciones nuevas'}</small></div><label className="dv-rider-switch" aria-label="Disponibilidad del repartidor"><input type="checkbox" checked={online} onChange={e=>setOnline(e.target.checked)}/><span/></label></div></div>
   </header>
   <div className="dv-rider-kpis"><div><span><Package size={17}/> Disponibles</span><strong>{data.offers.length}</strong><small>Ofertas de restaurantes</small></div><div><span><Bike size={17}/> En mis manos</span><strong>{data.active.length} <em>/ {MAX_ACTIVE_DELIVERIES}</em></strong><small>{data.slotsRemaining} cupo(s) libres</small></div><div><span><CheckCheck size={17}/> Completadas</span><strong>{delivered}</strong><small>Historial de esta identidad</small></div></div>
+  {nextTask&&<div className="dv-rider-next-task"><span className="dv-rider-next-task-symbol"><Bike size={21}/></span><div><span>SIGUIENTE PASO</span><strong>{nextTask.next}</strong><small>{nextTask.orderNo} · {nextTask.restaurant}</small></div><button type="button" onClick={()=>setTab('active')}>Abrir entrega <ArrowRight size={16}/></button></div>}
   <div className="dv-rider-demo-hint"><AlertCircle size={19}/><span><strong>Modo de prueba local.</strong> Este panel no recibe pedidos de otros teléfonos ni asignaciones reales. Los pagos, la verificación de identidad y la comunicación automática se integrarán con el servidor.</span></div>
   {!network&&<div className="dv-rider-network-warning" role="alert"><WifiOff size={17}/> Sin conexión a internet: acciones y rutas deshabilitadas.</div>}
   <div className="dv-rider-tools"><button type="button" onClick={audioTest} className="dv-rider-sound"><Volume2 size={18}/> {audioEnabled?'Probar bip-bip':'Activar y probar sonido'}</button>

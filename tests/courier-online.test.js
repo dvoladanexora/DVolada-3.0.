@@ -303,3 +303,23 @@ test('Mapa de entrega no simula destinos ficticios ni pide GPS sin coordenadas',
  assert.ok(src.includes('disabled={!valid(target)}'));
  assert.ok(!src.includes('lat:14.5,lng:-86.8'));
 });
+
+test('Repartidor carga herramientas bajo demanda y pagina ofertas e historial',()=>{
+ const ui=readFileSync(new URL('../src/CourierOnlineDashboard.jsx',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../src/courier-online.css',import.meta.url),'utf8');
+ for(const piece of ["React.lazy(()=>import('./CourierMap.jsx'))","React.lazy(()=>import('./CourierGpsArrival.jsx'))","React.lazy(()=>import('./CourierAcceptDialog.jsx'))"]){
+  assert.ok(ui.includes(piece),'import no diferido: '+piece);
+ }
+ assert.ok(ui.includes('React.Suspense fallback={lazyPanelFallback}'));
+ assert.ok(ui.includes('offers.slice(0,offerLimit).map(o='));
+ assert.ok(ui.includes('history.slice(0,historyLimit).map(o='));
+ assert.ok(ui.includes('offers.length>offerLimit'));
+ assert.ok(ui.includes('history.length>historyLimit'));
+ assert.ok(ui.includes('setOfferLimit(count=>count+15)'));
+ assert.ok(ui.includes('setHistoryLimit(count=>count+20)'));
+ assert.ok(ui.includes('setOfferLimit(15),[query,courierId]'));
+ assert.ok(ui.includes('setHistoryLimit(20),[courierId]'));
+ assert.ok(css.includes('.dv-rider-load-more'));
+ assert.ok(css.includes('.dv-rider-lazy-status'));
+ assert.ok(css.includes(':focus-visible'));
+});

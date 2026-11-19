@@ -53,3 +53,8 @@
 .dv-cash-console button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 @media(max-width:1000px){.dv-cash-panels{grid-template-columns:1fr}.dv-cash-hero{align-items:flex-start;flex-wrap:wrap}}
 @media(max-width:650px){.dv-cash-hero{padding:20px}.dv-cash-goto-kitchen{width:100%}.dv-cash-overview{gap:7px}.dv-cash-overview>div{padding:12px 10px}.dv-cash-overview span{font-size:10px}.dv-cash-overview strong{font-size:26px}.dv-cash-overview small{font-size:10px}.dv-cash-pending>header{flex-wrap:wrap}.dv-cash-order-actions{grid-template-columns:1fr}.dv-cash-list{max-height:none;padding:10px}}
+
+
+/* La capacidad informa, pero no promete bloquear pedidos sin servidor. */
+.dv-cash-capacity{display:flex;gap:11px;align-items:flex-start;padding:13px 15px;border-radius:14px;border:1px solid color-mix(in srgb,#d89e45 48%,var(--ow-line,var(--line)));background:color-mix(in srgb,#eda34a 12%,var(--ow-card,var(--surface)));font-size:12px;line-height:1.55;font-weight:700}
+.dv-cash-capacity svg{flex-shrink:0;color:#c67c29}

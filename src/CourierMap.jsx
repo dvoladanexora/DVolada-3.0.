@@ -36,7 +36,7 @@ export default function CourierMap({restaurant=null,customer=null,orderId=null})
   if(!gpsEnabled)return;
   if(!navigator.geolocation){setMessage('Este dispositivo no dispone de GPS en el navegador.');return}
   const watch=navigator.geolocation.watchPosition(p=>{
-   if(Date.now()-lastFix.current<12000&&position)return;
+   if(Date.now()-lastFix.current<12000)return;
    lastFix.current=Date.now();
    setPosition({lat:p.coords.latitude,lng:p.coords.longitude});
    setMessage('GPS activado para esta ruta de demostración.');

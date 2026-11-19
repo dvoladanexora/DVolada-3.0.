@@ -1,0 +1,41 @@
+import React from 'react';
+import {ArrowRight,Bell,ChefHat,Check,CheckCheck,Clock3,Eye,Printer,Store,Truck} from 'lucide-react';
+import {elapsedMinutes,kitchenQueues} from './kitchen-operations.js';
+import './restaurant-cashier-console.css';
+
+const number=o=>o.orderNo||o.id;
+export default function RestaurantCashierConsole({orders=[],restaurantId,restaurantName='Restaurante',now=Date.now(),connected=true,onAccept=()=>{},onDetail=()=>{},onPrint=()=>{},onGoKitchen=()=>{}}){
+ const q=kitchenQueues(orders,restaurantId,now);
+ const working=q.accepted.length+q.preparing.length;
+ return <div className="dv-cash-console">
+  <header className="dv-cash-hero"><div><span className="dv-cash-eyebrow"><Store size={16}/> CAJA / RECEPCIÓN · DVOLADA CLOUD</span><h2>Una caja organizada, una cocina en marcha.</h2><p>Revisá las solicitudes nuevas y decidí cuáles aceptar. La cocina recibe únicamente las que el negocio haya aceptado.</p></div><button type="button" onClick={onGoKitchen} className="dv-cash-goto-kitchen"><ChefHat size={21}/> Abrir cocina <ArrowRight size={17}/></button></header>
+  <div className="dv-cash-overview">
+   <div><span><Bell size={18}/> Por aceptar</span><strong>{q.pending.length}</strong><small>Requieren tu aprobación</small></div>
+   <div><span><ChefHat size={18}/> En cocina</span><strong>{working}</strong><small>Aceptados y preparando</small></div>
+   <div><span><CheckCheck size={18}/> Listos</span><strong>{q.ready.length}</strong><small>Para retiro o repartidor</small></div>
+  </div>
+  <div className="dv-cash-panels">
+   <section className="dv-cash-pending" aria-labelledby="dv-cash-pending-title"><header><div><span className="dv-cash-eyebrow">BANDEJA DE ENTRADA</span><h3 id="dv-cash-pending-title">Nuevos pedidos <b>{q.pending.length}</b></h3></div><span className="dv-cash-pending-caption">Revisá antes de aceptar</span></header>
+    <div className="dv-cash-list">
+     {q.pending.length?q.pending.map(order=>{
+      const elapsed=elapsedMinutes(order,now),items=Array.isArray(order.items)?order.items:[];
+      return <article key={order.id} className="dv-cash-order">
+       <div className="dv-cash-order-top"><strong>{number(order)}</strong><span><Clock3 size={15}/>{elapsed===null?'Sin hora':elapsed+' min'}</span></div>
+       <p className="dv-cash-order-name">{order.name||'Cliente'} · {order.delivery==='delivery'?'🛵 Envío a domicilio':'🏪 Retiro en local'}</p>
+       <div className="dv-cash-order-items">{items.slice(0,5).map((item,i)=><div key={item.id||i}><b>{Math.max(1,Number(item.qty)||1)}×</b> {item.name||'Producto'}</div>)}{items.length>5&&<small>+ {items.length-5} productos más</small>}</div>
+       {order.notes&&<div className="dv-cash-order-note">Nota: {order.notes}</div>}
+       <div className="dv-cash-order-actions"><button type="button" onClick={()=>onDetail(order)} className="dv-cash-detail"><Eye size={17}/> Ver detalle</button><button type="button" disabled={!connected} onClick={()=>onAccept(order)} className="dv-cash-accept"><Check size={17}/> Aceptar y enviar a cocina</button></div>
+      </article>;
+     }):<div className="dv-cash-empty"><Check size={34}/><strong>¡No hay pedidos por aceptar!</strong><p>Los nuevos pedidos aparecerán aquí cuando el servidor esté conectado al restaurante.</p></div>}
+    </div>
+   </section>
+   <aside className="dv-cash-production" aria-label="Estado de cocina"><header><span className="dv-cash-eyebrow">PRODUCCIÓN</span><h3>Así va tu cocina</h3><p>Seguimiento rápido de las órdenes aceptadas.</p></header>
+    <div className="dv-cash-production-group"><h4><span>Por comenzar</span><b>{q.accepted.length}</b></h4>{q.accepted.slice(0,4).map(o=><div key={o.id}><span><b>{number(o)}</b><small>Esperando preparación</small></span><button type="button" title="Imprimir comanda" onClick={()=>onPrint(o)}><Printer size={17}/></button></div>)}</div>
+    <div className="dv-cash-production-group"><h4><span>Preparando</span><b>{q.preparing.length}</b></h4>{q.preparing.slice(0,4).map(o=><div key={o.id}><span><b>{number(o)}</b><small>En cocina</small></span><button type="button" title="Imprimir comanda" onClick={()=>onPrint(o)}><Printer size={17}/></button></div>)}</div>
+    <div className="dv-cash-production-group"><h4><span>Listos para entregar</span><b>{q.ready.length}</b></h4>{q.ready.slice(0,4).map(o=><div key={o.id}><span><b>{number(o)}</b><small>{o.delivery==='delivery'?'Esperando repartidor':'Esperando retiro'}</small></span><button type="button" title="Imprimir comanda" onClick={()=>onPrint(o)}><Printer size={17}/></button></div>)}</div>
+    <button type="button" onClick={onGoKitchen} className="dv-cash-production-open"><ChefHat size={17}/> Ir a pantalla de cocina <ArrowRight size={16}/></button>
+   </aside>
+  </div>
+  <p className="dv-cash-safety">Modo de diseño: la caja y la cocina compartirán los estados entre equipos cuando esté lista la API autenticada. En este prototipo los cambios se guardan únicamente en el navegador.</p>
+ </div>;
+}

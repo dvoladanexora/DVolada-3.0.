@@ -438,7 +438,28 @@ test('Auditoría roles: the customer navigation stays customer-only and help rem
 });
 
 test('Auditoría marca y PWA: Dvolada spelling stays consistent in customer-facing update UI',()=>{
- assert.equal((app.match(/D Volada/g)||[]).length,0);
- assert.equal((pwaSource.match(/D Volada/g)||[]).length,0);
+ assert.equal((app.match(/D Volada/gi)||[]).length,0);
+ assert.equal((pwaSource.match(/D Volada/gi)||[]).length,0);
  assert.ok(pwaSource.includes('nueva actualización de Dvolada'));
+});
+
+
+test('Auditoría invitado: welcome guest access activates restrictions before entering the client',()=>{
+ assert.ok(app.includes("onClick={()=>{setGuestMode(true);enter('home')}}>Continuar como invitado"));
+ const navigate=app.slice(app.indexOf('const navigate=p=>'),app.indexOf('function addItem(',app.indexOf('const navigate=p=>')));
+ assert.ok(navigate.includes("'delivery-panel'"));
+ assert.ok(navigate.includes("if(guestMode&&"));
+});
+
+test('Auditoría historial: frequent products are scoped by restaurant and spending counts completed orders only',()=>{
+ assert.ok(app.includes("const completedFoodOrders=orders.filter(o=>o.kind==='food'&&(o.status==='Entregado'||(o.delivery==='pickup'&&o.status==='Recogido')))"));
+ assert.ok(app.includes("const key=String(row.placeId)+'|'+String(row.item.productId??row.item.id)"));
+ assert.ok(app.includes("frequentItems[String(x.place.id)+'|'+String(x.item.id)]"));
+ assert.ok(app.includes("const monthOrders=completedFoodOrders.filter"));
+ assert.ok(app.includes('Solo cuenta pedidos completados guardados en este navegador.'));
+});
+
+test('Auditoría notificaciones: local storage failures do not break notification clicks',()=>{
+ const notices=app.slice(app.indexOf('className="dv-bell-wrap"'),app.indexOf('className="dv-cart-header-toggle"'));
+ assert.ok(notices.includes("try{localStorage.setItem('dv_read_notifications',JSON.stringify(next))}catch{}"));
 });

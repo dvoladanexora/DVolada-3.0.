@@ -93,3 +93,8 @@
 .ow-shell.ow-redesign:fullscreen .ow-workarea{max-width:none}
 .ow-shell.ow-redesign:fullscreen .ow-kitchen-lanes{max-width:none}
 @media(max-width:720px){.ow-shell.ow-redesign:fullscreen{padding:8px 10px 24px}}
+
+
+/* Controles operativos visibles, sin afectar el modo oscuro o el layout móvil. */
+.ow-topactions button[aria-label="Activar sonido de pedidos"],.ow-topactions button[aria-label="Probar sonido de pedido"]{border:1px solid color-mix(in srgb,var(--accent) 25%,var(--ow-line,var(--line)));background:color-mix(in srgb,var(--accent) 8%,var(--ow-card,var(--surface)));color:var(--ow-ink,var(--ink));border-radius:13px}
+.ow-topactions button[aria-label="Activar sonido de pedidos"]:focus-visible,.ow-topactions button[aria-label="Probar sonido de pedido"]:focus-visible{outline:2px solid var(--accent);outline-offset:3px}

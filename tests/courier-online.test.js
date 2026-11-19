@@ -139,7 +139,7 @@ test('Panel visual expone tres vistas, consentimiento GPS, PIN y test de demo ex
  assert.ok(login.includes('import.meta.env.DEV'));
  assert.ok(!login.includes("password==='1326'"));
  assert.ok(gps.includes("Activar mi GPS para trazar la ruta"));
- assert.ok(gps.includes('if(!gpsEnabled)return'));
+ assert.ok(gps.includes('if(!gpsEnabled||!valid(target))return'));
  assert.ok(flags.includes('INTERNAL_PREVIEW_ENABLED'));
 });
 test('Accesibilidad y controles de tamaño móvil siguen presentes',()=>{
@@ -290,4 +290,14 @@ test('Diálogo de aceptación conserva foco entre renders y puede cerrarse con E
  assert.ok(dialog.includes('role="dialog"'));
  assert.ok(dialog.includes('aria-modal="true"'));
  assert.ok(dialog.includes("},[]);"));
+});
+
+test('Mapa de entrega no simula destinos ficticios ni pide GPS sin coordenadas',()=>{
+ const src=readFileSync(new URL('../src/CourierMap.jsx',import.meta.url),'utf8');
+ assert.ok(src.includes('const hasCoords=Boolean(valid(restaurant)||valid(customer))'));
+ assert.ok(src.includes('if(!gpsEnabled||!valid(target))return'));
+ assert.ok(src.includes('No hay coordenadas verificadas'));
+ assert.ok(src.includes('No mostraremos un mapa genérico'));
+ assert.ok(src.includes('disabled={!valid(target)}'));
+ assert.ok(!src.includes('lat:14.5,lng:-86.8'));
 });

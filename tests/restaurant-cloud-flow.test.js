@@ -153,3 +153,19 @@ test('Cocina pagina cientos de órdenes sin alterar contadores ni el orden de at
  assert.ok(ui.includes('setVisibleLimits(old=>({...old,[stage.key]:old[stage.key]+20}))'));
  assert.ok(ui.includes('useEffect(()=>setVisibleLimits({accepted:20,preparing:20,ready:20}),[restaurantId,query])'));
 });
+
+test('Caja muestra programados en lotes, permite ver más y respeta búsqueda',()=>{
+ const ui=readFileSync(new URL('../src/RestaurantCashierConsole.jsx',import.meta.url),'utf8');
+ assert.ok(ui.includes('useState(10)'));
+ assert.ok(ui.includes('useState(5)'));
+ assert.ok(ui.includes('scheduledDue=q.scheduledDue.filter(order=>matchesRestaurantOrder(order,query))'));
+ assert.ok(ui.includes('scheduledFuture=q.scheduledFuture.filter(order=>matchesRestaurantOrder(order,query))'));
+ assert.ok(ui.includes('scheduledDue.slice(0,scheduledLimit).map(order='));
+ assert.ok(ui.includes('scheduledFuture.slice(0,futureLimit).map(order='));
+ assert.ok(ui.includes('scheduledDue.length>scheduledLimit'));
+ assert.ok(ui.includes('scheduledFuture.length>futureLimit'));
+ assert.ok(ui.includes('setScheduledLimit(limit=>limit+10)'));
+ assert.ok(ui.includes('setFutureLimit(limit=>limit+10)'));
+ assert.ok(ui.includes('setScheduledLimit(10);setFutureLimit(5)'));
+ assert.ok(ui.includes('onActivate(order)'),'activación de programados debe conservarse');
+});

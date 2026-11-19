@@ -156,3 +156,12 @@ Estas barreras protegen la demostración dentro de una pestaña. **No resuelven 
 - Otros negocios permanecen independientes. La capacidad de cocina, sonido, preferencias y controles de espera se almacenan por ID de restaurante, no en una sola configuración compartida. La preferencia personal de tema/sidebar sigue siendo del navegador.
 - Cambiar el restaurante de demostración reinicia el estado visual de su panel, evitando arrastrar parámetros de otra cuenta local.
 - **Importante:** estos cambios NO sincronizan dispositivos distintos, NO autentican usuarios y NO convierten el indicador de red en servidor conectado. Work debe replicar estas verificaciones en el backend y ejecutarlas de nuevo con cliente, caja y cocina en diferentes equipos.
+
+
+### Última validación automatizada de la rama integral
+**118 de 118 pruebas aprobadas, 0 fallos, compilación Vite y sintaxis preliminar del servidor verificadas** en GitHub Actions:
+https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44522783117
+
+La revisión adicional corrigió un defecto que podía dar una sensación engañosa de funcionamiento: el estado operativo del restaurante ya no se limita al encabezado. En el navegador de demostración, cambiarlo a *Pausado* o *Cerrado* impide confirmar pedidos nuevos, de cualquier fecha. Los horarios configurados bloquean pedidos inmediatos fuera de turno, pero permiten programar a una fecha/hora permitida si el restaurante está habilitado. El encabezado avisa *Fuera de horario* cuando la apertura manual está activa, pero el turno ha terminado.
+
+Las preferencias de capacidad, avisos, espera e impresión se almacenan por identificador de restaurante. La experiencia se reinicia al cambiar de negocio ficticio para impedir que los ajustes operativos de uno queden visibles en otro. Work debe comprobar los mismos escenarios con tres dispositivos y autoridad del servidor; **localStorage no es el origen de verdad de producción**.

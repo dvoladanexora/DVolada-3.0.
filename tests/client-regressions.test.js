@@ -130,7 +130,7 @@ test('Mandados: responsive panels and dark theme are scoped',()=>{
 
 test('Favoritos: stale saved entries do not suppress empty-state guidance',()=>{
  assert.match(app,/customerCatalog\.some\(x=>customerWishlist\.includes\(String\(x\.place\.id\)/);
- assert.match(app,/places\.some\(p=>favorites\.includes\(p\.id\)\)/);
+ assert.match(app,/places\.some\(p=>favorites\.some\(id=>String\(id\)===String\(p\.id\)\)\)/);
  assert.match(app,/No hay comidas habituales disponibles en el catálogo actual/);
 });
 test('Favoritos: removal uses normalized product keys and an accessible label',()=>{
@@ -149,4 +149,9 @@ test('Favoritos: mobile, keyboard and dark theme styles are scoped',()=>{
  assert.match(customerStyles,/\.dv32 \.dv-favorite-product-image\{display:block/);
  assert.match(customerStyles,/\.dv32 \.dv-favorites-page button:focus-visible/);
  assert.match(customerStyles,/\[data-theme="dark"\] \.dv32 \.dv-favorite-product-card/);
+});
+
+test('Favoritos: saved IDs are normalized consistently when rendering cards',()=>{
+ assert.match(app,/customerCatalog\.filter\(x=>customerWishlist\.includes\(String\(x\.place\.id\)\+'-'\+String\(x\.item\.id\)\)\)/);
+ assert.match(app,/places\.filter\(p=>favorites\.some\(id=>String\(id\)===String\(p\.id\)\)\)/);
 });

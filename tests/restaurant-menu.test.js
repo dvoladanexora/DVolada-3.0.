@@ -84,3 +84,14 @@ test('editor Cloud incluye CRUD, fotos, filtros, alertas y notas sobre modo loca
  assert.ok(main.includes("localStorage.setItem('dv_places',content)"));
  assert.ok(main.includes('content.length>3200000'));
 });
+
+test('Editor descarta subidas tardías al cancelar, cambiar de producto o reabrir',()=>{
+ const src=readFileSync(new URL('../src/RestaurantMenuEditor.jsx',import.meta.url),'utf8');
+ assert.ok(src.includes('photoRequest=useRef(0)'));
+ assert.ok(src.includes('const request=++photoRequest.current'));
+ assert.ok(src.includes("if(request===photoRequest.current)setField('image',url)"));
+ assert.ok(src.includes('if(request===photoRequest.current)setPhotoBusy(false)'));
+ assert.ok(src.includes('const closeEditor=()=>{photoRequest.current++;setPhotoBusy(false)'));
+ assert.ok(src.includes('const openEditor=(item=null)=>{\n  photoRequest.current++;setPhotoBusy(false)'));
+ assert.ok(src.includes("setForm(current=>current?{...current,[key]:value}:current)"));
+});

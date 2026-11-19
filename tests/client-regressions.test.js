@@ -174,7 +174,7 @@ test('Mi cuenta: photo and saved-address controls have accessible names',()=>{
  assert.match(app,/aria-label=\{"Establecer dirección predeterminada "\+a\}/);
 });
 test('Mi cuenta: narrow screens, dark theme and keyboard focus are supported',()=>{
- assert.match(customerStyles,/\.dv32 \.dv-account-modern \.dv-address-row>div button\{min-height:44px/);
+ assert.match(customerStyles,/\.dv32 \.dv-account-modern \.dv-address-row button\{min-height:44px/);
  assert.match(customerStyles,/@media\(max-width:600px\)/);
  assert.match(customerStyles,/\[data-theme="dark"\] \.dv32 \.dv-account-modern \.dv-profile-card/);
  assert.match(customerStyles,/\.dv32 \.dv-account-modern button:focus-visible/);

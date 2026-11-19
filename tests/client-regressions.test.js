@@ -267,3 +267,14 @@ test('Dvolada Express: local requests have distinct IDs, empty state and safe re
  assert.match(groupSource,/¿Eliminar esta solicitud local de demostración\?/);
  assert.match(groupSource,/No se envían a repartidores ni calculan tarifas reales/);
 });
+
+test('Dvolada Express: isolated JSX wrapper is present',()=>{
+ assert.match(groupSource,/if\(type==='express'\)return <div className="ox-express-page">\{wrap\(/);
+ assert.match(groupSource,/No hay solicitudes de Express guardadas en este dispositivo\.<\/p>\)\}<\/div>\)\}<\/div>;/);
+});
+test('Dvolada Express: mobile layout, dark mode and focus styling',()=>{
+ assert.match(groupStyles,/\.dv32 \.ox-express-page \.ox-grid\{display:grid/);
+ assert.match(groupStyles,/@media\(max-width:760px\)/);
+ assert.match(groupStyles,/\[data-theme="dark"\] \.dv32 \.ox-express-page \.ox-panel/);
+ assert.match(groupStyles,/\.dv32 \.ox-express-page \.ox-btn:focus-visible/);
+});

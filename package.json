@@ -12,7 +12,8 @@
     "test:restaurant": "node --test tests/restaurant-cloud-flow.test.js",
     "test:menu": "node --test tests/restaurant-menu.test.js",
     "test:business": "node --test tests/restaurant-business.test.js",
-    "test:hardening": "node --test tests/restaurant-hardening.test.js"
+    "test:hardening": "node --test tests/restaurant-hardening.test.js",
+    "test:courier": "node --test tests/courier-online.test.js"
   },
   "dependencies": {
     "react": "^18.3.1",

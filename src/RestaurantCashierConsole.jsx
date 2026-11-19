@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import React,{useEffect,useState} from 'react';
 import {ArrowRight,Bell,ChefHat,Check,CheckCheck,Clock3,Eye,Printer,Store,Truck} from 'lucide-react';
 import {elapsedMinutes,kitchenQueues,matchesRestaurantOrder} from './kitchen-operations.js';
 import './restaurant-cashier-console.css';
@@ -7,6 +7,8 @@ const number=o=>o.orderNo||o.id;
 export default function RestaurantCashierConsole({orders=[],restaurantId,restaurantName='Restaurante',now=Date.now(),connected=true,query='',capacity=10,onActivate=()=>{},onAccept=()=>{},onDetail=()=>{},onPrint=()=>{},onGoKitchen=()=>{}}){
  const [pendingView,setPendingView]=useState('all');
  const [pendingSort,setPendingSort]=useState('oldest');
+ const [shownLimit,setShownLimit]=useState(20);
+ useEffect(()=>setShownLimit(20),[restaurantId,query,pendingView,pendingSort]);
  const q=kitchenQueues(orders,restaurantId,now);
  const working=q.accepted.length+q.preparing.length;
  const shownPending=q.pending.filter(order=>matchesRestaurantOrder(order,query)&&(pendingView==='all'||(pendingView==='delivery'?order.delivery==='delivery':order.delivery!=='delivery'))).sort((a,b)=>{
@@ -32,7 +34,7 @@ export default function RestaurantCashierConsole({orders=[],restaurantId,restaur
    <section className="dv-cash-pending" aria-labelledby="dv-cash-pending-title"><header><div><span className="dv-cash-eyebrow">BANDEJA DE ENTRADA</span><h3 id="dv-cash-pending-title">Nuevos pedidos <b>{q.pending.length}</b></h3></div><span className="dv-cash-pending-caption">Revisá antes de aceptar</span></header>
     <div className="dv-cash-filters" aria-label="Filtros de nuevos pedidos"><div role="group" aria-label="Tipo de entrega">{[['all','Todos'],['delivery','A domicilio'],['pickup','Retiro en local']].map(([id,label])=><button key={id} type="button" className={pendingView===id?'active':''} aria-pressed={pendingView===id} onClick={()=>setPendingView(id)}>{label}</button>)}</div><label>Ordenar<select aria-label="Orden de pedidos" value={pendingSort} onChange={e=>setPendingSort(e.target.value)}><option value="oldest">Más antiguos primero</option><option value="recent">Más recientes primero</option></select></label></div>
     <div className="dv-cash-list">
-     {shownPending.length?shownPending.map(order=>{
+     {shownPending.length?shownPending.slice(0,shownLimit).map(order=>{
       const elapsed=elapsedMinutes(order,now),items=Array.isArray(order.items)?order.items:[];
       return <article key={order.id} className="dv-cash-order">
        <div className="dv-cash-order-top"><strong>{number(order)}</strong><span><Clock3 size={15}/>{elapsed===null?'Sin hora':elapsed+' min'}</span></div>
@@ -42,6 +44,7 @@ export default function RestaurantCashierConsole({orders=[],restaurantId,restaur
        <div className="dv-cash-order-actions"><button type="button" onClick={()=>onDetail(order)} className="dv-cash-detail"><Eye size={17}/> Ver detalle</button><button type="button" disabled={!connected} onClick={()=>onAccept(order)} className="dv-cash-accept"><Check size={17}/> Aceptar y enviar a cocina</button></div>
       </article>;
      }):<div className="dv-cash-empty"><Check size={34}/><strong>¡No hay pedidos por aceptar!</strong><p>{query.trim()||pendingView!=='all'?'No hay pedidos que coincidan con los filtros.':'Los pedidos nuevos de prueba aparecerán aquí al registrarse en este navegador.'}</p></div>}
+     {shownPending.length>shownLimit&&<button type="button" className="dv-cash-load-more" onClick={()=>setShownLimit(limit=>limit+20)}>Mostrar 20 pedidos más · {shownLimit} de {shownPending.length} visibles</button>}
     </div>
    </section>
    <aside className="dv-cash-production" aria-label="Estado de cocina"><header><span className="dv-cash-eyebrow">PRODUCCIÓN</span><h3>Así va tu cocina</h3><p>Seguimiento rápido de las órdenes aceptadas.</p></header>

@@ -30,7 +30,7 @@ export default function RestaurantMenuEditor({restaurant,onChange=()=>false}){
  const [query,setQuery]=useState(''),[category,setCategory]=useState('Todas'),[stock,setStock]=useState('all');
  const [form,setForm]=useState(null),[editingId,setEditingId]=useState(null),[errors,setErrors]=useState({}),[photoBusy,setPhotoBusy]=useState(false),[notice,setNotice]=useState('');
  const [deleteItem,setDeleteItem]=useState(null);
- const closeRef=useRef(null),formRef=useRef(null);
+ const closeRef=useRef(null),formRef=useRef(null),photoRequest=useRef(0);
  const categories=useMemo(()=>['Todas',...new Set([...MENU_CATEGORIES,...items.map(i=>i.category).filter(Boolean)])],[items]);
  const matching=items.filter(item=>{
   const available=item.available!==false&&item.soldOut!==true;
@@ -38,13 +38,14 @@ export default function RestaurantMenuEditor({restaurant,onChange=()=>false}){
    &&(stock==='all'||(stock==='active'?available:!available))
    &&(!query.trim()||fold(item.name+' '+(item.description||'')+' '+(item.category||'')).includes(fold(query.trim())));
  });
- const setField=(key,value)=>{setForm(current=>({...current,[key]:value}));setErrors(old=>({...old,[key]:null}));};
+ const setField=(key,value)=>{setForm(current=>current?{...current,[key]:value}:current);setErrors(old=>({...old,[key]:null}));};
  const openEditor=(item=null)=>{
+  photoRequest.current++;setPhotoBusy(false);
   setEditingId(item?.id??null);
   setForm(item?{name:item.name||'',description:item.description||'',category:MENU_CATEGORIES.includes(item.category)?item.category:'Otros',price:String(item.price??''),prepTime:String(item.prepTime||25),image:item.image||'',extras:cleanMenuExtras(item.extras).join(', '),available:item.available!==false&&item.soldOut!==true}:emptyDraft());
   setErrors({});setNotice('');
  };
- const closeEditor=()=>{setForm(null);setEditingId(null);setErrors({})};
+ const closeEditor=()=>{photoRequest.current++;setPhotoBusy(false);setForm(null);setEditingId(null);setErrors({})};
  useEffect(()=>{
   if(!form&&!deleteItem)return;
   const old=document.body.style.overflow,last=document.activeElement;
@@ -92,10 +93,11 @@ export default function RestaurantMenuEditor({restaurant,onChange=()=>false}){
  const upload=async event=>{
   const file=event.target.files?.[0];event.target.value='';
   if(!file)return;
+  const request=++photoRequest.current;
   setPhotoBusy(true);setErrors(old=>({...old,image:null}));
-  try{const url=await readPhotoAsThumbnail(file);setField('image',url)}
-  catch(error){setErrors(old=>({...old,image:error.message||'No se pudo leer la imagen.'}))}
-  finally{setPhotoBusy(false)}
+  try{const url=await readPhotoAsThumbnail(file);if(request===photoRequest.current)setField('image',url)}
+  catch(error){if(request===photoRequest.current)setErrors(old=>({...old,image:error.message||'No se pudo leer la imagen.'}))}
+  finally{if(request===photoRequest.current)setPhotoBusy(false)}
  };
  return <section className="dv-menu-management" aria-label="Administración de menú">
   <header className="dv-menu-hero"><div><span className="dv-menu-kicker"><UtensilsCrossed size={16}/> MI MENÚ · RESTAURANTE ONLINE</span><h2>Tu carta, a tu manera.</h2><p>Agregá productos, precios, fotos, categorías y extras. Prepará tu catálogo con una vista clara antes de conectarlo al servidor.</p></div><button type="button" onClick={()=>openEditor()} className="dv-menu-add"><Plus size={19}/> Nuevo producto</button></header>

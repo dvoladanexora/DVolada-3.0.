@@ -16,6 +16,6 @@ export function AffiliateLogin({onLogin,onBack}){
   <button type="button" className="secondary wide" onClick={onBack}>Volver a Dvolada</button>
  </div></section>;
 }
-export function AffiliateOnlinePanel({orders,places,restaurantId,onUpdate,onCatalogChange,onLogout}){
- return <OnlineWorkspace orders={orders} places={places} restaurantId={restaurantId} onUpdate={onUpdate} onCatalogChange={onCatalogChange} onLogout={onLogout}/>;
+export function AffiliateOnlinePanel({orders,places,restaurantId,onUpdate,onCatalogChange,onRestaurantChange,onLogout}){
+ return <OnlineWorkspace orders={orders} places={places} restaurantId={restaurantId} onUpdate={onUpdate} onCatalogChange={onCatalogChange} onRestaurantChange={onRestaurantChange} onLogout={onLogout}/>;
 }

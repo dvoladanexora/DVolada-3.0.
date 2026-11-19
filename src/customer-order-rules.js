@@ -5,7 +5,7 @@ const cents=n=>Math.round(Number(n)*100);
 const moneyFromCents=n=>n/100;
 const drinks=/café|cafe|fresco|jugo|refresco|bebida|té|te |agua|licuado/i;
 export const offeredExtrasFor=item=>{
- if(Array.isArray(item?.extras)&&item.extras.length)return item.extras.filter(v=>typeof v==='string'&&v.trim()).slice(0,8);
+ if(Array.isArray(item?.extras))return item.extras.filter(v=>typeof v==='string'&&v.trim()).slice(0,8);
  return drinks.test(String(item?.name||''))?['Azúcar extra','Leche extra','Sin hielo']:['Queso extra','Aguacate','Salsa extra'];
 };
 export const lineSelectedExtras=line=>{

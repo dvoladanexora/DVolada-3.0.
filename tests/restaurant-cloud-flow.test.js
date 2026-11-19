@@ -107,3 +107,14 @@ test('El buscador global filtra visualmente ambas pantallas y la capacidad infor
  assert.ok(workspace.includes('Activar sonido de pedidos'));
  assert.ok(workspace.includes('Avisos sonoros activos'));
 });
+
+test('Comanda adaptable a papel térmico 58 y 80 mm sin inyección de estilo',()=>{
+ const o=order('123','Aceptado');
+ const a=kitchenTicketHtml(o,'Restaurante',new Date(now),58);
+ const b=kitchenTicketHtml(o,'Restaurante',new Date(now),80);
+ assert.ok(a.includes('size:58mm auto'));
+ assert.ok(a.includes('max-width:54mm'));
+ assert.ok(b.includes('size:80mm auto'));
+ assert.ok(b.includes('max-width:76mm'));
+ assert.ok(kitchenTicketHtml(o,'Restaurante',new Date(now),'invalido').includes('size:80mm auto'));
+});

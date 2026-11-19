@@ -115,3 +115,28 @@
  .dv-food-feed-card,.dv-food-feed-card img,.dv-shelf-food,.dv-home-discovery-actions button{transition:none!important}
  .dv-food-feed-card:hover,.dv-shelf-food:hover,.dv-home-discovery-actions button:hover{transform:none!important}
 }
+
+/* Restaurants visual audit 2/3: readable shelves on phones and both themes */
+.dv-restaurant-shelf,.dv-shelf-identity,.dv-shelf-info,.dv-shelf-heading,.dv-shelf-track{min-width:0}
+.dv-shelf-name-link{max-width:100%;text-align:left;overflow-wrap:anywhere;color:var(--ink)}
+.dv-shelf-info h2,.dv-shelf-address,.dv-shelf-hours{overflow-wrap:anywhere}
+.dv-shelf-address,.dv-shelf-hours{line-height:1.5}
+.dv-shelf-food{color:var(--ink);cursor:pointer}
+.dv-shelf-food>strong{overflow-wrap:anywhere}
+.dv-shelf-food:disabled{opacity:.62;cursor:not-allowed}
+.dv-shelf-food:disabled:hover{transform:none}
+.dv-shelf-food:focus-visible,.dv-shelf-name-link:focus-visible,.dv-shelf-visit:focus-visible,.dv-shelf-avatar:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.dv-shelf-status.open{color:#176e3b}.dv-shelf-status.closed{color:#9b2727}.dv-shelf-status.paused{color:#79500d}
+[data-theme="dark"] .dv-shelf-food,[data-theme="dark"] .dv-shelf-name-link{color:var(--ink)}
+[data-theme="dark"] .dv-shelf-status.open{color:#76d69d}
+[data-theme="dark"] .dv-shelf-status.closed{color:#ff9d97}
+[data-theme="dark"] .dv-shelf-status.paused{color:#f1c575}
+@media(max-width:420px){
+ .dv-shelf-heading{align-items:flex-start;flex-wrap:wrap;gap:9px}
+ .dv-shelf-visit{min-height:40px;white-space:normal}
+ .dv-shelf-food{flex-basis:min(67vw,190px)}
+ .dv-shelf-food>strong{font-size:13px;line-height:1.45}
+ .dv-shelf-food-bottom{gap:6px}
+ .dv-shelf-address,.dv-shelf-hours{font-size:11px}
+}
+@media(prefers-reduced-motion:reduce){.dv-shelf-food{transition:none!important}.dv-shelf-food:hover{transform:none!important}}

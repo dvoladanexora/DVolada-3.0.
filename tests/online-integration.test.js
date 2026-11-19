@@ -7,7 +7,7 @@ import {offeredExtrasFor,validateCartCatalog,splitRestaurantCart,cartCheckoutTot
 import {canMoveRestaurantOrder,kitchenQueues,scheduledOrderState} from '../src/kitchen-operations.js';
 import {applyOrderStatus,decisionForOrder} from '../src/restaurant-order-flow.js';
 import {cancelDemoOrder,changeDemoRestaurantOrder,persistDemoOrders} from '../src/order-demo-operations.js';
-import {safeReadStored} from '../src/browser-storage.js';
+import {safeReadStored,validStoredRestaurants} from '../src/browser-storage.js';
 import {courierQueues,applyCourierAction,courierViewOrder,validateCourierAction} from '../src/courier-workflow.js';
 
 const today=new Date('2026-11-19T10:00:00.000Z');
@@ -530,4 +530,24 @@ test('Caja, cliente y repartidor persisten antes de notificar un estado completa
  }
  assert.ok(cashier.includes('if(!saved.ok)return saved;'));
  assert.ok(courier.includes('if(!saved.ok)return saved;'));
+});
+
+test('Catálogo heredado corrupto no rompe la pantalla de Cliente ni los menús',()=>{
+ const fallback=[a];
+ const get=rows=>({getItem:()=>JSON.stringify(rows)});
+ const broken=[
+  [{id:'restaurant',items:[null]}],
+  [{id:'restaurant',items:[{id:1,name:'Pollo',price:Infinity}]}],
+  [{id:'restaurant',items:[{id:1,name:null,price:50}]}],
+  [{id:'restaurant',items:[{name:'Baleada',price:45}]}],
+  [{id:'restaurant',items:[{id:1,name:'Baleada',price:{amount:45}}]}],
+ ];
+ for(const rows of broken){
+  assert.equal(validStoredRestaurants(rows),false);
+  assert.deepEqual(safeReadStored(get(rows),'dv_places',fallback),fallback);
+ }
+ const accepted=[{id:99,name:'Restaurante de prueba',items:[{id:'SKU',name:'Baleada',price:45}]}];
+ assert.equal(validStoredRestaurants(accepted),true);
+ assert.deepEqual(safeReadStored(get(accepted),'dv_places',fallback),accepted);
+ assert.equal(validStoredRestaurants([]),true);
 });

@@ -218,4 +218,11 @@ Esta etapa refuerza la demostración de Cliente, Restaurante y Caja sin agregar 
 - **Pendiente de Work:** horario y zona horaria aplicados por servidor, festivos y excepciones, notificaciones/órdenes multiusuario, aislamiento de datos con permisos reales y aceptación visual en dispositivos. La hora local del navegador no es una fuente autorizada de producción.
 - Se mantiene la prohibición de fusionar `main` o publicar el servicio sin validación y aprobación del usuario.
 
-**CI para este corte:** consultar la ejecución [#44592860064](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44592860064). No marcar como aprobada hasta que finalice.
+**CI verificado:** 128/128 pruebas, 0 fallos, compilación Vite exitosa en [#44592860064](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44592860064).
+
+### Ajuste final de distintivos del Cliente
+- En las tarjetas de restaurantes, «En pausa», «Cerrado» y «Fuera de horario» aparecen como situaciones distintas. «Horario por confirmar» se mantiene cuando el negocio está abierto manualmente pero carece de horarios publicados.
+- El aviso de disponibilidad en la ficha del restaurante también distingue «En pausa» en vez de llamarlo cerrado.
+- Se añadió una prueba específica de esta diferencia en el catálogo.
+- **Última validación: 129/129 pruebas aprobadas, cero fallos, cero omitidas y compilación Vite correcta**, [GitHub Actions #44593179149](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44593179149).
+- Avisos técnicos no bloqueantes para Work: chunk de JS grande en Vite y avisos de deprecación de dependencias de GitHub Actions / `punycode`. Priorizar comprobación de rendimiento de iPhone antiguo y actualización responsable de herramientas.

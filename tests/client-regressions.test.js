@@ -155,3 +155,15 @@ test('Favoritos: saved IDs are normalized consistently when rendering cards',()=
  assert.match(app,/customerCatalog\.filter\(x=>customerWishlist\.includes\(String\(x\.place\.id\)\+'-'\+String\(x\.item\.id\)\)\)/);
  assert.match(app,/places\.filter\(p=>favorites\.some\(id=>String\(id\)===String\(p\.id\)\)\)/);
 });
+
+test('Mi cuenta: local profile validates contact fields before saving',()=>{
+ assert.match(app,/profile\.name\.trim\(\)\.length<2/);
+ assert.match(app,/profile\.phone\.replace\(\/\\D\/g,''\)\.length<8/);
+ assert.match(app,/profile\.address\.trim\(\)\.length<8/);
+ assert.match(app,/setGuestName\(next\.name\)/);
+});
+test('Mi cuenta: image uploads validate MIME type and phone uses telephone input',()=>{
+ assert.match(app,/!file\.type\.startsWith\('image\/'\)/);
+ assert.match(app,/file\.size>1500000/);
+ assert.match(app,/type=\{key==='phone'\?'tel':'text'\}/);
+});

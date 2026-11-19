@@ -41,12 +41,12 @@ export default function PwaUpdatePrompt(){
   if(!available)return;
   let cart=[];
   try{cart=JSON.parse(localStorage.getItem('dv_cart')||'[]')}catch{}
-  if(Array.isArray(cart)&&cart.length&&!window.confirm('Tenés productos en tu carrito. D Volada los mantiene guardados, pero una actualización puede interrumpir lo que estés haciendo. ¿Actualizar ahora?'))return;
+  if(Array.isArray(cart)&&cart.length&&!window.confirm('Tenés productos en tu carrito. Dvolada los mantiene guardados, pero una actualización puede interrumpir lo que estés haciendo. ¿Actualizar ahora?'))return;
   setBusy(true);
   const worker=waitingRef.current;
   if(worker){worker.postMessage({type:'SKIP_WAITING'});setTimeout(()=>window.location.reload(),3500)}
   else window.location.reload();
  };
  if(!available||dismissed===token)return null;
- return <div className="dv-update-banner" role="status" aria-live="polite"><div className="dv-update-icon"><RefreshCw size={22}/></div><div className="dv-update-copy"><strong>¡Hay una nueva actualización de D Volada!</strong><span>Tenemos mejoras listas para vos. Podés actualizar ahora o seguir usando la versión actual.</span></div><button className="dv-update-apply" onClick={update} disabled={busy}>{busy?'Actualizando…':'Actualizar ahora'}</button><button className="dv-update-close" aria-label="Actualizar más tarde" title="Más tarde" onClick={()=>setDismissed(token)}><X size={18}/></button></div>;
+ return <div className="dv-update-banner" role="status" aria-live="polite"><div className="dv-update-icon"><RefreshCw size={22}/></div><div className="dv-update-copy"><strong>¡Hay una nueva actualización de Dvolada!</strong><span>Tenemos mejoras listas para vos. Podés actualizar ahora o seguir usando la versión actual.</span></div><button className="dv-update-apply" onClick={update} disabled={busy}>{busy?'Actualizando…':'Actualizar ahora'}</button><button className="dv-update-close" aria-label="Actualizar más tarde" title="Más tarde" onClick={()=>setDismissed(token)}><X size={18}/></button></div>;
 }

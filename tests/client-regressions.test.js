@@ -50,3 +50,12 @@ test('Inicio: responsive theme and keyboard accessibility safeguards',()=>{
  assert.match(homeCss,/@media\(prefers-reduced-motion:reduce\)/);
  assert.match(homeCss,/overflow-wrap:anywhere/);
 });
+
+test('Restaurantes: search tolerates accents and missing item lists',()=>{
+ assert.match(app,/normalizeFoodSearch\(\[p\.name,p\.type,\.\.\.\(p\.items\|\|\[\]\)/);
+ assert.match(app,/\.includes\(normalizeFoodSearch\(search\)\)/);
+});
+test('Restaurantes: prices ignore unavailable products',()=>{
+ assert.match(app,/const cheapest=\(p\.items\|\|\[\]\)\.filter\(i=>i\.available!==false&&i\.soldOut!==true\)/);
+ assert.match(app,/i\.available!==false&&i\.soldOut!==true&&Number\(i\.price\)<=/);
+});

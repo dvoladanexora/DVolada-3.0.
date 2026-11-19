@@ -1,12 +1,14 @@
 import React from 'react';
 import {ArrowRight,Bell,ChefHat,Check,CheckCheck,Clock3,Eye,Printer,Store,Truck} from 'lucide-react';
-import {elapsedMinutes,kitchenQueues} from './kitchen-operations.js';
+import {elapsedMinutes,kitchenQueues,matchesRestaurantOrder} from './kitchen-operations.js';
 import './restaurant-cashier-console.css';
 
 const number=o=>o.orderNo||o.id;
-export default function RestaurantCashierConsole({orders=[],restaurantId,restaurantName='Restaurante',now=Date.now(),connected=true,onAccept=()=>{},onDetail=()=>{},onPrint=()=>{},onGoKitchen=()=>{}}){
+export default function RestaurantCashierConsole({orders=[],restaurantId,restaurantName='Restaurante',now=Date.now(),connected=true,query='',capacity=10,onAccept=()=>{},onDetail=()=>{},onPrint=()=>{},onGoKitchen=()=>{}}){
  const q=kitchenQueues(orders,restaurantId,now);
  const working=q.accepted.length+q.preparing.length;
+ const shownPending=q.pending.filter(order=>matchesRestaurantOrder(order,query));
+ const atCapacity=working>=Math.max(1,Number(capacity)||10);
  return <div className="dv-cash-console">
   <header className="dv-cash-hero"><div><span className="dv-cash-eyebrow"><Store size={16}/> CAJA / RECEPCIÓN · DVOLADA CLOUD</span><h2>Una caja organizada, una cocina en marcha.</h2><p>Revisá las solicitudes nuevas y decidí cuáles aceptar. La cocina recibe únicamente las que el negocio haya aceptado.</p></div><button type="button" onClick={onGoKitchen} className="dv-cash-goto-kitchen"><ChefHat size={21}/> Abrir cocina <ArrowRight size={17}/></button></header>
   <div className="dv-cash-overview">
@@ -14,10 +16,11 @@ export default function RestaurantCashierConsole({orders=[],restaurantId,restaur
    <div><span><ChefHat size={18}/> En cocina</span><strong>{working}</strong><small>Aceptados y preparando</small></div>
    <div><span><CheckCheck size={18}/> Listos</span><strong>{q.ready.length}</strong><small>Para retiro o repartidor</small></div>
   </div>
+  {atCapacity&&<div className="dv-cash-capacity" role="status"><ChefHat size={18}/><span>La cocina llegó a su capacidad configurada ({capacity} pedidos). Revisá tiempos antes de aceptar más. Esta alerta no bloquea pedidos automáticamente hasta conectar el servidor.</span></div>}
   <div className="dv-cash-panels">
    <section className="dv-cash-pending" aria-labelledby="dv-cash-pending-title"><header><div><span className="dv-cash-eyebrow">BANDEJA DE ENTRADA</span><h3 id="dv-cash-pending-title">Nuevos pedidos <b>{q.pending.length}</b></h3></div><span className="dv-cash-pending-caption">Revisá antes de aceptar</span></header>
     <div className="dv-cash-list">
-     {q.pending.length?q.pending.map(order=>{
+     {shownPending.length?shownPending.map(order=>{
       const elapsed=elapsedMinutes(order,now),items=Array.isArray(order.items)?order.items:[];
       return <article key={order.id} className="dv-cash-order">
        <div className="dv-cash-order-top"><strong>{number(order)}</strong><span><Clock3 size={15}/>{elapsed===null?'Sin hora':elapsed+' min'}</span></div>
@@ -26,7 +29,7 @@ export default function RestaurantCashierConsole({orders=[],restaurantId,restaur
        {order.notes&&<div className="dv-cash-order-note">Nota: {order.notes}</div>}
        <div className="dv-cash-order-actions"><button type="button" onClick={()=>onDetail(order)} className="dv-cash-detail"><Eye size={17}/> Ver detalle</button><button type="button" disabled={!connected} onClick={()=>onAccept(order)} className="dv-cash-accept"><Check size={17}/> Aceptar y enviar a cocina</button></div>
       </article>;
-     }):<div className="dv-cash-empty"><Check size={34}/><strong>¡No hay pedidos por aceptar!</strong><p>Los nuevos pedidos aparecerán aquí cuando el servidor esté conectado al restaurante.</p></div>}
+     }):<div className="dv-cash-empty"><Check size={34}/><strong>¡No hay pedidos por aceptar!</strong><p>{query.trim()?'No hay pedidos que coincidan con tu búsqueda.':'Los nuevos pedidos aparecerán aquí cuando el servidor esté conectado al restaurante.'}</p></div>}
     </div>
    </section>
    <aside className="dv-cash-production" aria-label="Estado de cocina"><header><span className="dv-cash-eyebrow">PRODUCCIÓN</span><h3>Así va tu cocina</h3><p>Seguimiento rápido de las órdenes aceptadas.</p></header>

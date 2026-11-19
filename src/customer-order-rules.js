@@ -1,3 +1,4 @@
+import {restaurantOrderBlockReason} from './restaurant-availability.js';
 /** Reglas de demostración del carrito Dvolada Online.
  * Deben repetirse desde un servidor confiable antes de vender pedidos reales.
  */
@@ -19,8 +20,8 @@ export function validateCartCatalog(cart,places,{scheduleMode='now'}={}){
  for(const line of cart){
   const place=restaurants.find(p=>String(p.id)===String(line?.placeId));
   if(!place)return 'Uno de los restaurantes ya no está disponible. Revisá el carrito.';
-  if(scheduleMode!=='later'&&(place.isOpen===false||place.open===false))
-   return 'El restaurante '+place.name+' está cerrado por ahora. Elegí otro negocio o programá el pedido.';
+  const blocked=restaurantOrderBlockReason(place,{scheduleMode});
+  if(blocked)return blocked;
   const item=(Array.isArray(place.items)?place.items:[]).find(i=>String(i.id)===String(line?.productId??String(line?.id).split('-')[0]));
   if(!item)return 'El producto '+String(line?.name||'')+' ya no aparece en el menú. Quitalo del carrito y volvé a agregarlo.';
   if(item.available===false||item.soldOut===true)return 'El producto '+item.name+' está agotado.';

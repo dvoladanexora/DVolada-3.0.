@@ -41,3 +41,12 @@ test('Inicio: search ignores accents and case and explains empty categories',()=
  assert.match(app,/normalizeFoodSearch\(v\)\.includes\(homeFoodQuery\)/);
  assert.match(app,/No hay productos disponibles en esta categoría/);
 });
+
+const homeCss=readFileSync(new URL('../src/home-catalog.css',import.meta.url),'utf8');
+test('Inicio: responsive theme and keyboard accessibility safeguards',()=>{
+ assert.match(homeCss,/\[data-theme="dark"\] \.dv-food-feed-card/);
+ assert.match(homeCss,/\.dv-food-feed-open:focus-visible/);
+ assert.match(homeCss,/@media\(max-width:360px\)/);
+ assert.match(homeCss,/@media\(prefers-reduced-motion:reduce\)/);
+ assert.match(homeCss,/overflow-wrap:anywhere/);
+});

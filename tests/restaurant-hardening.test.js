@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {applyOrderStatus,stageElapsedMinutes,decisionForOrder,allowedDecision} from '../src/restaurant-order-flow.js';
 import {neutralizeSpreadsheetFormula,quoteCsv,csvFromRows,historyCsvRows} from '../src/restaurant-export.js';
-import {decodeDemoStorageEvent,recordRestaurantShift,shiftLogKey} from '../src/restaurant-demo-bridge.js';
+import {decodeDemoStorageEvent,recordRestaurantShift,shiftLogKey,normalizeRestaurantShiftLog} from '../src/restaurant-demo-bridge.js';
 
 const at=new Date('2026-11-19T06:00:00.000Z');
 const sample={id:'100',placeId:1,status:'Pendiente',kind:'food',createdAt:'2026-11-19T05:30:00.000Z',items:[{name:'Pollo',qty:2}]};
@@ -129,4 +129,25 @@ test('Preview local permite probar varios restaurantes sin exponer login fictici
  assert.ok(login.includes('import.meta.env.DEV'));
  assert.ok(main.includes('restaurantId={previewRestaurantId??places[0]?.id}'));
  assert.ok(main.includes('INTERNAL_PREVIEW_ENABLED&&affiliateSession'));
+});
+
+test('Relevo local dañado no rompe Caja ni muestra notas de otro negocio',()=>{
+ const good=recordRestaurantShift('A','Se entregó el inventario al siguiente turno.',[],at);
+ const other={...good,id:'other',restaurantId:'B'};
+ assert.deepEqual(normalizeRestaurantShiftLog('texto','A'),[]);
+ assert.deepEqual(normalizeRestaurantShiftLog({records:[good]},'A'),[]);
+ assert.deepEqual(normalizeRestaurantShiftLog(null,'A'),[]);
+ const recovered=normalizeRestaurantShiftLog([
+  null,[],{id:'invalid',restaurantId:'A',note:'',at:'mal',activeOrders:'dos'},
+  other,good,{...good,id:'bad-date',at:'no es fecha'},
+  {...good,id:'bad-orders',activeOrders:-3}
+ ],'A');
+ assert.equal(recovered.length,1);
+ assert.equal(recovered[0].restaurantId,'A');
+ assert.equal(recovered[0].note,good.note);
+ assert.equal(recovered[0].activeOrders,0);
+ const long=Array.from({length:35},(_,i)=>({...good,id:'shift-'+i}));
+ assert.equal(normalizeRestaurantShiftLog(long,'A').length,25);
+ const workspace=readFileSync(new URL('../src/OnlineWorkspace.jsx',import.meta.url),'utf8');
+ assert.ok(workspace.includes('normalizeRestaurantShiftLog(get('));
 });

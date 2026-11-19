@@ -4,12 +4,13 @@ import './courier-accept-dialog.css';
 
 /** Confirmación intencional para evitar asignación accidental en pantallas táctiles. */
 export default function CourierAcceptDialog({order,place,onConfirm,onClose,canAccept=true,slots=0}){
- const surface=useRef(null),closeButton=useRef(null);
+ const surface=useRef(null),closeButton=useRef(null),closeRef=useRef(onClose);
+ closeRef.current=onClose;
  useEffect(()=>{
   const body=document.body,old=body.style.overflow,active=document.activeElement;
   body.style.overflow='hidden';closeButton.current?.focus();
   const onKey=e=>{
-   if(e.key==='Escape'){e.preventDefault();onClose()}
+   if(e.key==='Escape'){e.preventDefault();closeRef.current?.()}
    if(e.key!=='Tab'||!surface.current)return;
    const nodes=surface.current.querySelectorAll('button:not([disabled])');
    if(!nodes.length)return;
@@ -19,7 +20,7 @@ export default function CourierAcceptDialog({order,place,onConfirm,onClose,canAc
   };
   document.addEventListener('keydown',onKey);
   return()=>{body.style.overflow=old;document.removeEventListener('keydown',onKey);active?.focus?.()};
- },[onClose]);
+ },[]);
  return <div className="dv-rider-accept-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
   <section className="dv-rider-accept-dialog" role="dialog" aria-modal="true" aria-labelledby="dv-rider-accept-title" ref={surface}>
    <div className="dv-rider-accept-head"><div className="dv-rider-accept-symbol"><Bike size={26}/></div><button type="button" ref={closeButton} onClick={onClose} aria-label="Cerrar confirmación"><X size={20}/></button></div>

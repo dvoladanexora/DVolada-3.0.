@@ -491,7 +491,12 @@ test('Inicio: customer can switch between food and restaurants with product prev
 });
 
 test('Inicio: search results are not duplicated by the continuation feed',()=>{
- assert.ok(app.includes("homeCatalogView==='food'&&!headerSearch.trim()&&<section"));
+  assert.ok(app.includes("homeFoodCatalog.slice(0,headerSearch.trim()?60:3)"));
+  assert.ok(app.includes("homeFoodCatalog.slice(3,6)"));
+  assert.ok(app.includes("homeFoodCatalog.slice(6)"));
+  assert.ok(app.includes("homeCatalogView==='food'&&!headerSearch.trim()&&homeFoodCatalog.length>3"));
+  assert.ok(app.includes('HomeSponsorSlot variant="carousel"'));
+  assert.ok(app.includes('HomeSponsorSlot variant="compact"'));
  assert.equal((app.match(/No hay comidas disponibles en esta categoría\.<\/p>/g)||[]).length,0);
 });
 

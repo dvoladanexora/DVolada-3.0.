@@ -151,3 +151,15 @@ test('Relevo local dañado no rompe Caja ni muestra notas de otro negocio',()=>{
  const workspace=readFileSync(new URL('../src/OnlineWorkspace.jsx',import.meta.url),'utf8');
  assert.ok(workspace.includes('normalizeRestaurantShiftLog(get('));
 });
+
+test('Eventos de otras pestañas rechazan productos dañados antes de cambiar la tienda',()=>{
+ const valid={key:'dv_places',newValue:JSON.stringify([{id:1,name:'Negocio',items:[{id:100,name:'Pizza',price:90}]}])};
+ assert.deepEqual(decodeDemoStorageEvent(valid)?.rows[0].items[0].name,'Pizza');
+ const invalid=[
+  {key:'dv_places',newValue:JSON.stringify([{id:1,items:[null]}])},
+  {key:'dv_places',newValue:JSON.stringify([{id:1,items:[{id:100,name:'Pizza',price:{bogus:true}}]}])},
+  {key:'dv_orders',newValue:JSON.stringify([{id:1,status:null}])},
+ ];
+ for(const event of invalid)assert.equal(decodeDemoStorageEvent(event),null);
+ assert.deepEqual(decodeDemoStorageEvent({key:'dv_orders',newValue:JSON.stringify([{id:'X',status:'Pendiente'}])})?.rows[0].status,'Pendiente');
+});

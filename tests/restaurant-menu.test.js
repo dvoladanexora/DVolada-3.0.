@@ -96,3 +96,20 @@ test('Editor descarta subidas tardías al cancelar, cambiar de producto o reabri
  assert.ok(src.includes('const openEditor=(item=null)=>{\n  photoRequest.current++;setPhotoBusy(false)'));
  assert.ok(src.includes("setForm(current=>current?{...current,[key]:value}:current)"));
 });
+
+test('Menú extenso se carga por bloques y las validaciones llevan al campo incorrecto',()=>{
+ const ui=readFileSync(new URL('../src/RestaurantMenuEditor.jsx',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../src/restaurant-menu-editor.css',import.meta.url),'utf8');
+ assert.ok(ui.includes('useState(24)'));
+ assert.ok(ui.includes('setVisibleCount(24),[restaurant?.id,query,category,stock]'));
+ assert.ok(ui.includes('matching.slice(0,visibleCount).map(item='));
+ assert.ok(ui.includes('matching.length>visibleCount'));
+ assert.ok(ui.includes('setVisibleCount(count=>count+24)'));
+ assert.ok(ui.includes('aria-invalid={Boolean(errors.category)}'));
+ assert.ok(ui.includes('aria-invalid={Boolean(errors.description)}'));
+ assert.ok(ui.includes('aria-invalid={Boolean(errors.image)}'));
+ assert.ok(ui.includes("requestAnimationFrame(()=>formRef.current?.querySelector('[aria-invalid=\"true\"]')?.focus())"));
+ assert.ok(ui.includes('role="alert">Revisá los campos marcados'));
+ assert.ok(css.includes('.dv-menu-load-more'));
+ assert.ok(css.includes('.dv-menu-photo-upload:focus-within'));
+});

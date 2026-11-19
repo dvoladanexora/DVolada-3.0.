@@ -436,7 +436,11 @@ test('Auditoría roles: the customer navigation stays customer-only and help rem
  const more=app.slice(app.indexOf('className="dv-more-sheet"'),app.indexOf('className="dv-more-appearance"',app.indexOf('className="dv-more-sheet"')));
  assert.ok(more.includes("['help','Centro de ayuda',MessageCircle]"));
  assert.ok(!more.includes("['courier-login','Panel repartidor'"));
- assert.ok(app.includes("onClick={()=>enter('courier-login')}"));
+ assert.ok(app.includes("setWelcomePortal('login')"));
+ assert.ok(app.includes("setWelcomePortal('join')"));
+ assert.ok(app.includes("welcomePortal==='login'?'courier-login':'courier'"));
+ assert.ok(app.includes("welcomePortal==='login'?'partner-login':'affiliate'"));
+ assert.ok(app.includes('role="dialog" aria-modal="true" aria-labelledby="dv-welcome-portal-title"'));
 });
 
 test('Auditoría marca y PWA: Dvolada spelling stays consistent in customer-facing update UI',()=>{

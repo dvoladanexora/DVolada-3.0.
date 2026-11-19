@@ -53,8 +53,8 @@
 .dv-restaurant-profile,.dv-rp-header,.dv-rp-item,.dv-rp-item-main,.dv-rp-item-main>div{min-width:0}
 .dv-rp-header{flex-wrap:wrap}
 .dv-rp-header h2,.dv-rp-item-title,.dv-rp-item-main p{overflow-wrap:anywhere}
-.dv-rp-item-title,.dv-rp-add,.dv-rp-back,.dv-rp-favorite,.dv-rp-tabs button{touch-action:manipulation}
-.dv-rp-item-title:focus-visible,.dv-rp-add:focus-visible,.dv-rp-back:focus-visible,.dv-rp-favorite:focus-visible,.dv-rp-tabs button:focus-visible{outline:3px solid var(--accent,#f26732);outline-offset:3px}
+.dv-rp-item-title,.dv-rp-add,.dv-rp-back,.dv-rp-favorite,.dv-rp-info-button,.dv-rp-tabs button{touch-action:manipulation}
+.dv-rp-item-title:focus-visible,.dv-rp-add:focus-visible,.dv-rp-back:focus-visible,.dv-rp-favorite:focus-visible,.dv-rp-info-button:focus-visible,.dv-rp-tabs button:focus-visible{outline:3px solid var(--accent,#f26732);outline-offset:3px}
 .dv-rp-item-main strong{color:var(--ink)}
 .dv-rp-item-main p,.dv-rp-item-extra p{line-height:1.5}
 [data-theme="dark"] .dv-rp-header,[data-theme="dark"] .dv-rp-item,[data-theme="dark"] .dv-rp-modal{color:var(--ink)}

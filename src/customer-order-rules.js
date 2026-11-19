@@ -31,8 +31,15 @@ export function validateCartCatalog(cart,places,{scheduleMode='now'}={}){
   const allowed=offeredExtrasFor(item);
   if(chosen.length>8||new Set(chosen).size!==chosen.length||chosen.some(x=>typeof x!=='string'||!allowed.includes(x)))
    return 'Los extras de '+item.name+' cambiaron. Volvé a agregar el producto desde el menú.';
-  const expected=cents(item.price)+chosen.length*1000;
-  if(!Number.isFinite(expected)||!Number.isFinite(Number(line.price))||cents(line.price)!==expected)
+  const base=Number(item.price),linePrice=Number(line.price);
+  const validMoney=(amount,min,max)=>Number.isFinite(amount)&&amount>=min&&amount<=max&&
+   Number.isSafeInteger(Math.round(amount*100))&&Math.abs(amount*100-Math.round(amount*100))<1e-6;
+  if(item.price===null||item.price===undefined||item.price===''||
+     line.price===null||line.price===undefined||line.price===''||
+     !validMoney(base,.01,10000)||!validMoney(linePrice,.01,10080))
+   return 'El precio de '+item.name+' es inválido. Quitalo y volvé a agregarlo desde el menú.';
+  const expected=cents(base)+chosen.length*1000;
+  if(cents(linePrice)!==expected)
    return 'El precio de '+item.name+' cambió. Volvé a agregarlo desde el menú para actualizar el total.';
  }
  return null;

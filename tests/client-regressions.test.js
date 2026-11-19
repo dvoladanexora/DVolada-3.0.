@@ -1,0 +1,35 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+const chat=readFileSync(new URL('../src/DraggableChatFab.jsx',import.meta.url),'utf8');
+
+test('R10: catalog shows each item photo when available and a placeholder otherwise',()=>{
+ assert.match(app,/item\.image\?<img src=\{item\.image\}/);
+ assert.match(app,/dv-food-photo-placeholder/);
+});
+test('R14/R15: cart groups and orders are separated by restaurant',()=>{
+ assert.match(app,/const cartGroups=\[\.\.\.new Set\(cart\.map\(i=>String\(i\.placeId\)\)\)\]/);
+ assert.match(app,/const groups=\[\.\.\.new Set\(cart\.map\(x=>String\(x\.placeId\)\)\)\]/);
+ assert.match(app,/placeId:items\[0\]\.placeId,placeName:items\[0\]\.placeName/);
+ assert.doesNotMatch(app,/¿Cambiar de restaurante\?/);
+});
+test('R14: quantity and notes target product and restaurant',()=>{
+ assert.match(app,/quantity\(i\.id,-1,i\.placeId\)/);
+ assert.match(app,/quantity\(i\.id,1,i\.placeId\)/);
+ assert.match(app,/editCartInstruction\(i\.id,e\.target\.value,i\.placeId\)/);
+});
+test('R17: coupon field accepts input but does not invent a discount',()=>{
+ assert.match(app,/id="dv-coupon-code"/);
+ assert.match(app,/onChange=\{e=>setCoupon/);
+ assert.doesNotMatch(app,/id="dv-coupon-code"[^>]*disabled/);
+ assert.match(app,/descuentos todavía no están activos/);
+});
+test('R20: home catalog searches food by item and restaurant',()=>{
+ assert.match(app,/const homeFoodCatalog=customerCatalog\.filter/);
+ assert.match(app,/\[item\.name,item\.category,place\.name\]/);
+});
+test('R23: chat FAB has drag gestures and stored position',()=>{
+ assert.match(chat,/dv_chat_fab_position/);
+ assert.match(chat,/onPointerMove/);
+});

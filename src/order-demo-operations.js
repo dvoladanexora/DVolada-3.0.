@@ -2,6 +2,7 @@
  * La versión comercial debe ejecutar cada operación como transacción autorizada
  * en el servidor y usar la versión del pedido; este módulo NO autentica usuarios.
  */
+import {validStoredOrders} from './browser-storage.js';
 import {applyOrderStatus} from './restaurant-order-flow.js';
 import {canMoveRestaurantOrder,scheduledOrderState} from './kitchen-operations.js';
 
@@ -66,8 +67,7 @@ export function changeDemoRestaurantOrder(orders,{orderId,restaurantId,expectedS
  * entre pestañas o dispositivos: Work debe usar transacciones e idempotencia API.
  */
 export function persistDemoOrders(storage,nextOrders){
- if(!Array.isArray(nextOrders)||nextOrders.length>500
-  ||!nextOrders.every(row=>row&&typeof row==='object'&&!Array.isArray(row)&&row.id!=null&&typeof row.status==='string'))
+ if(!validStoredOrders(nextOrders))
   return {ok:false,reason:'Hay demasiados pedidos de prueba o un registro inválido. No se guardaron los cambios.'};
  try{
   if(typeof storage?.setItem!=='function')throw Error('Almacenamiento no disponible');
@@ -97,9 +97,7 @@ export function mutateDemoOrders(storage,fallbackOrders,change){
  }catch{
   return {ok:false,reason:'Los pedidos locales no se pudieron leer. No se modificó ninguna orden.'};
  }
- if(!Array.isArray(latest)||latest.length>500||
-  !latest.every(row=>row&&typeof row==='object'&&!Array.isArray(row)
-    &&row.id!=null&&typeof row.status==='string'))
+ if(!validStoredOrders(latest))
   return {ok:false,reason:'Los pedidos guardados están dañados o exceden el límite. No se modificó ninguna orden.'};
  let result;
  try{result=change(latest)}catch{

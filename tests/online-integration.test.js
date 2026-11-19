@@ -7,7 +7,7 @@ import {offeredExtrasFor,validateCartCatalog,splitRestaurantCart,cartCheckoutTot
 import {canMoveRestaurantOrder,kitchenQueues,scheduledOrderState} from '../src/kitchen-operations.js';
 import {applyOrderStatus,decisionForOrder} from '../src/restaurant-order-flow.js';
 import {cancelDemoOrder,changeDemoRestaurantOrder,persistDemoOrders,mutateDemoOrders} from '../src/order-demo-operations.js';
-import {safeReadStored,validStoredRestaurants} from '../src/browser-storage.js';
+import {safeReadStored,validStoredOrders,validStoredRestaurants} from '../src/browser-storage.js';
 import {courierQueues,applyCourierAction,courierViewOrder,validateCourierAction} from '../src/courier-workflow.js';
 
 const today=new Date('2026-11-19T10:00:00.000Z');
@@ -276,7 +276,7 @@ test('Almacenamiento con formato corrupto no deja la pantalla cliente en blanco'
  assert.deepEqual(safeReadStored(get('[{"id":"x"}]'),'dv_orders',[]),[]);
  assert.deepEqual(safeReadStored(get('[{"id":"x","status":"Pendiente"}]'),'dv_orders',[]),[{id:'x',status:'Pendiente'}]);
  assert.deepEqual(safeReadStored(get('[{"id":"a","items":null}]'),'dv_places',[a]),[a]);
- assert.deepEqual(safeReadStored(get('[{"id":"1","items":[]}]'),'dv_places',[]),[{id:'1',items:[]}]);
+ assert.deepEqual(safeReadStored(get('[{"id":"1","name":"Comedor","items":[]}]'),'dv_places',[]),[{id:'1',name:'Comedor',items:[]}]);
  assert.deepEqual(safeReadStored(get('[{"id":"p"}]'),'dv_cart',[]),[{id:'p'}]);
 });
 test('Permisos de almacenamiento denegados y tipos no coincidentes usan valores seguros',()=>{
@@ -631,4 +631,24 @@ test('Disminuir una cantidad no borra silenciosamente otros productos dañados',
  const removed=changeCartQuantity(next,'plato',1,-1);
  assert.deepEqual(removed,[untouched]);
  assert.deepEqual(cart,[untouched,target],'el carrito anterior se mantiene intacto');
+});
+
+test('Pedidos repetidos y restaurantes sin nombre no entran al estado restaurado',()=>{
+ const order={id:'ORD-1',status:'Pendiente'};
+ const doubled=[order,{id:'ORD-1',status:'Aceptado'}];
+ assert.equal(validStoredOrders(doubled),false);
+ assert.equal(persistDemoOrders({setItem(){throw Error('NO DEBE ESCRIBIR')}},doubled).ok,false);
+ assert.deepEqual(safeReadStored({getItem:()=>JSON.stringify(doubled)},'dv_orders',[]),[]);
+ const badPlaces=[
+  [{id:1,items:[]}],
+  [{id:1,name:'Negocio',items:[{id:1,name:'Café',price:25},{id:'1',name:'Café doble',price:30}]}],
+  [{id:1,name:'Negocio',items:[]},{id:'1',name:'Duplicado',items:[]}],
+  [{id:1,name:'Negocio',items:[{id:11,name:'',price:25}]}],
+ ];
+ for(const bad of badPlaces){
+  assert.equal(validStoredRestaurants(bad),false);
+  assert.deepEqual(safeReadStored({getItem:()=>JSON.stringify(bad)},'dv_places',[]),[]);
+ }
+ const good=[{id:1,name:'Negocio',items:[{id:11,name:'Café',price:25}]}];
+ assert.equal(validStoredRestaurants(good),true);
 });

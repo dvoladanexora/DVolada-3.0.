@@ -63,6 +63,7 @@ export function mutateDemoPlaces(storage,fallbackPlaces,change){
  try{next=change(latest)}catch{
   return {ok:false,reason:'No se pudo validar la modificación del restaurante.'};
  }
+ if(next?.ok===false)return next;
  if(!validStoredRestaurants(next)||next.length>500)
   return {ok:false,reason:'La modificación contiene productos inválidos. No se guardó.'};
  try{

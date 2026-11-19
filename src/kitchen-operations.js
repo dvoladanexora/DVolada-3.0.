@@ -27,6 +27,12 @@ export function kitchenQueues(orders,restaurantId,now=Date.now()){
   ready:relevant.filter(o=>o.status==='Listo').sort(byAge),
  };
 }
+export const matchesRestaurantOrder=(order,query)=>{
+ const q=String(query||'').trim().toLocaleLowerCase('es');
+ if(!q)return true;
+ const parts=[order?.orderNo,order?.id,order?.name,...(Array.isArray(order?.items)?order.items.flatMap(i=>[i.name,i.instructions]):[])];
+ return parts.some(value=>String(value||'').toLocaleLowerCase('es').includes(q));
+};
 export const escapeKitchenHtml=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const kitchenLineExtras=item=>{
  const array=Array.isArray(item?.extras)?item.extras:typeof item?.extras==='string'?[item.extras]:[];

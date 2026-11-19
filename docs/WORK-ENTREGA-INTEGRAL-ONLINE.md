@@ -311,3 +311,45 @@ Esta etapa refuerza la demostración de Cliente, Restaurante y Caja sin agregar 
 - No se implementaron pagos reales ni se desplegó en `main` / Cloudflare.
 
 **Criterio de cierre de la Fase 1 de tres:** se aplicaron las correcciones detectadas en el alcance local; 150/150 pruebas aprobadas y compilación válida. La fase 2 se concentrará en rendimiento, interfaz, accesibilidad y compatibilidad, y la fase 3 en auditoría integral y entrega. No afirmar “100% de producción” ni los porcentajes 98/99 como certificados.
+
+
+## 15. Fase 2 — Optimización, navegación y accesibilidad (19/11/2026)
+
+**Último CI verde:** [GitHub Actions #44640791510](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44640791510) — **158/158 pruebas automatizadas en nueve suites**, 0 fallos, 0 omitidas y compilación Vite correcta. No se publicó en `main`.
+
+### Indicadores de compilación (sin comprimir)
+| Recurso | Después de Fase 1 | Después de Fase 2 | Reducción aprox. |
+| --- | ---: | ---: | ---: |
+| JavaScript inicial | 412.92 kB | 375.90 kB | 9.0% |
+| CSS inicial | 271.38 kB | 229.28 kB | 15.5% |
+| JavaScript inicial comprimido gzip | 119.64 kB | 109.98 kB | 8.1% |
+| CSS inicial comprimido gzip | 48.44 kB | 41.85 kB | 13.6% |
+
+Esto reduce transferencia/procesamiento inicial, **pero no demuestra FPS ni tiempo real de carga en dispositivos**. Además, desde el primer corte de la auditoría online (538.52 kB JS / 347.22 kB CSS) la reducción acumulada es aproximadamente 30% JS y 34% CSS.
+
+### Mejoras por panel
+- **Cocina:** `kitchenVisibleBatch` limita las tarjetas a 20 por etapa; botón accesible para mostrar 20 más; el total real y los contadores de retrasos permanecen completos; se reinicia el lote al cambiar negocio o búsqueda. Se añadió una prueba con 81 órdenes.
+- **Restaurante/Caja:** lista de pendientes ya paginada; las órdenes programadas vencidas aparecen en lotes de 10 y las futuras en lotes de 5 con opciones de cargar más. La búsqueda también filtra programadas y pedidos con fecha inválida; no quedan futuras inaccesibles tras el quinto registro. Los botones de comanda incluyen el número de pedido en su nombre accesible.
+- **Menú del restaurante:** tarjetas por bloques de 24 y reinicio de paginación al filtrar; error de formulario anunciado con `role="alert"`, campos inválidos correctamente marcados, foco dirigido al primer campo incorrecto, fotografías con decodificación asíncrona, controles táctiles de tamaño mínimo.
+- **Repartidor:** ofertas visibles en lotes de 15 e historial en lotes de 20, con reinicio de límites cuando cambia identidad/búsqueda. Mapa, llegada GPS y diálogo de aceptación se cargan bajo demanda con `React.lazy` y estado accesible de carga. Se amplían controles táctiles y foco de teclado.
+- **Cliente:** invitaciones/instalación, beneficios, promociones, contacto comercial y login interno del repartidor se cargan al abrir esas secciones; se eliminaron imports no utilizados que podían incrementar el paquete inicial. Se añadió enlace visible con foco **«Saltar al contenido principal»**, ID del `main`, indicación `aria-current` en navegación móvil y foco visible consistente.
+- **Checkout:** el control deslizante anuncia estado/progreso, importe total e instrucciones de teclado mediante `aria-describedby`/`aria-valuetext`; si hay error se anuncia sin afirmar que el pedido fue confirmado.
+
+### Pruebas añadidas
+- Paginación de 81 pedidos por etapa, límites y recálculo por filtros.
+- Búsqueda y carga por lotes de programados futuros/vencidos en Caja.
+- Paginación del menú y foco en campos inválidos.
+- Carga bajo demanda del mapa/GPS/modal en Repartidor, paginación de ofertas/historial.
+- Estado del deslizador para lectores de pantalla, acceso por teclado, botón de comanda distinguible.
+- Rutas diferidas de Cliente con pantalla de carga accesible, navegación móvil y enlace para saltar cabecera.
+
+### Lista de aceptación manual para Work — Fase 3
+1. Abrir en iPhone 6S, Android y PC con caché vacía. Registrar tiempo de primer render, interacción de botones, consumo de RAM y recarga.
+2. Caja: crear más de 40 pendientes, 15 programados vencidos y 15 futuros. Buscar por número/nombre/producto, cargar más, activar, imprimir y verificar que no se pierdan filas ni se mezclen negocios.
+3. Cocina: probar más de 80 órdenes distribuidas en las tres columnas, filtrar, cargar más, pasar Aceptado → Preparando → Listo y comprobar alertas y comandas 58/80 mm.
+4. Menú: cargar 100 productos, filtrar categoría/agotados, agregar/editar/eliminar, cargar una fotografía, comprobar foco/errores con teclado físico y lector de pantalla.
+5. Repartidor: más de 30 ofertas, más de 40 históricas, acceso a mapa/GPS y aceptación, PIN y modo sin conexión. Confirmar que solo dos entregas activas están permitidas.
+6. Cliente: acceso directo a invitaciones, instalación, promociones, checkout inmediato/programado, navegación con Tab, Enter, flechas y móvil. Probar modo oscuro, texto grande, contraste, preferencia de menos movimiento, teclado en pantalla y rotación.
+7. Cargar paneles diferidos sin red o con conexión muy lenta; asegurar que el usuario vea estado de carga y no una página en blanco. Repetir con actualización de PWA y una versión vieja cacheada.
+
+**Nota importante:** el resultado es preparación de frontend y pruebas automatizadas; **no equivale a certificación de operación real ni sustituye backend seguro, transacciones, pagos y sincronización multi-dispositivo.** Fase 3 debe auditar la integración y preparar entrega para Work; no fusionar/publicar este PR sin autorización.

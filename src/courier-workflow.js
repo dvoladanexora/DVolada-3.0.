@@ -32,6 +32,18 @@ export function courierQueues(orders,riderId){
  const byOldest=(a,b)=>(Date.parse(a.courierAssignedAt||a.createdAt||a.date||'')||0)-(Date.parse(b.courierAssignedAt||b.createdAt||b.date||'')||0);
  return {offers:offers.sort(byOldest),active:active.sort(byOldest),history:history.sort(byNewest),slotsRemaining:Math.max(0,MAX_ACTIVE_DELIVERIES-active.length)};
 }
+/** Resumen operativo, nunca inventa tiempos ni distancias. */
+export function courierNextTask(orders,riderId){
+ const priority={'En ubicación':0,'En camino':1,'Recogido':2,'Listo':3,'Preparando':4,'Aceptado':5,'Cancelación solicitada':6};
+ const labels={'En ubicación':'Solicitar PIN y finalizar entrega','En camino':'Confirmar llegada al cliente','Recogido':'Iniciar recorrido al cliente',
+ 'Listo':'Recoger en el restaurante','Preparando':'Esperar preparación en cocina',
+ 'Aceptado':'Esperar que el restaurante marque Listo','Cancelación solicitada':'Esperar respuesta del restaurante'};
+ const active=courierQueues(orders,riderId).active;
+ if(!active.length)return null;
+ const order=[...active].sort((a,b)=>(priority[a.status]??99)-(priority[b.status]??99))[0];
+ return {orderId:order.id,orderNo:order.orderNo||order.id,status:order.status,
+  restaurant:order.placeName||'Restaurante',next:labels[order.status]||'Revisar pedido'};
+}
 export const COURIER_NEXT=Object.freeze({
  pickup:{from:'Listo',to:'Recogido'},
  route:{from:'Recogido',to:'En camino'},

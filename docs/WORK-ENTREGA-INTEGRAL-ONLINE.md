@@ -148,3 +148,11 @@ Estas barreras protegen la demostración dentro de una pestaña. **No resuelven 
 
 ### Pruebas nuevas de conflictos
 `tests/online-integration.test.js` incluye ocho casos adicionales: cancelación competida, órdenes terminales, activación programada, dos cajas, etapas de cocina, aislamiento de negocio, rechazo con motivo y aviso de conflicto en pantalla.
+
+
+## Auditoría adicional · Disponibilidad y aislamiento de restaurantes (19/11/2026)
+- El botón **Abierto / Pausado / Cerrado** del Restaurante Online ahora guarda el estado dentro del restaurante seleccionado en `dv_places` del mismo navegador; no es solo una etiqueta.
+- En la demo local el catálogo y la validación de checkout impiden nuevas órdenes cuando el negocio se encuentra pausado o cerrado. Si tiene horarios configurados, los pedidos inmediatos fuera de horario se rechazan; pedidos programados solo pasan si están dentro de la agenda configurada y el negocio no está pausado ni cerrado.
+- Otros negocios permanecen independientes. La capacidad de cocina, sonido, preferencias y controles de espera se almacenan por ID de restaurante, no en una sola configuración compartida. La preferencia personal de tema/sidebar sigue siendo del navegador.
+- Cambiar el restaurante de demostración reinicia el estado visual de su panel, evitando arrastrar parámetros de otra cuenta local.
+- **Importante:** estos cambios NO sincronizan dispositivos distintos, NO autentican usuarios y NO convierten el indicador de red en servidor conectado. Work debe replicar estas verificaciones en el backend y ejecutarlas de nuevo con cliente, caja y cocina en diferentes equipos.

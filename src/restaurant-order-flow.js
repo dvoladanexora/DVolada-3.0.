@@ -43,5 +43,5 @@ export function decisionForOrder(order,action,reason=''){
  if((action==='reject'||action==='deny-cancel')&&(message.length<5||message.length>220))throw Error('Indicá un motivo de 5 a 220 caracteres');
  if(action==='reject')return {status:'Rechazado',metadata:{rejectionReason:message}};
  if(action==='approve-cancel')return {status:'Cancelado',metadata:{}};
- return {status:order.statusBeforeCancellation==='Preparando'?'Preparando':'Preparando',metadata:{cancelResponseReason:message}};
+ return {status:'Preparando',metadata:{cancelResponseReason:message}};
 }

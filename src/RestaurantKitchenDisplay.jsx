@@ -1,6 +1,6 @@
 import React from 'react';
 import {AlertTriangle,ArrowRight,ChefHat,CheckCheck,CheckCircle2,Clock3,Monitor,Printer,ShoppingBag,UtensilsCrossed} from 'lucide-react';
-import {elapsedMinutes,kitchenLineExtras,kitchenQueues} from './kitchen-operations.js';
+import {elapsedMinutes,kitchenLineExtras,kitchenQueues,matchesRestaurantOrder} from './kitchen-operations.js';
 import './restaurant-kitchen-display.css';
 
 const stages=[
@@ -28,7 +28,7 @@ function KitchenOrderCard({order,stage,now,alertMinutes,connected,onChange,onPri
 }
 
 export default function RestaurantKitchenDisplay({
- orders=[],restaurantId,restaurantName='Restaurante',now=Date.now(),alertMinutes=20,connected=true,
+ orders=[],restaurantId,restaurantName='Restaurante',now=Date.now(),alertMinutes=20,connected=true,query='',
  onChange=()=>{},onPrint=()=>{},onDetail=()=>{},onGoCashier=()=>{},
 }){
  const q=kitchenQueues(orders,restaurantId,now);
@@ -45,12 +45,13 @@ export default function RestaurantKitchenDisplay({
    {delayed>0&&<span className="dv-kitchen-warning"><AlertTriangle size={16}/> {delayed} con demora</span>}
    {q.pending.length>0&&<button type="button" className="dv-kitchen-pending" onClick={onGoCashier}><ShoppingBag size={16}/> {q.pending.length} esperando en Caja <ArrowRight size={16}/></button>}
   </div>
+  {query.trim()&&<p className="dv-kitchen-filter-notice" role="status">Mostrando coincidencias para «{query.trim()}». Los contadores de arriba muestran el total de pedidos.</p>}
   <div className="dv-kitchen-lanes">
    {stages.map(stage=>{
-    const Icon=stage.Icon,items=q[stage.key];
+    const Icon=stage.Icon,items=q[stage.key].filter(order=>matchesRestaurantOrder(order,query));
     return <section key={stage.key} className={'dv-kitchen-lane dv-kitchen-lane-'+stage.key} aria-label={stage.title}>
      <header><div className="dv-kitchen-lane-icon"><Icon size={21}/></div><div><h3>{stage.title}</h3><span>{stage.subtitle}</span></div><strong className="dv-kitchen-count">{items.length}</strong></header>
-     <div className="dv-kitchen-lane-orders">{items.length?items.map(o=><KitchenOrderCard key={o.id} order={o} stage={stage} now={now} alertMinutes={alertMinutes} connected={connected} onChange={onChange} onPrint={onPrint} onDetail={onDetail}/>):<div className="dv-kitchen-empty"><CheckCircle2 size={31}/><p>{stage.key==='accepted'?'No hay pedidos esperando comenzar.':stage.key==='preparing'?'No hay platos en preparación.':'No hay órdenes listas por ahora.'}</p></div>}</div>
+     <div className="dv-kitchen-lane-orders">{items.length?items.map(o=><KitchenOrderCard key={o.id} order={o} stage={stage} now={now} alertMinutes={alertMinutes} connected={connected} onChange={onChange} onPrint={onPrint} onDetail={onDetail}/>):<div className="dv-kitchen-empty"><CheckCircle2 size={31}/><p>{query.trim()?'Sin coincidencias en esta etapa.':stage.key==='accepted'?'No hay pedidos esperando comenzar.':stage.key==='preparing'?'No hay platos en preparación.':'No hay órdenes listas por ahora.'}</p></div>}</div>
     </section>;
    })}
   </div>

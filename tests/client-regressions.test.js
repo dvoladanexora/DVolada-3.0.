@@ -1,3 +1,4 @@
+import {validateSponsorInquiry,sponsorEmailLink,sponsorWhatsappLink,formatSponsorInquiry} from '../src/sponsor-inquiry.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -666,4 +667,35 @@ test('Carrito: opening the drawer locks background scrolling like the other over
  const lock=app.slice(app.indexOf("const isOpen=Boolean(foodChoice"),app.indexOf("const activeFlashPromos")>0?app.indexOf("const activeFlashPromos"):app.indexOf("const notify="));
  assert.ok(app.includes("exitPrompt||cartDrawer"));
  assert.ok(app.includes("exitPrompt,cartDrawer]"));
+});
+
+test('Publicidad: feed muestra dos espacios y abre el formulario sin ir a afiliación',()=>{
+ assert.equal((app.match(/<HomeSponsorSlot variant=/g)||[]).length,2);
+ assert.equal((app.match(/onJoin=\{\(\)=>setSponsorContactOpen\(true\)\}/g)||[]).length,2);
+ assert.ok(app.includes('<SponsorInquiryModal onClose={()=>setSponsorContactOpen(false)}/>'));
+});
+test('Publicidad: carrusel y formulario tienen controles de accesibilidad',()=>{
+ const src=readFileSync(new URL('../src/HomeSponsorSlot.jsx',import.meta.url),'utf8');
+ const modal=readFileSync(new URL('../src/SponsorInquiryModal.jsx',import.meta.url),'utf8');
+ assert.ok(src.includes('5000'));
+ assert.ok(src.includes("visibilitychange"));
+ assert.ok(src.includes('prefers-reduced-motion'));
+ assert.ok(src.includes('Pausar rotación de anuncios'));
+ assert.ok(src.includes('onTouchEnd'));
+ assert.ok(modal.includes('role="dialog" aria-modal="true"'));
+ assert.ok(modal.includes('No se cobra ni reserva un espacio aquí'));
+});
+
+test('Publicidad: valida contacto y construye enlaces seguros sin envío ficticio',()=>{
+ const lead={name:'María',business:'Mi negocio',phone:'9723-5093',city:'San Marcos',space:'Spot compacto',details:'Me interesa',consent:true};
+ assert.deepEqual(validateSponsorInquiry(lead),{name:true,business:true,phone:true,consent:true});
+ assert.equal(validateSponsorInquiry({...lead,phone:'12'}).phone,false);
+ assert.equal(validateSponsorInquiry({...lead,consent:false}).consent,false);
+ const message=formatSponsorInquiry({...lead,name:'María\r\nBcc: fake@example.com'});
+ assert.ok(!message.includes('\r'));
+ assert.ok(message.includes('Solicitud de información'));
+ assert.ok(sponsorEmailLink(lead,'dvoladanexora@gmail.com').startsWith('mailto:dvoladanexora@gmail.com?subject='));
+ assert.equal(sponsorEmailLink(lead,'invalid'),null);
+ assert.equal(sponsorWhatsappLink(lead,'abc'),null);
+ assert.ok(sponsorWhatsappLink(lead,'+504 9999-9999').startsWith('https://wa.me/50499999999?text='));
 });

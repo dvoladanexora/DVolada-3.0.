@@ -50,7 +50,7 @@ export default function RestaurantBusinessSettings({restaurant,onSave=()=>false}
      <label>URL de fotografía (opcional)<input value={String(draft.image).startsWith('data:')?'Foto seleccionada localmente':draft.image} disabled={String(draft.image).startsWith('data:')} onChange={e=>edit('image',e.target.value)} placeholder="https://misitio.com/restaurante.jpg"/></label>
     </div>
    </div>
-   <div className="dv-business-hours"><div className="dv-business-hours-head"><div><span className="dv-business-eyebrow"><Clock3 size={16}/> HORARIOS</span><h3>¿Qué días atienden?</h3><p>Activá únicamente los días y horas reales. Los turnos que cruzan medianoche se configurarán con el servidor.</p></div></div>
+   <div className="dv-business-hours"><div className="dv-business-hours-head"><div><span className="dv-business-eyebrow"><Clock3 size={16}/> HORARIOS</span><h3>¿Qué días atienden?</h3><p>Activá únicamente los días y horas reales. Si el cierre es anterior a la apertura, se considera el día siguiente (por ejemplo, 18:00–01:00). En la prueba se usa la hora local del dispositivo.</p></div></div>
     <div className="dv-business-days">{WEEK_DAYS.map(({id,label})=>{
      const day=draft.hours[id];
      return <div className={'dv-business-day '+(day?.enabled?'active':'')} key={id}>

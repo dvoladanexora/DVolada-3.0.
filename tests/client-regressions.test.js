@@ -278,3 +278,16 @@ test('Dvolada Express: mobile layout, dark mode and focus styling',()=>{
  assert.match(groupStyles,/\[data-theme="dark"\] \.dv32 \.ox-express-page \.ox-panel/);
  assert.match(groupStyles,/\.dv32 \.ox-express-page \.ox-btn:focus-visible/);
 });
+
+test('Más opciones: accessible modal closes on Escape',()=>{
+ assert.match(app,/className="dv-more-sheet" role="dialog" aria-modal="true"/);
+ assert.match(app,/onKeyDown=\{e=>\{if\(e\.key==='Escape'\)/);
+ assert.match(app,/aria-label="Cerrar más opciones"/);
+});
+test('Más opciones: theme and motion controls remain explicit',()=>{
+ assert.match(app,/aria-pressed=\{theme==='light'\}/);
+ assert.match(app,/aria-pressed=\{theme==='dark'\}/);
+ assert.match(app,/aria-pressed=\{theme==='system'\}/);
+ assert.match(app,/checked=\{reduceAnimations\}/);
+ assert.match(app,/aria-label="Buscar actualizaciones y recargar Dvolada"/);
+});

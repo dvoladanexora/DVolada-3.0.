@@ -81,7 +81,7 @@ test('editor Cloud incluye CRUD, fotos, filtros, alertas y notas sobre modo loca
  assert.ok(panel.includes("screen==='menu'&&<RestaurantMenuEditor"));
  assert.ok(wrapper.includes('onCatalogChange={onCatalogChange}'));
  assert.ok(main.includes('onCatalogChange={saveRestaurantMenu}'));
- assert.ok(main.includes("localStorage.setItem('dv_places',content)"));
+ assert.ok(main.includes('mutateDemoPlaces(localStorage,places,latest=>'));
  assert.ok(main.includes('content.length>3200000'));
 });
 

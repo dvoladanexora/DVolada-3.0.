@@ -34,7 +34,7 @@ export function validateMenuDraft(draft,existing=[],editingId=null){
  const items=Array.isArray(existing)?existing:[];
  if(name.length<3||name.length>80)errors.name='Escribí un nombre entre 3 y 80 caracteres.';
  else if(items.some(i=>String(i.id)!==String(editingId)&&String(i.name||'').trim().toLocaleLowerCase('es')===name.toLocaleLowerCase('es')))errors.name='Ya existe un producto con ese nombre.';
- if(!priceRaw||!Number.isFinite(price)||price<=0||price>10000||Math.round(price*100)!==price*100)errors.price='Ingresá un precio válido entre L 0.01 y L 10,000 (máximo 2 decimales).';
+ if(!priceRaw||!Number.isFinite(price)||price<=0||price>10000||Math.abs(Math.round(price*100)-price*100)>1e-6)errors.price='Ingresá un precio válido entre L 0.01 y L 10,000 (máximo 2 decimales).';
  if(!MENU_CATEGORIES.includes(category))errors.category='Elegí una categoría del menú.';
  if(!Number.isInteger(prep)||prep<1||prep>180)errors.prepTime='Tiempo estimado: 1 a 180 minutos.';
  if(String(draft.description||'').length>220)errors.description='Descripción máxima: 220 caracteres.';

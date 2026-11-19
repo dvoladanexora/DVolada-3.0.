@@ -316,3 +316,8 @@ test('Auditoría cliente: checkout requires a useful delivery address',()=>{
  assert.match(app,/const catalogProblem=checkCartCatalog\(\)/);
  assert.match(app,/if\(isOffline\)\{notify\('Sin conexión: el pedido no puede confirmarse/);
 });
+
+test('Auditoría checkout: scheduled dates must be valid before confirming',()=>{
+ assert.match(app,/!Number\.isFinite\(new Date\(scheduleAt\)\.getTime\(\)\)/);
+ assert.match(app,/address\.trim\(\)\.length<8/);
+});

@@ -197,7 +197,7 @@ Esta tanda mejora la **preparación del frontend** de Cliente y Restaurante/Caja
 
 ### Evidencia y restricciones
 - **Referencia anterior confirmada:** 120/120 tests + compilación en el commit anterior a esta tanda (ejecución #44523400502).
-- **Después de esta tanda:** se añadieron 3 tests a `tests/online-integration.test.js`. El resultado agregado debe comprobarse en GitHub Actions; no presentar todavía las nuevas pruebas como aprobadas sin ver el resultado.
+- **Después de esta tanda (VERIFICADO):** 123/123 tests de nueve suites, 0 fallos, 0 omitidos y compilación Vite exitosa en GitHub Actions [run #44577129733](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44577129733), 19/11/2026. Se añadieron 3 pruebas a `tests/online-integration.test.js`.
 - Las verificaciones de CI en PR apilados pueden depender de la configuración de la rama base; el evento `push` de la rama integral se añadió para proporcionar validación independiente.
 - **Work debe repetir**: dos restaurantes con el mismo SKU; carrito multinegocio; cuota local llena durante checkout; horarios de pedidos programados; extras eliminados al repetir; filtros de Caja en tablet y móvil; orden antigua aceptada desde otra Caja; desconexión y restablecimiento.
 - **Bloqueos no resueltos por esta tanda:** cuentas, permisos, precios y PIN en servidor, persistencia transaccional, sincronización multidispositivo, fotos reales, pagos, chat y notificaciones. No fusionar en `main` ni desplegar Cloudflare antes de aprobación expresa.

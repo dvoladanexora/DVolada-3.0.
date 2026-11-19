@@ -36,5 +36,7 @@ jobs:
         run: npm run test:business
       - name: Pruebas de flujo, cancelaciones, CSV y relevos
         run: npm run test:hardening
+      - name: Pruebas de repartidores, asignaciones, PIN y GPS
+        run: npm run test:courier
       - name: Compilar aplicación
         run: npm run build

@@ -227,3 +227,17 @@ test('Dvolada Club: responsive stats and dark mode styles are present',()=>{
  assert.match(clubStyles,/\[data-theme="dark"\] \.dv32 \.gx-club \.gx-stats article/);
  assert.match(clubStyles,/\.dv32 \.gx-club button:focus-visible/);
 });
+
+const groupSource=readFileSync(new URL('../src/OperationsExtras.jsx',import.meta.url),'utf8');
+test('Pedidos grupales: validates names and notes and keeps requests local',()=>{
+ assert.match(groupSource,/name\.length<3\|\|name\.length>80/);
+ assert.match(groupSource,/notes\.length>300/);
+ assert.match(groupSource,/id:'GR-'\+id\(\)/);
+ assert.match(groupSource,/Las personas todavía no pueden agregar productos desde otros teléfonos/);
+});
+test('Pedidos grupales: copy failures, empty state and removal are handled',()=>{
+ assert.match(groupSource,/navigator\.clipboard\?\.writeText/);
+ assert.match(groupSource,/No se pudo copiar el código/);
+ assert.match(groupSource,/Aún no creaste grupos en este dispositivo/);
+ assert.match(groupSource,/¿Eliminar este grupo de demostración\?/);
+});

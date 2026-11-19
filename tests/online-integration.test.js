@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
-import {offeredExtrasFor,validateCartCatalog,splitRestaurantCart,cartCheckoutTotal} from '../src/customer-order-rules.js';
+import {offeredExtrasFor,validateCartCatalog,splitRestaurantCart,cartCheckoutTotal,sameCartLine,changeCartQuantity,changeCartInstruction} from '../src/customer-order-rules.js';
 import {canMoveRestaurantOrder,kitchenQueues,scheduledOrderState} from '../src/kitchen-operations.js';
 import {applyOrderStatus,decisionForOrder} from '../src/restaurant-order-flow.js';
 import {cancelDemoOrder,changeDemoRestaurantOrder} from '../src/order-demo-operations.js';
@@ -383,4 +383,47 @@ test('Horarios incompletos o inválidos no se interpretan como restaurante abier
   assert.equal(withinBusinessHours({...a,hours},time),false,JSON.stringify(hours));
  }
  assert.equal(restaurantOrderBlockReason({...a,hours:null},{at:time}),null);
+});
+
+
+test('Mismo ID de producto en dos restaurantes no comparte cantidad ni instrucciones',()=>{
+ const lines=[
+  {id:'sku-1',placeId:'negocio-a',name:'Baleada',qty:2,price:25,instructions:''},
+  {id:'sku-1',placeId:'negocio-b',name:'Pizza',qty:4,price:99,instructions:''},
+ ];
+ assert.equal(sameCartLine(lines[0],'sku-1','negocio-a'),true);
+ assert.equal(sameCartLine(lines[1],'sku-1','negocio-a'),false);
+ const changed=changeCartQuantity(lines,'sku-1','negocio-a',-1);
+ assert.deepEqual(changed.map(i=>i.qty),[1,4]);
+ assert.strictEqual(changed[1],lines[1]);
+ const edited=changeCartInstruction(changed,'sku-1','negocio-b','Sin cebolla');
+ assert.equal(edited[0].instructions,'');
+ assert.equal(edited[1].instructions,'Sin cebolla');
+ const removed=changeCartQuantity(edited,'sku-1','negocio-a',-1);
+ assert.deepEqual(removed.map(i=>i.placeId),['negocio-b']);
+ assert.equal(changeCartQuantity(edited,'sku-1','negocio-b',200)[1].qty,99);
+ assert.equal(changeCartInstruction(edited,'sku-1','negocio-b','x'.repeat(250))[1].instructions.length,200);
+});
+
+test('Checkout preserva carrito si falla el guardado local; valida horario con regla compartida',()=>{
+ const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ const start=app.indexOf('function placeOrder(){');
+ const end=app.indexOf('function sendMandado(){',start);
+ const checkout=app.slice(start,end);
+ assert.ok(checkout.includes('withinBusinessHours(p,d)===false'));
+ assert.ok(checkout.includes('courierOrdersRef.current=savedOrders'));
+ assert.ok(checkout.indexOf("localStorage.setItem('dv_orders',serialized)")>=0);
+ assert.ok(checkout.indexOf("localStorage.setItem('dv_orders',serialized)")<checkout.indexOf('setCart([])'));
+ assert.ok(checkout.includes('tu carrito sigue intacto'));
+ const persistence=app.slice(app.indexOf(' const previous=persisted.current,next='),app.indexOf(' persisted.current=next;'));
+ assert.ok(persistence.includes('next[key]=serialized}'));
+ assert.ok(!persistence.includes('const serialized=JSON.stringify(value);next[key]=serialized'));
+});
+
+test('Caja permite filtrar entrega/retiro y ordenar las solicitudes sin tocar estados',()=>{
+ const cash=readFileSync(new URL('../src/RestaurantCashierConsole.jsx',import.meta.url),'utf8');
+ assert.ok(cash.includes("pendingView==='delivery'"));
+ assert.ok(cash.includes("value={pendingSort}"));
+ assert.ok(cash.includes('aria-pressed={pendingView===id}'));
+ assert.ok(cash.includes('Los pedidos nuevos de prueba aparecerán'));
 });

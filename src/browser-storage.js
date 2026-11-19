@@ -44,6 +44,16 @@ export function validStoredOrders(rows){
   return true;
  });
 }
+/** Preserva el lote original dañado en localStorage hasta que alguien lo repare.
+ * Evita reemplazarlo silenciosamente por datos vacíos al abrir la demo.
+ */
+export function corruptDemoSnapshot(key,raw){
+ if(raw===null||typeof raw!=='string'||!['dv_orders','dv_places'].includes(key))return false;
+ try{
+  const rows=JSON.parse(raw);
+  return key==='dv_orders'?!validStoredOrders(rows):!validStoredRestaurants(rows);
+ }catch{return true}
+}
 export function safeReadStored(storage,key,fallback){
  try{
   const raw=storage?.getItem?.(key);

@@ -1393,3 +1393,30 @@ body:has(.modal-backdrop) .mobile-nav.dv-compact-nav{visibility:hidden!important
  .dv32 .dv-favorites-page .page-heading h1{flex-wrap:wrap}
 }
 @media(prefers-reduced-motion:reduce){.dv32 .dv-favorite-product-card button{transition:none!important}}
+
+/* Mi cuenta, revisión 2/3: touch, responsive, dark mode, keyboard */
+.dv32 .dv-account-modern,.dv32 .dv-account-modern .dv-profile-card,.dv32 .dv-account-modern .dv-address-manager{min-width:0;max-width:100%;box-sizing:border-box}
+.dv32 .dv-account-modern .dv-profile-card{gap:16px;padding:clamp(16px,3vw,26px)!important;border-radius:22px}
+.dv32 .dv-account-modern .dv-profile-photo{width:112px;height:112px;flex-shrink:0;border:2px solid var(--line);box-shadow:0 8px 24px #00000012}
+.dv32 .dv-account-modern .dv-profile-upload{min-height:44px;max-width:100%;cursor:pointer}
+.dv32 .dv-account-modern .dv-profile-field{min-width:0}
+.dv32 .dv-account-modern .dv-profile-field input{min-width:0;max-width:100%;box-sizing:border-box;background:var(--bg);color:var(--ink);border-color:var(--line)}
+.dv32 .dv-account-modern .dv-address-row{min-width:0;max-width:100%;box-sizing:border-box;align-items:flex-start}
+.dv32 .dv-account-modern .dv-address-row>span{flex:1;min-width:0;overflow-wrap:anywhere}
+.dv32 .dv-account-modern .dv-address-row>div{display:flex;flex-wrap:wrap;gap:8px;max-width:100%}
+.dv32 .dv-account-modern .dv-address-row button{min-height:44px;padding:9px 12px;white-space:normal}
+.dv32 .dv-account-modern .dv-batch3-box label{display:flex;align-items:flex-start;gap:8px;line-height:1.5}
+.dv32 .dv-account-modern .dv-batch3-box input[type=checkbox]{flex-shrink:0;margin:3px 0 0}
+.dv32 .dv-account-modern .dv-batch3-box>summary:focus-visible,.dv32 .dv-account-modern button:focus-visible,.dv32 .dv-account-modern input:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.dv32 .dv-account-modern .dv-profile-card>.primary.wide{min-height:48px}
+[data-theme="dark"] .dv32 .dv-account-modern .dv-profile-card,[data-theme="dark"] .dv32 .dv-account-modern .dv-batch3-box{background:var(--surface)!important;color:var(--ink);border-color:var(--line)!important}
+[data-theme="dark"] .dv32 .dv-account-modern .dv-address-row{border-color:var(--line);background:var(--surface)}
+@media(max-width:600px){
+ .dv32 .dv-account-modern .dv-profile-card{padding:18px 14px!important}
+ .dv32 .dv-account-modern .dv-address-row{flex-direction:column;align-items:stretch}
+ .dv32 .dv-account-modern .dv-address-row>div{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .dv32 .dv-account-modern .dv-address-row>div button:last-child{grid-column:span 2}
+ .dv32 .dv-account-modern .dv-profile-photo{width:96px;height:96px}
+}
+@media(max-width:360px){.dv32 .dv-account-modern .dv-address-row>div{grid-template-columns:minmax(0,1fr)}.dv32 .dv-account-modern .dv-address-row>div button:last-child{grid-column:auto}}
+@media(prefers-reduced-motion:reduce){.dv32 .dv-account-modern button,.dv32 .dv-account-modern summary{transition:none!important}}

@@ -20,20 +20,23 @@ export default function CourierMap({restaurant=null,customer=null,orderId=null})
  const element=useRef(null),map=useRef(null),layers=useRef([]),gpsWatch=useRef(null),lastFix=useRef(0);
  const [position,setPosition]=useState(null),[destination,setDestination]=useState('restaurant'),[message,setMessage]=useState('Podés consultar el mapa sin activar tu GPS.'),[ready,setReady]=useState(false),[gpsEnabled,setGpsEnabled]=useState(false),[loadingError,setLoadingError]=useState(false);
  const target=destination==='restaurant'?restaurant:customer;
+ const hasCoords=Boolean(valid(restaurant)||valid(customer));
+ useEffect(()=>{if(!valid(restaurant)&&valid(customer))setDestination('customer')},[restaurant?.lat,restaurant?.lng,customer?.lat,customer?.lng]);
  useEffect(()=>{
-  let cancelled=false;
+  if(!hasCoords){setReady(false);setMessage('No hay coordenadas verificadas: usá las direcciones de la tarjeta de entrega.');return}
+  let cancelled=false;setLoadingError(false);setReady(false);
   loadLeaflet().then(L=>{
    if(cancelled||!element.current)return;
-   const initial=valid(restaurant)?restaurant:valid(customer)?customer:{lat:14.5,lng:-86.8};
-   const m=L.map(element.current,{zoomControl:true}).setView([Number(initial.lat),Number(initial.lng)],valid(restaurant)||valid(customer)?14:7);
+   const initial=valid(restaurant)?restaurant:customer;
+   const m=L.map(element.current,{zoomControl:true}).setView([Number(initial.lat),Number(initial.lng)],14);
    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(m);
    map.current=m;setReady(true);
    requestAnimationFrame(()=>m.invalidateSize());
   }).catch(()=>{if(!cancelled){setLoadingError(true);setMessage('No se pudo cargar el mapa. Usá Google Maps desde los botones de navegación.')}});
   return()=>{cancelled=true;map.current?.remove();map.current=null};
- },[]);
+ },[restaurant?.lat,restaurant?.lng,customer?.lat,customer?.lng]);
  useEffect(()=>{
-  if(!gpsEnabled)return;
+  if(!gpsEnabled||!valid(target))return;
   if(!navigator.geolocation){setMessage('Este dispositivo no dispone de GPS en el navegador.');return}
   const watch=navigator.geolocation.watchPosition(p=>{
    if(Date.now()-lastFix.current<12000)return;
@@ -43,9 +46,9 @@ export default function CourierMap({restaurant=null,customer=null,orderId=null})
   },()=>setMessage('No se pudo obtener la ubicación. Revisá los permisos del navegador.'),{enableHighAccuracy:true,maximumAge:15000,timeout:15000});
   gpsWatch.current=watch;
   return()=>{navigator.geolocation.clearWatch(watch);gpsWatch.current=null};
- },[gpsEnabled]);
+ },[gpsEnabled,destination,restaurant?.lat,restaurant?.lng,customer?.lat,customer?.lng]);
  useEffect(()=>{
-  if(!ready||!map.current)return;
+  if(!hasCoords||!ready||!map.current)return;
   const L=window.L,m=map.current;layers.current.forEach(l=>m.removeLayer(l));layers.current=[];
   const point=(p,label,color)=>{
    if(!valid(p))return;
@@ -70,9 +73,9 @@ export default function CourierMap({restaurant=null,customer=null,orderId=null})
  },[ready,gpsEnabled,position?.lat,position?.lng,destination,restaurant?.lat,restaurant?.lng,customer?.lat,customer?.lng]);
  return <section className="dv-courier-map-panel" aria-label="Mapa de la entrega">
   <div className="dv-courier-map-head"><div><strong>Mapa y navegación</strong><small>{orderId?'Orden '+orderId:'Vista de prueba'}</small></div><span>GPS opcional</span></div>
-  <div className="dv-courier-map-controls"><button type="button" className={destination==='restaurant'?'active':''} onClick={()=>setDestination('restaurant')}>Restaurante</button><button type="button" className={destination==='customer'?'active':''} onClick={()=>setDestination('customer')}>Cliente</button></div>
-  {loadingError?<div className="dv-courier-map-unavailable">El mapa no está disponible en este momento. Podés abrir el destino en una aplicación externa cuando haya coordenadas verificadas.</div>:<div ref={element} className="dv-courier-map-canvas" role="region" aria-label="Mapa interactivo del pedido"/>}
-  <button type="button" className="dv-courier-gps-consent" onClick={()=>{setGpsEnabled(p=>!p);setPosition(null)}}>{gpsEnabled?'Detener GPS':'Activar mi GPS para trazar la ruta'}</button>
+  <div className="dv-courier-map-controls"><button type="button" disabled={!valid(restaurant)} className={destination==='restaurant'?'active':''} onClick={()=>setDestination('restaurant')}>Restaurante</button><button type="button" disabled={!valid(customer)} className={destination==='customer'?'active':''} onClick={()=>setDestination('customer')}>Cliente</button></div>
+  {!hasCoords?<div className="dv-courier-map-unavailable">Este pedido no tiene puntos GPS verificados. No mostraremos un mapa genérico que pueda confundirse con el destino. Utilizá la dirección escrita y confirmala antes de salir.</div>:loadingError?<div className="dv-courier-map-unavailable">El mapa no está disponible en este momento. Podés abrir el destino en una aplicación externa cuando haya coordenadas verificadas.</div>:<div ref={element} className="dv-courier-map-canvas" role="region" aria-label="Mapa interactivo del pedido"/>}
+  <button type="button" className="dv-courier-gps-consent" disabled={!valid(target)} onClick={()=>{setGpsEnabled(p=>!p);setPosition(null)}}>{gpsEnabled?'Detener GPS':'Activar mi GPS para trazar la ruta'}</button>
   <p className="dv-courier-map-message" role="status">{message}</p>
   <div className="dv-courier-map-controls">{valid(target)?<a href={mapsUrl(target)} target="_blank" rel="noopener noreferrer">Abrir ruta en Google Maps</a>:<span>No hay coordenadas confiables para navegar desde el mapa.</span>}</div>
   <small className="dv-courier-map-disclaimer">Este mapa es solo de demostración. Al activar GPS, tu posición puede consultarse en el servicio público de rutas OSRM. En producción necesitaremos un proveedor y un aviso de privacidad adecuados.</small>

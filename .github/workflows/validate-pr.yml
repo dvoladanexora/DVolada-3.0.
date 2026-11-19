@@ -26,5 +26,7 @@ jobs:
         run: npm run test:online
       - name: Pruebas de navegación sin conexión
         run: npm run test:offline
+      - name: Pruebas de regresión del cliente
+        run: npm run test:client
       - name: Compilar aplicación
         run: npm run build

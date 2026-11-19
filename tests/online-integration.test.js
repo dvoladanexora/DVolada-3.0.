@@ -6,6 +6,7 @@ import {offeredExtrasFor,validateCartCatalog,splitRestaurantCart,cartCheckoutTot
 import {canMoveRestaurantOrder,kitchenQueues,scheduledOrderState} from '../src/kitchen-operations.js';
 import {applyOrderStatus,decisionForOrder} from '../src/restaurant-order-flow.js';
 import {cancelDemoOrder,changeDemoRestaurantOrder} from '../src/order-demo-operations.js';
+import {safeReadStored} from '../src/browser-storage.js';
 import {courierQueues,applyCourierAction,courierViewOrder,validateCourierAction} from '../src/courier-workflow.js';
 
 const today=new Date('2026-11-19T10:00:00.000Z');
@@ -264,4 +265,27 @@ test('Cliente, Caja y Cocina muestran conflicto en lugar de falso éxito',()=>{
  assert.ok(restaurant.includes('if(!response?.ok)'));
  assert.ok(restaurant.includes('currentOrder.status,area,business?.id'));
  assert.ok(restaurant.includes("decisionOrder.status,'cashier',business?.id"));
+});
+
+test('Almacenamiento con formato corrupto no deja la pantalla cliente en blanco',()=>{
+ const get=value=>({getItem:()=>value});
+ assert.deepEqual(safeReadStored(get('{mal JSON'),'dv_orders',[]),[]);
+ assert.deepEqual(safeReadStored(get('{"admin":true}'),'dv_orders',[]),[]);
+ assert.deepEqual(safeReadStored(get('[null]'),'dv_orders',[]),[]);
+ assert.deepEqual(safeReadStored(get('[{"id":"x"}]'),'dv_orders',[]),[]);
+ assert.deepEqual(safeReadStored(get('[{"id":"x","status":"Pendiente"}]'),'dv_orders',[]),[{id:'x',status:'Pendiente'}]);
+ assert.deepEqual(safeReadStored(get('[{"id":"a","items":null}]'),'dv_places',[a]),[a]);
+ assert.deepEqual(safeReadStored(get('[{"id":"1","items":[]}]'),'dv_places',[]),[{id:'1',items:[]}]);
+ assert.deepEqual(safeReadStored(get('[{"id":"p"}]'),'dv_cart',[]),[{id:'p'}]);
+});
+test('Permisos de almacenamiento denegados y tipos no coincidentes usan valores seguros',()=>{
+ const denied={getItem:()=>{throw Error('SecurityError')}};
+ assert.deepEqual(safeReadStored(denied,'dv_orders',[{id:'seed'}]),[{id:'seed'}]);
+ assert.equal(safeReadStored({getItem:()=>'"incorrecto"'},'dv_theme','dark'),'incorrecto');
+ assert.equal(safeReadStored({getItem:()=>'"incorrecto"'},'dv_sound_enabled',true),true);
+ assert.deepEqual(safeReadStored({getItem:()=> '[]'},'dv_local_profile',{name:'Invitado'}),{name:'Invitado'});
+ assert.deepEqual(safeReadStored({getItem:()=> '{"name":"Cliente"}'},'dv_local_profile',{name:''}),{name:'Cliente'});
+ const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(main.includes("safeReadStored(localStorage,key,fallback)"));
+ assert.ok(main.includes("try{c=localStorage.getItem('dv_invite_code')||''}catch{}"));
 });

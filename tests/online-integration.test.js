@@ -489,3 +489,13 @@ test('Deslizador muestra importe y modo programado sin confirmar al pulsar una f
  assert.ok(slider.includes("if(['ArrowRight','ArrowLeft','Home','End'].includes(e.key))"));
  assert.ok(!slider.includes("['Enter',' ','ArrowRight','End']"),'las flechas no pueden enviar pedidos por sí solas');
 });
+
+test('Caja limita tarjetas iniciales a 20, permite cargar más y reinicia al filtrar',()=>{
+ const cashier=readFileSync(new URL('../src/RestaurantCashierConsole.jsx',import.meta.url),'utf8');
+ assert.ok(cashier.includes("useState(20)"));
+ assert.ok(cashier.includes("useEffect(()=>setShownLimit(20),[restaurantId,query,pendingView,pendingSort])"));
+ assert.ok(cashier.includes("shownPending.slice(0,shownLimit).map(order"));
+ assert.ok(cashier.includes("shownPending.length>shownLimit"));
+ assert.ok(cashier.includes("setShownLimit(limit=>limit+20)"));
+ assert.ok(cashier.includes("onAccept(order)"));
+});

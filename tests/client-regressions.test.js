@@ -33,3 +33,11 @@ test('R23: chat FAB has drag gestures and stored position',()=>{
  assert.match(chat,/dv_chat_fab_position/);
  assert.match(chat,/onPointerMove/);
 });
+
+test('Inicio: search ignores accents and case and explains empty categories',()=>{
+ assert.match(app,/normalizeFoodSearch=value=>/);
+ assert.match(app,/\.normalize\('NFD'\)/);
+ assert.match(app,/const homeFoodQuery=normalizeFoodSearch\(headerSearch\)/);
+ assert.match(app,/normalizeFoodSearch\(v\)\.includes\(homeFoodQuery\)/);
+ assert.match(app,/No hay productos disponibles en esta categoría/);
+});

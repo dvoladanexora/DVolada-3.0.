@@ -8,9 +8,15 @@ export default function RestaurantCashierConsole({orders=[],restaurantId,restaur
  const [pendingView,setPendingView]=useState('all');
  const [pendingSort,setPendingSort]=useState('oldest');
  const [shownLimit,setShownLimit]=useState(20);
+ const [scheduledLimit,setScheduledLimit]=useState(10);
+ const [futureLimit,setFutureLimit]=useState(5);
  useEffect(()=>setShownLimit(20),[restaurantId,query,pendingView,pendingSort]);
+ useEffect(()=>{setScheduledLimit(10);setFutureLimit(5)},[restaurantId,query]);
  const q=kitchenQueues(orders,restaurantId,now);
  const working=q.accepted.length+q.preparing.length;
+ const scheduledDue=q.scheduledDue.filter(order=>matchesRestaurantOrder(order,query));
+ const scheduledFuture=q.scheduledFuture.filter(order=>matchesRestaurantOrder(order,query));
+ const scheduledInvalid=q.scheduledInvalid.filter(order=>matchesRestaurantOrder(order,query));
  const shownPending=q.pending.filter(order=>matchesRestaurantOrder(order,query)&&(pendingView==='all'||(pendingView==='delivery'?order.delivery==='delivery':order.delivery!=='delivery'))).sort((a,b)=>{
   const left=new Date(a.createdAt||a.date||0).getTime(),right=new Date(b.createdAt||b.date||0).getTime();
   const validLeft=Number.isFinite(left)?left:Number.MAX_SAFE_INTEGER,validRight=Number.isFinite(right)?right:Number.MAX_SAFE_INTEGER;
@@ -25,15 +31,17 @@ export default function RestaurantCashierConsole({orders=[],restaurantId,restaur
    <div><span><CheckCheck size={18}/> Listos</span><strong>{q.ready.length}</strong><small>Para retiro o repartidor</small></div>
   </div>
   {atCapacity&&<div className="dv-cash-capacity" role="status"><ChefHat size={18}/><span>La cocina llegó a su capacidad configurada ({capacity} pedidos). Revisá tiempos antes de aceptar más. Esta alerta no bloquea pedidos automáticamente hasta conectar el servidor.</span></div>}
-  {(q.scheduledDue.length>0||q.scheduledFuture.length>0||q.scheduledInvalid.length>0)&&<section className="dv-cash-scheduled" aria-label="Pedidos programados"><header><Clock3 size={19}/><strong>Pedidos programados</strong><span>{q.scheduledDue.length} por activar · {q.scheduledFuture.length} futuros</span></header>
-   {q.scheduledDue.map(order=><div className="dv-cash-scheduled-row" key={order.id}><div><strong>{number(order)} · Hora de preparar</strong><small>{order.name||'Cliente'} · {order.scheduledFor?new Date(order.scheduledFor).toLocaleString('es-HN'):'Sin hora'}</small></div><button type="button" disabled={!connected} onClick={()=>onActivate(order)}><Check size={16}/> Activar pedido</button></div>)}
-   {q.scheduledFuture.slice(0,5).map(order=><div className="dv-cash-scheduled-row future" key={order.id}><div><strong>{number(order)} · Próximamente</strong><small>{new Date(order.scheduledFor).toLocaleString('es-HN')} · {order.name||'Cliente'}</small></div><span>No disponible todavía</span></div>)}
-   {q.scheduledInvalid.length>0&&<p role="alert">{q.scheduledInvalid.length} pedido(s) sin fecha válida: requieren revisión antes de activarse.</p>}
+  {(scheduledDue.length>0||scheduledFuture.length>0||scheduledInvalid.length>0)&&<section className="dv-cash-scheduled" aria-label="Pedidos programados"><header><Clock3 size={19}/><strong>Pedidos programados</strong><span>{scheduledDue.length} por activar · {scheduledFuture.length} futuros{query.trim()?' · coincidencias':''}</span></header>
+   {scheduledDue.slice(0,scheduledLimit).map(order=><div className="dv-cash-scheduled-row" key={order.id}><div><strong>{number(order)} · Hora de preparar</strong><small>{order.name||'Cliente'} · {order.scheduledFor?new Date(order.scheduledFor).toLocaleString('es-HN'):'Sin hora'}</small></div><button type="button" disabled={!connected} onClick={()=>onActivate(order)}><Check size={16}/> Activar pedido</button></div>)}
+   {scheduledDue.length>scheduledLimit&&<button type="button" className="dv-cash-load-more" onClick={()=>setScheduledLimit(limit=>limit+10)}>Mostrar 10 programados más · {Math.min(scheduledLimit,scheduledDue.length)} de {scheduledDue.length}</button>}
+   {scheduledFuture.slice(0,futureLimit).map(order=><div className="dv-cash-scheduled-row future" key={order.id}><div><strong>{number(order)} · Próximamente</strong><small>{new Date(order.scheduledFor).toLocaleString('es-HN')} · {order.name||'Cliente'}</small></div><span>No disponible todavía</span></div>)}
+   {scheduledFuture.length>futureLimit&&<button type="button" className="dv-cash-load-more" onClick={()=>setFutureLimit(limit=>limit+10)}>Mostrar 10 futuros más · {Math.min(futureLimit,scheduledFuture.length)} de {scheduledFuture.length}</button>}
+   {scheduledInvalid.length>0&&<p role="alert">{scheduledInvalid.length} pedido(s) sin fecha válida: requieren revisión antes de activarse.</p>}
   </section>}
   <div className="dv-cash-panels">
    <section className="dv-cash-pending" aria-labelledby="dv-cash-pending-title"><header><div><span className="dv-cash-eyebrow">BANDEJA DE ENTRADA</span><h3 id="dv-cash-pending-title">Nuevos pedidos <b>{q.pending.length}</b></h3></div><span className="dv-cash-pending-caption">Revisá antes de aceptar</span></header>
     <div className="dv-cash-filters" aria-label="Filtros de nuevos pedidos"><div role="group" aria-label="Tipo de entrega">{[['all','Todos'],['delivery','A domicilio'],['pickup','Retiro en local']].map(([id,label])=><button key={id} type="button" className={pendingView===id?'active':''} aria-pressed={pendingView===id} onClick={()=>setPendingView(id)}>{label}</button>)}</div><label>Ordenar<select aria-label="Orden de pedidos" value={pendingSort} onChange={e=>setPendingSort(e.target.value)}><option value="oldest">Más antiguos primero</option><option value="recent">Más recientes primero</option></select></label></div>
-    <div className="dv-cash-list">
+    <div className="dv-cash-list" aria-label="Pedidos pendientes filtrados">
      {shownPending.length?shownPending.slice(0,shownLimit).map(order=>{
       const elapsed=elapsedMinutes(order,now),items=Array.isArray(order.items)?order.items:[];
       return <article key={order.id} className="dv-cash-order">

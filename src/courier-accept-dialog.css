@@ -1,0 +1,22 @@
+/* Confirmación de aceptación · móvil, iOS y escritorio */
+.dv-rider-accept-backdrop{position:fixed;inset:0;z-index:23000;display:grid;place-items:center;padding:16px;background:rgba(10,16,23,.64);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.dv-rider-accept-dialog{width:min(440px,100%);max-height:calc(100dvh - 32px);overflow-y:auto;box-sizing:border-box;padding:clamp(19px,4vw,29px);border:1px solid var(--line);border-radius:25px;background:var(--surface);color:var(--ink);box-shadow:0 24px 75px #0004}
+.dv-rider-accept-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.dv-rider-accept-symbol{display:grid;place-items:center;width:55px;height:55px;border-radius:18px;background:color-mix(in srgb,var(--accent) 13%,var(--surface));color:var(--accent)}
+.dv-rider-accept-head button{width:42px;height:42px;border:1px solid var(--line);border-radius:50%;display:grid;place-items:center;background:var(--soft);color:var(--ink)}
+.dv-rider-accept-dialog h2{font-size:clamp(22px,4vw,28px);letter-spacing:-.04em;line-height:1.2;margin:10px 0}
+.dv-rider-accept-dialog p{margin:0 0 17px;color:var(--muted);font-size:13px;line-height:1.6}
+.dv-rider-accept-order{display:grid;gap:8px;padding:16px;border:1px solid var(--line);border-radius:15px;background:var(--soft)}
+.dv-rider-accept-order>span{font-size:10px;letter-spacing:.11em;color:var(--accent);font-weight:850;display:flex;align-items:center;gap:7px}
+.dv-rider-accept-order strong{font-size:18px;line-height:1.35}
+.dv-rider-accept-order small{color:var(--muted);font-size:12px}
+.dv-rider-accept-info{display:flex;gap:10px;align-items:flex-start;margin:14px 0;padding:12px 14px;border-radius:12px;border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line));background:color-mix(in srgb,var(--accent) 7%,var(--surface));font-size:12px;line-height:1.5;color:var(--muted)}
+.dv-rider-accept-info svg{color:var(--accent);flex-shrink:0}
+.dv-rider-accept-buttons{display:grid;grid-template-columns:1fr 1.35fr;gap:10px;margin-top:20px}
+.dv-rider-accept-buttons button{min-height:49px;display:flex;justify-content:center;align-items:center;gap:8px;padding:11px;border:1px solid var(--line);border-radius:13px;background:var(--soft);color:var(--ink);font-size:12px;font-weight:850}
+.dv-rider-accept-buttons .dv-rider-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.dv-rider-accept-buttons button:disabled{opacity:.4}
+.dv-rider-accept-dialog button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:450px){.dv-rider-accept-backdrop{align-items:end;padding:0}.dv-rider-accept-dialog{width:100%;max-height:90dvh;border-radius:23px 23px 0 0;padding-bottom:max(22px,env(safe-area-inset-bottom,22px))}}
+@media(max-width:340px){.dv-rider-accept-buttons{grid-template-columns:1fr}}
+@supports not (background:color-mix(in srgb,#fff,#000)){.dv-rider-accept-symbol,.dv-rider-accept-info{background:var(--soft)}}

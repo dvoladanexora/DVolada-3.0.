@@ -59,3 +59,23 @@ export function changeDemoRestaurantOrder(orders,{orderId,restaurantId,expectedS
  const updated=applyOrderStatus(order,toStatus,metadata,at);
  return{ok:true,orders:rows.map(o=>o===order?updated:o),order:updated};
 }
+
+
+/** Guarda el lote antes de anunciar éxito o actualizar los paneles de prueba.
+ * Protege frente a cuota/almacenamiento bloqueado, pero NO resuelve concurrencia
+ * entre pestañas o dispositivos: Work debe usar transacciones e idempotencia API.
+ */
+export function persistDemoOrders(storage,nextOrders){
+ if(!Array.isArray(nextOrders)||nextOrders.length>500
+  ||!nextOrders.every(row=>row&&typeof row==='object'&&!Array.isArray(row)&&row.id!=null&&typeof row.status==='string'))
+  return {ok:false,reason:'Hay demasiados pedidos de prueba o un registro inválido. No se guardaron los cambios.'};
+ try{
+  if(typeof storage?.setItem!=='function')throw Error('Almacenamiento no disponible');
+  const serialized=JSON.stringify(nextOrders);
+  if(serialized.length>3_500_000)throw Error('Capacidad de demostración excedida');
+  storage.setItem('dv_orders',serialized);
+  return {ok:true};
+ }catch{
+  return {ok:false,reason:'No se pudo guardar el pedido de prueba en este dispositivo. Revisá el espacio disponible; los cambios no se aplicaron.'};
+ }
+}

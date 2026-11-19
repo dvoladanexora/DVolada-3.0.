@@ -102,3 +102,6 @@ Para aprobar, probar con A cliente, B caja, C cocina, D repartidor, incluyendo p
 - Si el cliente cancela cuando está Pendiente o Programado, se cancela directamente solo en esta demostración. Si está Aceptado o Preparando, el restaurante debe aprobar o rechazar desde Caja.
 - Al rechazar la solicitud, la orden vuelve al estado original Aceptado/Preparando con sus marcas de tiempo y motivo de revisión.
 - Work deberá fijar política comercial de cancelaciones, programación automática servidor y relojes confiables, no depender de la hora modificable del navegador.
+
+## Selección de restaurante para QA
+El portal ficticio disponible solo en desarrollo local muestra una lista de negocios de prueba. Work puede elegir un restaurante diferente en cada entrada para validar filtros de pedidos, menús, ficha y relevos. La selección NO es autenticación ni un permiso real; la API productiva deberá derivar el restaurante exclusivamente de la sesión autorizada.

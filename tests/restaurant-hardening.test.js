@@ -117,3 +117,14 @@ test('Cancelaciones de pedidos aceptados se revisan en Caja, no se borran direct
  const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
  assert.ok(main.includes("const immediate=['Programado','Pendiente'].includes(cancelOrder.status)"));
 });
+
+test('Preview local permite probar varios restaurantes sin exponer login ficticio en la web pública',()=>{
+ const login=readFileSync(new URL('../src/AffiliateOnline.jsx',import.meta.url),'utf8');
+ const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(login.includes('Restaurante de demostración'));
+ assert.ok(login.includes('places.map(p=><option'));
+ assert.ok(login.includes('onLogin(restaurantId)'));
+ assert.ok(login.includes('import.meta.env.DEV'));
+ assert.ok(main.includes('restaurantId={previewRestaurantId??places[0]?.id}'));
+ assert.ok(main.includes('INTERNAL_PREVIEW_ENABLED&&affiliateSession'));
+});

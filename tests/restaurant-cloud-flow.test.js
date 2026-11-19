@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {kitchenQueues,elapsedMinutes,kitchenTicketHtml,belongsToRestaurant,openKitchenTicket,canMoveRestaurantOrder,matchesRestaurantOrder,scheduledOrderState} from '../src/kitchen-operations.js';
+import {kitchenQueues,elapsedMinutes,kitchenTicketHtml,belongsToRestaurant,openKitchenTicket,canMoveRestaurantOrder,matchesRestaurantOrder,scheduledOrderState,kitchenVisibleBatch} from '../src/kitchen-operations.js';
 
 const order=(id,status,placeId='r1',options={})=>({
  id,orderNo:'#DV-'+id,kind:'food',placeId,status,delivery:'delivery',name:'Cliente',
@@ -131,4 +131,25 @@ test('Pedidos programados: Caja separa los futuros, vencidos y sin fecha válida
  assert.equal(scheduledOrderState(due,now),'due');
  assert.equal(canMoveRestaurantOrder('Programado','Pendiente','cashier'),true);
  assert.equal(canMoveRestaurantOrder('Programado','Aceptado','cashier'),false);
+});
+
+test('Cocina pagina cientos de órdenes sin alterar contadores ni el orden de atención',()=>{
+ const lots=Array.from({length:81},(_,i)=>order('lote-'+String(i).padStart(3,'0'),'Aceptado','r1',{createdAt:new Date(now-i*1000).toISOString()}));
+ const q=kitchenQueues(lots,'r1',now);
+ assert.equal(q.accepted.length,81);
+ const first=kitchenVisibleBatch(q.accepted,20);
+ assert.deepEqual([first.shown,first.total,first.remaining],[20,81,61]);
+ assert.deepEqual(first.visible,q.accepted.slice(0,20));
+ const second=kitchenVisibleBatch(q.accepted,40);
+ assert.deepEqual([second.shown,second.total,second.remaining],[40,81,41]);
+ assert.deepEqual(kitchenVisibleBatch(q.accepted,100).visible,q.accepted);
+ assert.deepEqual(kitchenVisibleBatch(null,20),{visible:[],shown:0,total:0,remaining:0});
+ assert.equal(kitchenVisibleBatch(q.accepted,-5).shown,1);
+ assert.equal(kitchenVisibleBatch(q.accepted,Infinity).shown,20);
+ const ui=readFileSync(new URL('../src/RestaurantKitchenDisplay.jsx',import.meta.url),'utf8');
+ assert.ok(ui.includes('kitchenVisibleBatch(items,visibleLimits[stage.key])'));
+ assert.ok(ui.includes('page.visible.map(o='));
+ assert.ok(ui.includes('page.remaining>0'));
+ assert.ok(ui.includes('setVisibleLimits(old=>({...old,[stage.key]:old[stage.key]+20}))'));
+ assert.ok(ui.includes('useEffect(()=>setVisibleLimits({accepted:20,preparing:20,ready:20}),[restaurantId,query])'));
 });

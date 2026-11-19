@@ -1420,3 +1420,20 @@ body:has(.modal-backdrop) .mobile-nav.dv-compact-nav{visibility:hidden!important
 }
 @media(max-width:360px){.dv32 .dv-account-modern .dv-address-row>div{grid-template-columns:minmax(0,1fr)}.dv32 .dv-account-modern .dv-address-row>div button:last-child{grid-column:auto}}
 @media(prefers-reduced-motion:reduce){.dv32 .dv-account-modern button,.dv32 .dv-account-modern summary{transition:none!important}}
+
+/* Invitar amigos: pass 2 — scoped responsive and accessible presentation */
+.dv32 .dv-invite-page,.dv32 .dv-invite-page .dv-invite-panel{min-width:0;max-width:100%;box-sizing:border-box}
+.dv32 .dv-invite-page .dv-invite-panel{display:grid;grid-template-columns:minmax(0,1fr) minmax(190px,250px);gap:clamp(18px,3vw,32px);padding:clamp(18px,3.5vw,36px);border:1px solid var(--line);border-radius:24px;box-shadow:0 10px 32px #0000000a}
+.dv32 .dv-invite-page .dv-invite-panel>div{min-width:0}
+.dv32 .dv-invite-page .dv-invite-code{font-family:inherit;font-weight:800;font-size:clamp(27px,5vw,52px);letter-spacing:.045em;overflow-wrap:anywhere;line-height:1.15;margin:14px 0;color:#b95130}
+.dv32 .dv-invite-page .dv-invite-actions{display:flex;flex-wrap:wrap;gap:10px}
+.dv32 .dv-invite-page .dv-invite-actions button{min-height:46px;flex:1 1 145px;max-width:100%;white-space:normal}
+.dv32 .dv-invite-page .dv-invite-qr{min-width:0;max-width:100%;text-align:center}
+.dv32 .dv-invite-page .dv-invite-qr img{display:block;width:min(100%,220px);height:auto;aspect-ratio:1;object-fit:contain;box-sizing:border-box;border:1px solid #e8e8e8;border-radius:16px;box-shadow:0 6px 20px #00000012}
+.dv32 .dv-invite-page .dv-invite-qr small{max-width:100%;overflow-wrap:anywhere}
+.dv32 .dv-invite-page button:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+[data-theme="dark"] .dv32 .dv-invite-page .dv-invite-panel{background:var(--surface);color:var(--ink);border-color:var(--line)}
+[data-theme="dark"] .dv32 .dv-invite-page .dv-invite-code{color:#ffa77d}
+@media(max-width:720px){.dv32 .dv-invite-page .dv-invite-panel{grid-template-columns:minmax(0,1fr)}.dv32 .dv-invite-page .dv-invite-qr{margin-top:8px}}
+@media(max-width:420px){.dv32 .dv-invite-page .dv-invite-actions{flex-direction:column}.dv32 .dv-invite-page .dv-invite-actions button{width:100%;flex:0 0 auto}.dv32 .dv-invite-page .dv-invite-panel{padding:18px 14px}}
+@media(prefers-reduced-motion:reduce){.dv32 .dv-invite-page .dv-invite-actions button{transition:none!important}}

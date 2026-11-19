@@ -113,8 +113,10 @@ test('Mandados: submit button follows phone, address, budget and connectivity va
  assert.match(app,/address\.trim\(\)\.length<8/);
  assert.match(app,/!Number\.isFinite\(Number\(budget\)\)/);
 });
-test('Mandados: list items are trimmed and removable by accessible name',()=>{
- assert.match(app,/name:newItem\.trim\(\),qty:newQty\.trim\(\)/);
+test('Mandados: list items are bounded, trimmed and removable by accessible name',()=>{
+ assert.match(app,/\[list,setList\]=useState\(\[\]\)/);
+ assert.match(app,/name:newItem\.trim\(\)\.slice\(0,100\),qty:newQty\.trim\(\)\.slice\(0,60\)/);
+ assert.match(app,/list\.length>=50/);
  assert.match(app,/aria-label=\{'Quitar '\+i\.name\+' de la lista'\}/);
  assert.match(app,/const id='DM-'\+Date\.now\(\)\.toString\(36\)/);
 });
@@ -452,7 +454,8 @@ test('Auditoría invitado: welcome guest access activates restrictions before en
 });
 
 test('Auditoría historial: frequent products are scoped by restaurant and spending counts completed orders only',()=>{
- assert.ok(app.includes("const completedFoodOrders=orders.filter(o=>o.kind==='food'&&(o.status==='Entregado'||(o.delivery==='pickup'&&o.status==='Recogido')))"));
+ assert.ok(app.includes("const dvOrderCompleted=o=>Boolean(o)&&(o.status==='Entregado'||(o.delivery==='pickup'&&o.status==='Recogido'))"));
+ assert.ok(app.includes("const completedFoodOrders=orders.filter(o=>o.kind==='food'&&dvOrderCompleted(o))"));
  assert.ok(app.includes("const key=String(row.placeId)+'|'+String(row.item.productId??row.item.id)"));
  assert.ok(app.includes("frequentItems[String(x.place.id)+'|'+String(x.item.id)]"));
  assert.ok(app.includes("const monthOrders=completedFoodOrders.filter"));
@@ -469,4 +472,96 @@ test('Auditoría arranque: invite code and animation preferences tolerate blocke
  assert.ok(app.includes("[inviteCode]=useState(()=>{try{let c=localStorage.getItem('dv_invite_code')"));
  assert.ok(app.includes("catch{return 'DV'+Math.random().toString(36).slice(2,8).toUpperCase()}"));
  assert.ok(app.includes("try{localStorage.setItem('dv_reduce_animations',JSON.stringify(reduceAnimations))}catch{}"));
+});
+
+
+test('Inicio: customer can switch between food and restaurants with product previews',()=>{
+ assert.ok(app.includes("saved==='restaurants'||saved==='food'?saved:'food'"));
+ assert.ok(app.includes('aria-label="Cómo querés explorar Dvolada"'));
+ assert.ok(app.includes("> Ver comida</button>"));
+ assert.ok(app.includes("> Ver restaurantes</button>"));
+ assert.ok(app.includes("homeCatalogView==='restaurants'&&<section"));
+ assert.ok(app.includes("<RestaurantGrid places={homeRestaurantCatalog}"));
+ assert.ok(app.includes("withMenuPreview"));
+ assert.ok(app.includes("localStorage.setItem('dv_home_catalog_view',JSON.stringify(homeCatalogView))"));
+});
+
+test('Inicio: search results are not duplicated by the continuation feed',()=>{
+ assert.ok(app.includes("homeCatalogView==='food'&&!headerSearch.trim()&&<section"));
+ assert.equal((app.match(/No hay comidas disponibles en esta categoría\.<\/p>/g)||[]).length,0);
+});
+
+test('Carrito: drawer groups restaurants and uses the same multi-order fees as checkout',()=>{
+ const drawer=app.slice(app.indexOf('{cartDrawer&&'),app.indexOf("{page==='orders'",app.indexOf('{cartDrawer&&')));
+ assert.ok(drawer.includes('cartGroups.map(group=>'));
+ assert.ok(drawer.includes("key={String(i.placeId)+'-'+String(i.id)}"));
+ assert.ok(drawer.includes('cartGroups.length*serviceFee'));
+ assert.ok(drawer.includes('cartGroups.length*deliveryFee'));
+ assert.ok(drawer.includes('{money(checkoutTotal)}'));
+ const checkout=app.slice(app.indexOf('className="dv-checkout-breakdown"'),app.indexOf('<SlideConfirm',app.indexOf('className="dv-checkout-breakdown"')));
+ assert.ok(checkout.includes('serviceFee*cartGroups.length'));
+ assert.ok(checkout.includes('deliveryFee*cartGroups.length'));
+});
+
+test('Cliente: desktop has an explicit refresh action and mobile More reuses it',()=>{
+ assert.ok(app.includes('async function refreshDvolada()'));
+ assert.ok(app.includes('className="iconbtn dv-desktop-refresh"'));
+ assert.equal((app.match(/onClick=\{refreshDvolada\}/g)||[]).length,2);
+ assert.ok(customerStyles.includes('.dv32 .dv-desktop-refresh'));
+ assert.ok(customerStyles.includes('@media(max-width:760px){.dv32 .dv-desktop-refresh{display:none!important}}'));
+});
+
+test('Cliente: Escape closes interactive overlays without leaving the current page',()=>{
+ const escape=app.slice(app.indexOf("useEffect(()=>{const onEscape="),app.indexOf('const notify=',app.indexOf("useEffect(()=>{const onEscape=")));
+ for(const action of ['setFoodChoice(null)','setHelpOpen(false)','setSupportOrder(null)','setChatOpen(false)','setFlashOpen(false)','setCartDrawer(false)','setCheckout(false)','setNotificationsOpen(false)','setFilterOpen(false)'])assert.ok(escape.includes(action),action);
+ assert.ok(escape.includes("window.addEventListener('keydown',onEscape)"));
+});
+
+test('Cliente: structured extras and stale products cannot break add-to-cart',()=>{
+ const add=app.slice(app.indexOf('function addItem('),app.indexOf('function editCartInstruction'));
+ assert.ok(add.includes("const unitPrice=Number(item.price)"));
+ assert.ok(add.includes("return false"));
+ assert.ok(add.includes("places.find(p=>String(p.id)===String(originalPlace.id))"));
+ assert.ok(add.includes("if(!addItem(custom,place,qty))return"));
+ assert.ok(app.includes("foodChoice.item.extras.map(x=>typeof x==='string'?x:String(x?.name||x?.label||''))"));
+});
+
+test('Pedidos: pickup collection is completion for history, ratings and metrics',()=>{
+ assert.ok(app.includes("const dvOrderFinished=o=>dvOrderCompleted(o)||o?.status==='Cancelado'"));
+ assert.ok(app.includes("orders.filter(o=>dvOrderFinished(o)&&"));
+ assert.ok(app.includes("orders.filter(o=>!dvOrderFinished(o)&&"));
+ assert.ok(app.includes("if(!orderToRate||!dvOrderCompleted(orderToRate))"));
+ assert.ok(app.includes("{dvOrderCompleted(o)&&!o.rated&&<button"));
+});
+
+test('Cliente: live automatic theme follows OS changes and hourly mode refreshes',()=>{
+ const theme=app.slice(app.indexOf("useEffect(()=>{document.documentElement.style.setProperty('--accent'"),app.indexOf('const orderAlerts='));
+ assert.ok(theme.includes("media.addEventListener('change',onChange)"));
+ assert.ok(theme.includes("media.addListener?.(onChange)"));
+ assert.ok(theme.includes("theme==='hour'?setInterval(apply,60000):null"));
+});
+
+test('Cliente: review, checkout and mandado text fields are bounded',()=>{
+ assert.ok(app.includes('<textarea maxLength={800} value={reviewText}'));
+ assert.ok(app.includes('<textarea maxLength={1000} value={issueDetails}'));
+ assert.ok(app.includes('<textarea maxLength={500} value={notes}'));
+ assert.ok(app.includes('id="dv-grocery-address" maxLength={200}'));
+ assert.ok(app.includes("comment:reviewText.trim().slice(0,800)"));
+});
+
+test('Restaurantes: selected IDs from storage/server are normalized before opening a profile',()=>{
+ assert.ok(app.includes("const activePlace=places.find(p=>String(p.id)===String(selected))"));
+});
+
+test('Inicio: repeat suggestions only use completed orders and frequent sorting is restaurant-safe',()=>{
+ assert.ok(app.includes("completedFoodOrders.length>0&&<div className=\"dv-home-repeat\""));
+ assert.ok(app.includes("completedFoodOrders.slice().reverse().slice(0,3)"));
+ assert.ok(app.includes("frequentItems[String(b.place.id)+'|'+String(b.item.id)]"));
+});
+
+test('Pedido activo: repeat is not offered while an existing food order is still in progress',()=>{
+ const active=app.slice(app.indexOf("orders.filter(o=>!dvOrderFinished(o)&&"),app.indexOf('{supportOrder&&'));
+ assert.ok(!active.includes('>Repetir pedido</button>'));
+ assert.ok(active.includes('Copiar PIN'));
+ assert.ok(active.includes("navigator.clipboard.writeText(String(o.pin)).then"));
 });

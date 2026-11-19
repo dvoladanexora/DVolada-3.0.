@@ -163,3 +163,7 @@
 .dv-rider-next-task>button{display:inline-flex;justify-content:center;align-items:center;gap:8px;border:1px solid var(--rider-line);border-radius:12px;padding:11px 13px;min-height:43px;background:var(--rider-card);color:var(--rider-ink);font-size:12px;font-weight:850;white-space:nowrap}
 @media(max-width:610px){.dv-rider-next-task{padding:13px;gap:10px;flex-wrap:wrap}.dv-rider-next-task-symbol{width:39px;height:39px}.dv-rider-next-task>button{width:100%}}
 @supports not (background:color-mix(in srgb,#fff,#000)){.dv-rider-next-task{background:var(--rider-card)}}
+
+/* Reportes fáciles de llenar en móvil: selección antes de escribir */
+.dv-rider-incident select{width:100%;min-height:47px;border:1px solid var(--rider-line);background:var(--rider-soft);color:var(--rider-ink);font-size:13px;padding:10px 12px;border-radius:12px}
+.dv-rider-incident select:focus-visible{outline:2px solid var(--accent);outline-offset:3px}

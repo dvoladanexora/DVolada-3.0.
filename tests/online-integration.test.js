@@ -6,7 +6,7 @@ import {runInNewContext} from 'node:vm';
 import {offeredExtrasFor,validateCartCatalog,splitRestaurantCart,cartCheckoutTotal,sameCartLine,changeCartQuantity,changeCartInstruction} from '../src/customer-order-rules.js';
 import {canMoveRestaurantOrder,kitchenQueues,scheduledOrderState} from '../src/kitchen-operations.js';
 import {applyOrderStatus,decisionForOrder} from '../src/restaurant-order-flow.js';
-import {cancelDemoOrder,changeDemoRestaurantOrder} from '../src/order-demo-operations.js';
+import {cancelDemoOrder,changeDemoRestaurantOrder,persistDemoOrders} from '../src/order-demo-operations.js';
 import {safeReadStored} from '../src/browser-storage.js';
 import {courierQueues,applyCourierAction,courierViewOrder,validateCourierAction} from '../src/courier-workflow.js';
 
@@ -412,8 +412,8 @@ test('Checkout preserva carrito si falla el guardado local; valida horario con r
  const checkout=app.slice(start,end);
  assert.ok(checkout.includes('withinBusinessHours(p,d)===false'));
  assert.ok(checkout.includes('courierOrdersRef.current=savedOrders'));
- assert.ok(checkout.indexOf("localStorage.setItem('dv_orders',serialized)")>=0);
- assert.ok(checkout.indexOf("localStorage.setItem('dv_orders',serialized)")<checkout.indexOf('setCart([])'));
+ assert.ok(checkout.includes('persistDemoOrders(localStorage,savedOrders)'));
+ assert.ok(checkout.indexOf('persistDemoOrders(localStorage,savedOrders)')<checkout.indexOf('setCart([])'));
  assert.ok(checkout.includes('tu carrito sigue intacto'));
  const persistence=app.slice(app.indexOf(' const previous=persisted.current,next='),app.indexOf(' persisted.current=next;'));
  assert.ok(persistence.includes('next[key]=serialized}'));
@@ -498,4 +498,36 @@ test('Caja limita tarjetas iniciales a 20, permite cargar más y reinicia al fil
  assert.ok(cashier.includes("shownPending.length>shownLimit"));
  assert.ok(cashier.includes("setShownLimit(limit=>limit+20)"));
  assert.ok(cashier.includes("onAccept(order)"));
+});
+
+test('Cambios de pedidos solo indican éxito después de guardar el lote en la demo',()=>{
+ const writes=[],storage={setItem(key,value){writes.push([key,value])}};
+ const rows=[{id:'DV-X-1',status:'Pendiente',kind:'food'}];
+ assert.deepEqual(persistDemoOrders(storage,rows),{ok:true});
+ assert.equal(writes.length,1);
+ assert.equal(writes[0][0],'dv_orders');
+ assert.deepEqual(JSON.parse(writes[0][1]),rows);
+ const blocked={setItem(){throw Error('QuotaExceededError')}};
+ assert.match(persistDemoOrders(blocked,rows).reason,/No se pudo guardar/);
+ assert.equal(persistDemoOrders(blocked,rows).ok,false);
+ assert.equal(persistDemoOrders(null,rows).ok,false);
+ assert.equal(persistDemoOrders(storage,[{id:'x'}]).ok,false);
+ assert.equal(persistDemoOrders(storage,Array.from({length:501},(_,id)=>({id,status:'Pendiente'}))).ok,false);
+ assert.equal(persistDemoOrders(storage,[{id:1,status:'Pendiente',notes:'x'.repeat(3_500_000)}]).ok,false);
+ assert.equal(writes.length,1,'nunca escribe registros inválidos o que superen el límite');
+});
+
+test('Caja, cliente y repartidor persisten antes de notificar un estado completado',()=>{
+ const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ const cashier=app.slice(app.indexOf('function updateOrder('),app.indexOf('useEffect(()=>{courierOrdersRef.current=',app.indexOf('function updateOrder(')));
+ const cancel=app.slice(app.indexOf('function confirmCancelOrder()'),app.indexOf('function saveRestaurantProfile(',app.indexOf('function confirmCancelOrder()')));
+ const courier=app.slice(app.indexOf('function handleCourierAction('),app.indexOf('function repeatOrder(',app.indexOf('function handleCourierAction(')));
+ for(const source of [cashier,cancel,courier]){
+  assert.ok(source.includes('persistDemoOrders(localStorage,'),'debe persistir antes de modificar UI');
+  const write=source.indexOf('persistDemoOrders(localStorage,');
+  assert.ok(write<source.indexOf('courierOrdersRef.current='));
+  assert.ok(source.includes('if(!saved.ok)'),'debe detenerse si el almacenamiento falla');
+ }
+ assert.ok(cashier.includes('if(!saved.ok)return saved;'));
+ assert.ok(courier.includes('if(!saved.ok)return saved;'));
 });

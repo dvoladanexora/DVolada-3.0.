@@ -696,3 +696,21 @@ test('Deslizador describe el avance y las instrucciones para lectores de pantall
  assert.ok(slider.includes("aria-label={label+(amount?' · Total '+amount:'')}"));
  assert.ok(slider.includes('if(confirmed!==true)'));
 });
+
+test('Módulos secundarios del Cliente se importan de forma diferida con indicador accesible',()=>{
+ const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
+ for(const file of ['ShareInstallHub','SponsorInquiryModal','CourierDemoLogin','OperationsExtras','GrowthFeatures']){
+  assert.ok(app.includes("React.lazy(()=>import('./"+file+".jsx'))"),'debe importar bajo demanda: '+file);
+  assert.ok(!app.includes("import "+file+" from './"+file+".jsx'"),'no debe precargar '+file);
+ }
+ assert.ok(app.includes('const featureLoading=<p className="dv-feature-loading" role="status"'));
+ assert.ok(app.includes('<React.Suspense fallback={featureLoading}><ShareInstallHub'));
+ assert.ok(app.includes('<React.Suspense fallback={featureLoading}><SponsorInquiryModal'));
+ assert.ok(app.includes('<React.Suspense fallback={featureLoading}><GrowthFeatures'));
+ assert.ok(app.includes('<React.Suspense fallback={featureLoading}><CourierDemoLogin'));
+ assert.ok(!app.includes("import CourierGpsArrival from './CourierGpsArrival.jsx'"));
+ assert.ok(!app.includes("import CourierMap from './CourierMap.jsx'"));
+ assert.ok(css.includes('.dv-feature-loading'));
+ assert.ok(css.includes('prefers-reduced-motion:reduce'));
+});

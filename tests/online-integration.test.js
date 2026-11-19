@@ -119,7 +119,7 @@ test('Programado solo llega a Caja cuando vence y nunca se ofrece directamente a
 test('Deslizar confirma solo tras validación correcta; permite reintento',()=>{
  const slider=readFileSync(new URL('../src/SlideConfirm.jsx',import.meta.url),'utf8');
  const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
- assert.ok(slider.includes('if(confirmed===false)'));
+ assert.ok(slider.includes('if(confirmed!==true)'));
  assert.ok(slider.includes('locked.current=false;setDone(false);setProgress(0)'));
  assert.ok(slider.includes('await onConfirm?.()'));
  const start=app.indexOf('function placeOrder(){'),end=app.indexOf('function sendMandado(){',start);

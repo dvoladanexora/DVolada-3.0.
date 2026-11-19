@@ -107,3 +107,7 @@ La API Node/PostgreSQL en `server/` es un esqueleto **incompleto y aislado**. Su
 - Se extiende el flujo de CI y futura publicación para ejecutar todas las suites y comprobar la sintaxis del servidor preliminar.
 
 **Esta auditoría no autoriza por sí sola el lanzamiento.** Work debe cerrar y evidenciar cada checkpoint bloqueante; únicamente entonces declarar el producto listo para ofrecer a restaurantes y repartidores reales.
+
+
+### Privacidad de datos en la vista previa
+La sección **Más opciones** tiene «Borrar datos de prueba de este dispositivo», con confirmación explícita. El control borra únicamente claves del dominio con prefijo `dv_` y reinicia la PWA; no borra cuentas o pedidos del servidor. Se ha añadido para que usuarios de QA puedan limpiar datos locales ficticios y preservar su privacidad. Work debe sustituir el borrado por gestión de derechos de datos y sesiones reales cuando exista backend.

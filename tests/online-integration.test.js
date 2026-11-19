@@ -479,3 +479,13 @@ test('La tienda no importa los paneles internos en el paquete inicial',()=>{
  assert.ok(app.includes('<React.Suspense fallback={panelLoading}><CourierOnlineDashboard'));
  assert.ok(app.includes('role="status" aria-live="polite"'));
 });
+
+test('Deslizador muestra importe y modo programado sin confirmar al pulsar una flecha',()=>{
+ const slider=readFileSync(new URL('../src/SlideConfirm.jsx',import.meta.url),'utf8');
+ assert.ok(slider.includes('confirmed!==true'), 'la confirmación debe ser explícitamente verdadera');
+ assert.ok(slider.includes("label.toLowerCase().includes('program')"));
+ assert.ok(slider.includes('{!done&&amount&&<small>{amount}</small>}'));
+ assert.ok(slider.includes("if(['Enter',' '].includes(e.key))"));
+ assert.ok(slider.includes("if(['ArrowRight','ArrowLeft','Home','End'].includes(e.key))"));
+ assert.ok(!slider.includes("['Enter',' ','ArrowRight','End']"),'las flechas no pueden enviar pedidos por sí solas');
+});

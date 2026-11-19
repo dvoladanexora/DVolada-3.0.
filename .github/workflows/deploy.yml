@@ -24,8 +24,10 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-audit --no-fund
-      - name: Probar API Online antes de publicar
-        run: npm run test:online
+      - name: Ejecutar TODAS las pruebas antes de publicar
+        run: npm run test:all
+      - name: Validar servidor preliminar
+        run: npm run check:server
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -32,5 +32,7 @@ jobs:
         run: npm run test:restaurant
       - name: Pruebas del editor de menú y fotos
         run: npm run test:menu
+      - name: Pruebas de ficha y horarios de restaurante
+        run: npm run test:business
       - name: Compilar aplicación
         run: npm run build

@@ -179,3 +179,14 @@ test('Mi cuenta: narrow screens, dark theme and keyboard focus are supported',()
  assert.match(customerStyles,/\[data-theme="dark"\] \.dv32 \.dv-account-modern \.dv-profile-card/);
  assert.match(customerStyles,/\.dv32 \.dv-account-modern button:focus-visible/);
 });
+
+test('Invitar amigos: sharing URL uses URL API and encodes referral code',()=>{
+ assert.match(app,/new URL\(import\.meta\.env\.BASE_URL,window\.location\.origin\)/);
+ assert.match(app,/url\.searchParams\.set\('ref',inviteCode\)/);
+});
+test('Invitar amigos: copy and share give feedback for unsupported browsers and errors',()=>{
+ assert.match(app,/Copiar no está disponible en este navegador/);
+ assert.match(app,/Compartir no está disponible en este navegador/);
+ assert.match(app,/No se pudo copiar el enlace/);
+ assert.match(app,/e\?\.name!=='AbortError'/);
+});

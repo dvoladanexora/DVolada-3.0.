@@ -59,3 +59,13 @@ test('Restaurantes: prices ignore unavailable products',()=>{
  assert.match(app,/const cheapest=\(p\.items\|\|\[\]\)\.filter\(i=>i\.available!==false&&i\.soldOut!==true\)/);
  assert.match(app,/i\.available!==false&&i\.soldOut!==true&&Number\(i\.price\)<=/);
 });
+
+const restaurantCss=readFileSync(new URL('../src/restaurant-profile.css',import.meta.url),'utf8');
+test('Restaurantes: responsive shelves, dark theme and keyboard focus',()=>{
+ assert.match(homeCss,/\.dv-shelf-food:disabled/);
+ assert.match(homeCss,/\.dv-shelf-food:focus-visible/);
+ assert.match(homeCss,/@media\(max-width:420px\)/);
+ assert.match(homeCss,/\[data-theme="dark"\] \.dv-shelf-food/);
+ assert.match(restaurantCss,/\.dv-rp-item-title:focus-visible/);
+ assert.match(restaurantCss,/@media\(max-width:360px\)/);
+});

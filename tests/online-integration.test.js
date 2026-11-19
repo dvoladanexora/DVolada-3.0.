@@ -683,3 +683,16 @@ test('Los cambios de órdenes y catálogos de todos los paneles pasan por guarda
  assert.ok(!app.includes('setOrders(prev=>prev.map'),'sin cambios de órdenes por estado obsoleto');
  assert.ok(!app.includes('setOrders(previous=>[...samples'),'los pedidos demo se guardan antes de mostrar éxito');
 });
+
+test('Deslizador describe el avance y las instrucciones para lectores de pantalla',()=>{
+ const slider=readFileSync(new URL('../src/SlideConfirm.jsx',import.meta.url),'utf8');
+ assert.ok(slider.includes("const hintId=useId()"));
+ assert.ok(slider.includes('aria-describedby={hintId}'));
+ assert.ok(slider.includes('aria-valuetext={done?'));
+ assert.ok(slider.includes('aria-atomic="true"'));
+ assert.ok(slider.includes('id={hintId}'));
+ assert.ok(slider.includes('role={error?"alert":"note"}'));
+ assert.ok(slider.includes('Con teclado usá las flechas'));
+ assert.ok(slider.includes("aria-label={label+(amount?' · Total '+amount:'')}"));
+ assert.ok(slider.includes('if(confirmed!==true)'));
+});

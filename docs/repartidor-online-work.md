@@ -56,3 +56,11 @@ npm run build
 10. Definir la arquitectura de la **cuenta Cloudflare exclusiva para Dvolada** solo cuando el usuario decida crearla. Dvolada Local/Plus están fuera del alcance.
 
 **Criterio de entrega:** no declarar 98–99% de OPERACIÓN REAL hasta que servidor, identidad, sincronización, pruebas de campo y seguridad estén verificados. El porcentaje de frontend y el de producto operativo son métricas diferentes.
+
+
+### Revisión final de UX y resistencia local
+- Los pedidos ficticios ahora reciben números diferentes por tanda y la herramienta limita la creación masiva de pedidos activos.
+- Una orden en preparación conserva la etapa visual de restaurante aceptado.
+- Solo se registran como fallos de PIN los códigos realmente incorrectos, no errores de internet.
+- Los registros locales de incidencias y disponibilidad se validan al leerlos para evitar datos corruptos o valores ajenos.
+- El mapa solo solicita GPS tras pulsar el botón correspondiente. Los teléfonos válidos tienen 8 a 15 dígitos.

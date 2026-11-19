@@ -1349,3 +1349,30 @@ body:has(.modal-backdrop) .mobile-nav.dv-compact-nav{visibility:hidden!important
  .dv32 .dv-customer-filters>*{max-width:100%;min-width:0;box-sizing:border-box}
 }
 @media(prefers-reduced-motion:reduce){.dv32 .dv-track-fill,.dv32 .dv-track-logo,.dv32 .dv-chat-panel{animation:none!important;transition:none!important}}
+
+/* Mandados visual audit 2/3: comfortable forms on mobile, desktop and dark mode */
+.dv-groceries-page,.dv-groceries-layout,.dv-grocery-list-panel,.dv-grocery-details-panel{min-width:0}
+.dv-groceries-layout{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);align-items:start;gap:clamp(14px,2vw,26px)}
+.dv-groceries-layout>.surface{max-width:100%;min-width:0;box-sizing:border-box}
+.dv-groceries-page .grocery-line{min-width:0;gap:12px}
+.dv-groceries-page .grocery-line>div{min-width:0;overflow-wrap:anywhere}
+.dv-groceries-page .grocery-line .iconbtn{flex-shrink:0;min-width:44px;min-height:44px}
+.dv-groceries-page .add-grid{min-width:0;grid-template-columns:repeat(2,minmax(0,1fr))}
+.dv-groceries-page .add-grid>*{min-width:0;max-width:100%;box-sizing:border-box}
+.dv-groceries-page input,.dv-groceries-page textarea,.dv-groceries-page select{font-size:16px;max-width:100%;box-sizing:border-box}
+.dv-groceries-page .dv-grocery-details-panel label{display:block;margin:14px 0 7px;line-height:1.4}
+.dv-groceries-page button:focus-visible,.dv-groceries-page input:focus-visible,.dv-groceries-page select:focus-visible,.dv-groceries-page textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.dv-groceries-page .dv-grocery-details-panel .primary.wide{min-height:48px;white-space:normal}
+.dv-groceries-page .dv-grocery-details-panel .primary.wide:disabled{opacity:.55;cursor:not-allowed}
+[data-theme="dark"] .dv-groceries-page .surface{background:var(--surface);color:var(--ink);border-color:var(--line)}
+[data-theme="dark"] .dv-groceries-page input,[data-theme="dark"] .dv-groceries-page textarea,[data-theme="dark"] .dv-groceries-page select{background:var(--bg);color:var(--ink);border-color:var(--line)}
+@media(max-width:850px){.dv-groceries-layout{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:420px){
+ .dv-groceries-page .page-heading h1{font-size:clamp(1.8rem,8vw,2.4rem)}
+ .dv-groceries-layout{gap:12px}
+ .dv-groceries-layout>.surface{padding:18px 14px}
+ .dv-groceries-page .add-grid{grid-template-columns:minmax(0,1fr);gap:9px}
+ .dv-groceries-page .add-grid button{grid-column:1}
+ .dv-groceries-page .grocery-line{padding:13px 0}
+}
+@media(prefers-reduced-motion:reduce){.dv-groceries-page input,.dv-groceries-page button{transition:none!important}}

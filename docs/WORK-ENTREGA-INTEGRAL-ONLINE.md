@@ -377,3 +377,17 @@ Esto reduce transferencia/procesamiento inicial, **pero no demuestra FPS ni tiem
 
 ### Advertencia de límites
 No es correcto afirmar «100% listo para vender» ni que los cuatro paneles se sincronizan entre dispositivos. Los resultados de Actions validan **reglas y compilación del prototipo local**, no la experiencia real de usuario. En producción siguen pendientes arquitectura de identidad, API, transacciones, cobros, asignación y PIN confiables. El PR #74 continúa como borrador.
+
+
+## 17. Pulido preventivo antes de Work (20/11/2026)
+
+**Nuevo corte CI:** [GitHub Actions #44673359502](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44673359502): **172/172 pruebas aprobadas**, cero fallos, cero omitidas y build Vite exitoso. Este corte supera las 168 del cierre inicial de Fase 3.
+
+1. **Ficha del negocio:** las fotografías comprimidas de forma asíncrona se invalidan si el usuario cambia de restaurante o desmonta el panel; no pueden terminar aplicándose al negocio equivocado. Se bloquea guardar mientras la imagen se procesa y se enfoca el primer campo inválido con un resumen accesible.
+2. **Puerta de lanzamiento público:** `DEMO_ORDER_WRITES_ENABLED` depende exclusivamente de `INTERNAL_PREVIEW_ENABLED`, que está limitado a **Vite DEV**. `openCustomerCheckout`, `placeOrder` y `sendMandado` rechazan crear órdenes ficticias desde un build público. El catálogo sigue disponible. **Para habilitar pedidos reales es obligatorio integrar primero el checkout con backend autenticado.**
+3. **CORS de la API preliminar:** `server/src/cors-policy.js` permite exclusivamente orígenes configurados por `DVOLADA_ALLOWED_ORIGINS`, con soporte de preflight `OPTIONS` antes de JWT y sin wildcard; HTTP solo para `localhost` o loopback en pruebas. No activar producción sin configurar el origen HTTPS real.
+4. **Guía de decisión de publicación:** `docs/PUBLICACION-PUBLICA-CHECKLIST.md` distingue catálogo informativo de plataforma comercial y enumera bloqueantes técnicos, seguridad, pagos, operaciones y QA.
+
+**Acción adicional para Work:** ejecutar el plan de `docs/WORK-FASE3-PRUEBAS-REALES.md` con `VITE_DVOLADA_INTERNAL_PREVIEW=true`, y validar por separado que un build de producción sin API **no permite crear pedidos locales**. No publicar el build de demostración ni inferir que un `/health` disponible significa sincronización real.
+
+**Sin despliegue ni fusión**: PR #74 permanece en borrador; `main` sigue intacto.

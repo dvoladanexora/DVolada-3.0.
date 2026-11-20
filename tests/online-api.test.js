@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createOnlineApi,OnlineApiError,conflictMessage} from '../src/online-api.js';
 import {readJsonBody,validStatusPatch} from '../server/src/request-validation.js';
 import {parseAllowedOrigins,allowedCorsHeaders} from '../server/src/cors-policy.js';
+import {validRestaurantRole,restaurantTransitionPermission} from '../server/src/restaurant-permissions.js';
 import {readFileSync} from 'node:fs';
 
 test('requires HTTPS and an authenticated token provider',()=>{
@@ -177,4 +178,55 @@ test('Servidor comprueba origen antes de autenticación y preflight explícito',
  assert.ok(src.indexOf("if(req.method==='OPTIONS')")<src.indexOf("const identity=await auth(req)"));
  assert.ok(src.includes("res.writeHead(204);res.end();return;"));
  assert.ok(!src.includes("'Access-Control-Allow-Origin':'*'"));
+});
+
+test('Rol y membresía SQL son obligatorios; permisos del JWT no autorizan por sí solos',()=>{
+ const server=readFileSync(new URL('../server/src/server.js',import.meta.url),'utf8');
+ const schema=readFileSync(new URL('../server/sql/002_restaurant_membership.sql',import.meta.url),'utf8');
+ assert.match(schema,/CREATE TABLE IF NOT EXISTS restaurant_users/);
+ assert.match(schema,/active boolean NOT NULL DEFAULT false/);
+ assert.match(schema,/PRIMARY KEY \(restaurant_id,user_id\)/);
+ assert.match(server,/FROM restaurant_users u JOIN restaurants r ON r.id=u.restaurant_id/);
+ assert.match(server,/u.restaurant_id=\$1 AND u.user_id=\$2 AND u.active=TRUE/);
+ assert.ok(server.includes('[payload.restaurant_id,payload.sub]'));
+ assert.ok(server.includes('validRestaurantRole(rows[0].role)'));
+ assert.ok(server.includes('role:rows[0].role'));
+ assert.ok(!server.includes('identity.permissions.includes'));
+ assert.ok(!server.includes('payload.permissions.includes'));
+});
+test('Caja, Cocina y gerentes no pueden saltarse las transiciones de otro rol',()=>{
+ for(const role of ['owner','manager','cashier','kitchen'])assert.equal(validRestaurantRole(role),true);
+ for(const role of ['customer','courier','admin','',null,undefined])assert.equal(validRestaurantRole(role),false);
+ for(const role of ['cashier','owner','manager']){
+  assert.equal(restaurantTransitionPermission(role,'Pendiente','Aceptado').ok,true);
+  assert.equal(restaurantTransitionPermission(role,'Pendiente','Rechazado').ok,true);
+ }
+ for(const role of ['kitchen','owner','manager']){
+  assert.equal(restaurantTransitionPermission(role,'Aceptado','Preparando').ok,true);
+  assert.equal(restaurantTransitionPermission(role,'Preparando','Listo').ok,true);
+ }
+ assert.equal(restaurantTransitionPermission('kitchen','Pendiente','Aceptado').status,403);
+ assert.equal(restaurantTransitionPermission('cashier','Aceptado','Preparando').status,403);
+ assert.equal(restaurantTransitionPermission('kitchen','Aceptado','Cancelado').status,403);
+ assert.equal(restaurantTransitionPermission('owner','Listo','Entregado').status,422,
+  'ningún rol puede inventar una transición no implementada');
+ assert.equal(restaurantTransitionPermission('unknown','Pendiente','Aceptado').status,403);
+ const server=readFileSync(new URL('../server/src/server.js',import.meta.url),'utf8');
+ assert.ok(server.includes('restaurantTransitionPermission(identity.role,current.status,body.status)'));
+ assert.ok(server.includes("status=denial.status;response={error:denial.reason}"));
+});
+test('JWT debe estar firmado, expirar y pertenecer a una persona y negocio válidos',()=>{
+ const server=readFileSync(new URL('../server/src/server.js',import.meta.url),'utf8');
+ assert.ok(server.includes("algorithms:['HS256']"));
+ assert.ok(server.includes("token.length>4096"));
+ assert.ok(server.includes("catch{throw Object.assign(Error('Invalid or expired token'),{code:401})}"));
+ assert.ok(server.includes('typeof payload.restaurant_id'));
+ assert.ok(server.includes('typeof payload.sub'));
+ assert.ok(server.includes('Number.isSafeInteger(payload.iat)'));
+ assert.ok(server.includes('Number.isSafeInteger(payload.exp)'));
+ assert.ok(server.includes('payload.exp-payload.iat>3600'));
+ assert.ok(server.includes('server.requestTimeout=15000'));
+ assert.ok(server.includes('server.headersTimeout=10000'));
+ assert.ok(server.includes("content-security-policy"));
+ assert.ok(server.includes("referrer-policy"));
 });

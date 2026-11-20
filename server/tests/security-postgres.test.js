@@ -147,7 +147,9 @@ test('Seguridad HTTP real y aislamiento de restaurantes con PostgreSQL', {skip:!
    assert.deepEqual(again.body,first.body);
    assert.equal((await pool.query('SELECT count(*)::int AS n FROM online_order_events WHERE order_id=$1',[orderA])).rows[0].n,1);
    assert.equal((await patch(orderA,'Rechazado',1,tokens.cashier,key)).status,409);
-   assert.equal((await patch(orderA,'Listo',2,tokens.cashier)).status,403);
+   // 422 = salto de estado inválido; 403 = transición válida para otro rol.
+   assert.equal((await patch(orderA,'Listo',2,tokens.cashier)).status,422);
+   assert.equal((await patch(orderA,'Preparando',2,tokens.cashier)).status,403);
    assert.equal((await patch(orderB,'Aceptado',1,tokens.cashier)).status,404);
   });
   await t.test('Revocación y cambio de rol afectan tokens ya emitidos',async()=>{

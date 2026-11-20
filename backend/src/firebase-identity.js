@@ -80,7 +80,8 @@ export async function exchangeFirebase(req,env,{verify=verifyFirebaseIdToken}={}
   const token=Array.from(random,b=>String.fromCharCode(b)).join('');
   const bearer=btoa(token).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
   const tokenHash=await hmacHex(env.SESSION_PEPPER,'session:v1:'+bearer);
-  const expiresAt=Math.floor(Date.now()/1000)+7*24*3600;
+  // Short-lived app session: disabled Firebase accounts do not revoke D1 automatically.
+  const expiresAt=Math.floor(Date.now()/1000)+12*3600;
   await env.DB.prepare(`INSERT INTO auth_sessions(id,user_id,token_hash,device_label,expires_at)
     VALUES(?,?,?,?,?)`).bind(sessionId,user.id,tokenHash,deviceLabel||'Dispositivo',expiresAt).run();
   return {sessionToken:bearer,expiresAt,role:user.account_role};

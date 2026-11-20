@@ -204,6 +204,16 @@ test('Seguridad HTTP real y aislamiento de restaurantes con PostgreSQL', {skip:!
    assert.ok(['Aceptado','Rechazado'].includes(row.status));
    assert.equal((await pool.query('SELECT count(*)::int AS n FROM online_order_events WHERE order_id=$1',[orderC])).rows[0].n,1);
   });
+  await t.test('El servidor rechaza JSON desproporcionado y cursores de consulta falsos',async()=>{
+   const oversized=await call('/api/v1/restaurant/orders/'+orderD+'/status',{
+    method:'PATCH',key:randomUUID(),
+    json:{status:'Aceptado',expectedVersion:1,description:'X'.repeat(6000)}
+   });
+   assert.equal(oversized.status,413);
+   const invalidCursor=await call('/api/v1/restaurant/orders/changes?since=1%20OR%201%3D1');
+   assert.equal(invalidCursor.status,400);
+   assert.equal((await pool.query('SELECT count(*)::int AS n FROM online_order_events WHERE order_id=$1',[orderD])).rows[0].n,0);
+  });
   await t.test('Cuerpo adulterado no puede escribir precios ni restaurante',async()=>{
    const tampered=await call('/api/v1/restaurant/orders/'+orderD+'/status',{
     method:'PATCH',key:randomUUID(),

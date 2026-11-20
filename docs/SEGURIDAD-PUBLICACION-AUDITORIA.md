@@ -40,7 +40,7 @@
 
 **Fuentes de referencia:** OWASP Authorization Cheat Sheet (https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html); guía oficial Leaflet 1.9 (https://leafletjs.com/examples-v1/quick-start/).
 
-## Corte final verificado
+## Corte previo verificado
 
 - **GitHub Actions:** https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44675822648
 - **182/182 pruebas aprobadas**, cero fallos/omitidas y compilación exitosa.
@@ -50,3 +50,29 @@
 - **Bloqueadores de publicación de pedidos:** autenticación y membresías reales, API integrada, PIN y pagos seguros, control antifraude, WAF distribuido, lockfiles versionados, HTTPS/CSP/HSTS del dominio y pruebas de seguridad con Work sobre varios dispositivos.
 
 **Estado del PR:** borrador sin fusión ni despliegue. Esta documentación autoriza únicamente la auditoría de código, NO operar clientes reales.
+
+## Ronda complementaria de endurecimiento — 20/11/2026
+
+Esta revisión adicional se ejecutó **sin tocar main ni el despliegue público**. Cambios en la rama de auditoría:
+
+1. **Solicitudes PATCH cerradas:** la API únicamente acepta `status` (de una lista controlada) y `expectedVersion`; rechaza campos adicionales como precio, ID de restaurante, PIN, permisos o repartidor. La autorización sigue siendo responsabilidad del servidor y la base de datos.
+2. **Imágenes externas restringidas:** se rechazan direcciones IP directas, localhost, intranet y dominios internos como origen de fotos de producto; se admiten URLs HTTPS públicas válidas. **Límite restante:** el DNS de un dominio externo puede cambiar y las imágenes externas siguen revelando IP al proveedor. Antes de producción usar un host de medios controlado.
+3. **PIN de demostración criptográfico:** se utiliza Web Crypto y se rechaza la ejecución si no hay fuente de aleatoriedad segura. **Nunca usar ese PIN client-side como mecanismo comercial**: el servidor deberá generar, almacenar de forma protegida y verificar PIN reales.
+4. **Protección CSV también en Local/Plus:** el módulo anterior ahora usa `csvFromRows`, que neutraliza fórmulas con prefijos y controles Unicode. Las ventanas de impresión de Local/Plus no incluyen scripts y anulan `window.opener`.
+5. **Procesamiento de fotos protegido:** tamaño máximo 5 MB, resolución máxima 30 megapíxeles, límite de espera de 18 segundos y revocación de referencias a archivos temporales.
+6. **Privacidad de navegación:** `index.html` usa `referrer=no-referrer` para no transmitir rutas o parámetros del visitante a imágenes externas.
+7. **Errores del servidor saneados:** respuesta con identificador único `X-Request-ID`; los logs internos registran códigos controlados, **no mensajes SQL, cuerpos, tokens ni PIN**.
+8. **API segura al iniciar:** escucha únicamente en `127.0.0.1` por defecto. Si `NODE_ENV=production` o se solicita enlazar una interfaz de red externa, se exige origen público HTTPS y una lista de frontends HTTPS permitidos. **No prueba que exista el proxy TLS o WAF**.
+9. **Servidor de desarrollo local:** Vite escucha en `127.0.0.1` por defecto para que la vista de administrador y las pruebas internas no se expongan accidentalmente en redes compartidas. El acceso de Work desde otro equipo requerirá abrir el puerto **solo en un entorno aislado de pruebas**.
+10. **Artefacto público mínimo:** la página de pruebas `device-studio.html` se excluye de `dist` en producción y la CI falla si vuelve a aparecer.
+11. **Puerta obligatoria de publicación:** el workflow Pages exige `package-lock.json` y `server/package-lock.json` verificados, `npm ci`, auditoría de dependencias y pruebas completas antes de desplegar. **Los lockfiles todavía no existen en el repositorio** y por tanto el despliegue futuro quedará deliberadamente bloqueado hasta generarlos y revisarlos.
+
+### Bloqueos que siguen abiertos
+
+- Generar/verificar lockfiles de frontend y servidor a partir de un entorno Node de confianza y versionarlos. No omitir temporalmente la puerta de publicación.
+- Habilitar identidades/roles reales, permisos comprobados en cada petición, backend y BD de pedidos con transacciones.
+- Diseñar PIN comercial validado únicamente por servidor, protección antifraude, pago/conciliación, protección WAF/distribuida y límites de datos personales.
+- Establecer headers reales `Content-Security-Policy`, `Strict-Transport-Security` y otros en el hosting definitivo y ejecutar QA de navegador, dispositivos y permisos.
+- Evaluar privacidad del perfil local del cliente y proceso de eliminación de datos en dispositivos compartidos.
+
+**Criterio:** cero fallos en los tests es evidencia de regresión, **no certificación de seguridad ni autorización para cobrar o publicar pedidos**.

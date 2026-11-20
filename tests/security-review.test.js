@@ -103,3 +103,16 @@ test('Configuración de producción requiere HTTPS público y lista de orígenes
  assert.ok(server.includes("||!['127.0.0.1','localhost','::1'].includes(bindHost)"));
  assert.ok(server.includes('server.listen(port,bindHost,'));
 });
+
+test('La publicación pública se niega sin lockfiles y ejecuta auditoría y pruebas',()=>{
+ const deploy=readFileSync(new URL('../.github/workflows/deploy.yml',import.meta.url),'utf8');
+ assert.ok(deploy.includes('test -f package-lock.json'));
+ assert.ok(deploy.includes('test -f server/package-lock.json'));
+ assert.ok(deploy.includes('npm ci --no-audit --no-fund'));
+ assert.ok(deploy.includes('npm --prefix server ci --ignore-scripts'));
+ assert.ok(deploy.includes('npm audit --audit-level=high'));
+ assert.ok(deploy.includes('npm --prefix server audit --omit=dev --audit-level=high'));
+ assert.ok(deploy.includes('npm run test:all'));
+ assert.ok(deploy.includes('npm run check:server'));
+ assert.ok(deploy.indexOf('npm run test:all')<deploy.indexOf('npm run build'));
+});

@@ -752,3 +752,50 @@ test('UUID creados en el menú pueden comprarse y repetirse sin romper el identi
  assert.ok(app.includes('const current=resolveCartProduct(item,place.items)'));
  assert.ok(app.includes('const base=resolveCartProduct(line,place.items)'));
 });
+
+test('Estrés de 120 pedidos mantiene el aislamiento de tres negocios y el cupo de repartidor',()=>{
+ const createdAt='2026-11-19T10:00:00.000Z';
+ const originals=Array.from({length:120},(_,n)=>({
+  id:'STRESS-'+n,orderNo:'#STRESS-'+n,kind:'food',placeId:n%3+1,
+  placeName:'Restaurante '+(n%3+1),delivery:'delivery',status:'Pendiente',pin:'123456',
+  items:[{id:100+n,name:'Producto '+n,price:25,qty:1}],createdAt
+ }));
+ const disk=new Map();
+ const storage={getItem:k=>disk.get(k)??null,setItem:(k,v)=>disk.set(k,v)};
+ assert.equal(persistDemoOrders(storage,originals).ok,true);
+ const apply=(id,change)=>{
+  const out=mutateDemoOrders(storage,originals,latest=>change(latest));
+  assert.equal(out.ok,true,out.reason);
+  return out;
+ };
+ for(const n of [0,3,6]){
+  const id='STRESS-'+n;
+  for(const [from,to,area] of [['Pendiente','Aceptado','cashier'],['Aceptado','Preparando','kitchen'],['Preparando','Listo','kitchen']]){
+   apply(id,latest=>changeDemoRestaurantOrder(latest,{orderId:id,restaurantId:1,expectedStatus:from,toStatus:to,area},today));
+  }
+ }
+ const saved=()=>JSON.parse(disk.get('dv_orders'));
+ assert.equal(saved().length,120);
+ assert.equal(kitchenQueues(saved(),1,Date.now()).ready.length,3);
+ assert.equal(kitchenQueues(saved(),2,Date.now()).ready.length,0);
+ assert.equal(kitchenQueues(saved(),3,Date.now()).pending.length,40);
+ const r='demo-rider-1';
+ for(const id of ['STRESS-0','STRESS-3'])
+  apply(id,latest=>applyCourierAction(latest,id,'accept',r,{online:true},today));
+ const blocked=mutateDemoOrders(storage,originals,latest=>applyCourierAction(latest,'STRESS-6','accept',r,{online:true},today));
+ assert.equal(blocked.ok,false);
+ assert.match(blocked.reason,/dos entregas/);
+ assert.equal(courierQueues(saved(),r).active.length,2);
+ assert.equal(saved().find(x=>x.id==='STRESS-6').courierAccepted,undefined);
+ for(const [action,options] of [['pickup',{}],['route',{}],['arrive',{gpsVerified:true}]]){
+  apply('STRESS-0',latest=>applyCourierAction(latest,'STRESS-0',action,r,options,today));
+ }
+ assert.equal(validateCourierAction(saved(),'STRESS-0','deliver',r,{pin:'654321'}).ok,false);
+ apply('STRESS-0',latest=>applyCourierAction(latest,'STRESS-0','deliver',r,{pin:'123456'},today));
+ assert.equal(courierQueues(saved(),r).active.length,1);
+ apply('STRESS-6',latest=>applyCourierAction(latest,'STRESS-6','accept',r,{online:true},today));
+ assert.equal(courierQueues(saved(),r).active.length,2);
+ assert.equal(courierQueues(saved(),r).history.length,1);
+ assert.equal(saved().length,120);
+ assert.equal(saved().filter(x=>x.placeId===2&&x.status!=='Pendiente').length,0);
+});

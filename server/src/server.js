@@ -2,6 +2,7 @@ import http from 'node:http';
 import {createHash} from 'node:crypto';
 import {Pool} from 'pg';
 import {jwtVerify} from 'jose';
+import {readJsonBody,validStatusPatch} from './request-validation.js';
 
 const port=Number(process.env.PORT||8080);
 const databaseUrl=process.env.DATABASE_URL;
@@ -26,10 +27,6 @@ async function auth(req){
  const {rows}=await pool.query('SELECT plan,subscription_status FROM restaurants WHERE id=$1',[payload.restaurant_id]);
  if(!rows.length||rows[0].subscription_status!=='active'||!['ONLINE','PLUS'].includes(rows[0].plan))throw Object.assign(Error('Online plan not active'),{code:403});
  return {restaurantId:payload.restaurant_id,userId:payload.sub,permissions:payload.permissions};
-}
-async function parseJson(req){
- let value='';for await(const chunk of req){value+=chunk;if(value.length>4096)throw Object.assign(Error('Request too large'),{code:413})}
- try{return JSON.parse(value)}catch{throw Object.assign(Error('Invalid JSON'),{code:400})}
 }
 const server=http.createServer(async(req,res)=>{
  try{
@@ -71,9 +68,10 @@ const server=http.createServer(async(req,res)=>{
   if(!identity.permissions.includes('online:orders:write'))return send(res,403,{error:'Write permission required'});
   const key=req.headers['idempotency-key'];
   if(typeof key!=='string'||!uuid.test(key))return send(res,400,{error:'UUID Idempotency-Key required'});
-  const body=await parseJson(req);
-  if(!Number.isSafeInteger(body.expectedVersion)||body.expectedVersion<1||typeof body.status!=='string')
-   return send(res,400,{error:'Invalid status or expectedVersion'});
+  if(!/^application\/json(?:;|$)/i.test(String(req.headers['content-type']||'')))
+   return send(res,415,{error:'Content-Type must be application/json'});
+  const body=await readJsonBody(req);
+  if(!validStatusPatch(body))return send(res,400,{error:'Invalid status or expectedVersion'});
   const hash=createHash('sha256').update(JSON.stringify({id:match[1],status:body.status,expectedVersion:body.expectedVersion})).digest('hex');
   const client=await pool.connect();
   try{
@@ -99,6 +97,6 @@ const server=http.createServer(async(req,res)=>{
   }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
  }
  return send(res,404,{error:'Not found'});
- }catch(e){if(e.code===401||e.code===403||e.code===400||e.code===413)return send(res,e.code,{error:e.message});if(e.code==='ERR_JWT_EXPIRED'||e.code?.startsWith?.('ERR_JWT'))return send(res,401,{error:'Invalid or expired token'});console.error('API error',e);return send(res,500,{error:'Internal server error'})}
+ }catch(e){if(e.code===401||e.code===403||e.code===400||e.code===413||e.code===415)return send(res,e.code,{error:e.message});if(e.code==='ERR_JWT_EXPIRED'||e.code?.startsWith?.('ERR_JWT'))return send(res,401,{error:'Invalid or expired token'});console.error('API error',e);return send(res,500,{error:'Internal server error'})}
 });
 server.listen(port,()=>console.log('Dvolada Online API listening on '+port));

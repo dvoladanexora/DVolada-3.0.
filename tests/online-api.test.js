@@ -6,6 +6,7 @@ import {parseAllowedOrigins,allowedCorsHeaders} from '../server/src/cors-policy.
 import {validRestaurantRole,restaurantTransitionPermission} from '../server/src/restaurant-permissions.js';
 import {createActorLimiter} from '../server/src/actor-rate-limit.js';
 import {createHealthProbe} from '../server/src/health-probe.js';
+import {activeRestaurantRole,verifiedRestaurantRole,MEMBER_SQL} from '../server/src/tenant-access.js';
 import {readFileSync} from 'node:fs';
 
 test('requires HTTPS and an authenticated token provider',()=>{
@@ -189,11 +190,10 @@ test('Rol y membresía SQL son obligatorios; permisos del JWT no autorizan por s
  assert.match(schema,/CREATE TABLE IF NOT EXISTS restaurant_users/);
  assert.match(schema,/active boolean NOT NULL DEFAULT false/);
  assert.match(schema,/PRIMARY KEY \(restaurant_id,user_id\)/);
- assert.match(server,/FROM restaurant_users u JOIN restaurants r ON r.id=u.restaurant_id/);
- assert.match(server,/u.restaurant_id=\$1 AND u.user_id=\$2 AND u.active=TRUE/);
- assert.ok(server.includes('[payload.restaurant_id,payload.sub]'));
- assert.ok(server.includes('validRestaurantRole(rows[0].role)'));
- assert.ok(server.includes('role:rows[0].role'));
+ assert.match(MEMBER_SQL,/FROM restaurant_users u JOIN restaurants r ON r.id=u.restaurant_id/);
+ assert.match(MEMBER_SQL,/u.restaurant_id=\$1 AND u.user_id=\$2 AND u.active=TRUE/);
+ assert.ok(server.includes('activeRestaurantRole(pool,payload.restaurant_id,payload.sub)'));
+ assert.ok(server.includes('role:'));
  assert.ok(!server.includes('identity.permissions.includes'));
  assert.ok(!server.includes('payload.permissions.includes'));
 });
@@ -215,11 +215,12 @@ test('Caja, Cocina y gerentes no pueden saltarse las transiciones de otro rol',(
   'ningún rol puede inventar una transición no implementada');
  assert.equal(restaurantTransitionPermission('unknown','Pendiente','Aceptado').status,403);
  const server=readFileSync(new URL('../server/src/server.js',import.meta.url),'utf8');
- assert.ok(server.includes('restaurantTransitionPermission(currentAccess.role,current.status,body.status)'));
- assert.ok(server.includes('FOR SHARE OF u,r'));
- assert.ok(server.includes("if(!currentAccess||!validRestaurantRole(currentAccess.role)"));
+ assert.ok(server.includes('restaurantTransitionPermission(currentRole,current.status,body.status)'));
+ assert.ok(server.includes("activeRestaurantRole(client,identity.restaurantId,identity.userId,{lock:true})"));
+ assert.ok(server.includes("if(!currentRole){"));
  assert.ok(server.includes("return send(res,403,{error:'Restaurant access revoked or plan inactive'})"));
- assert.ok(server.indexOf('FOR SHARE OF u,r')<server.indexOf("await client.query('INSERT INTO online_idempotency"));
+ assert.ok(server.indexOf("activeRestaurantRole(client,identity.restaurantId,identity.userId,{lock:true})")<server.indexOf("await client.query('INSERT INTO online_idempotency"));
+ assert.ok(MEMBER_SQL.includes('u.active=TRUE'));
  assert.ok(server.includes("status=denial.status;response={error:denial.reason}"));
 });
 test('JWT debe estar firmado, expirar y pertenecer a una persona y negocio válidos',()=>{
@@ -310,13 +311,12 @@ test('La API niega permisos revocados también dentro de la transacción',()=>{
  const src=readFileSync(new URL('../server/src/server.js',import.meta.url),'utf8');
  const patch=src.slice(src.indexOf("if(req.method==='PATCH'&&match)"));
  assert.ok(patch.includes("await client.query('BEGIN')"));
- assert.ok(patch.includes("u.active=TRUE FOR SHARE OF u,r"));
- assert.ok(patch.includes("[identity.restaurantId,identity.userId]"));
- assert.ok(patch.includes("currentAccess.subscription_status!=='active'"));
- assert.ok(patch.includes("restaurantTransitionPermission(currentAccess.role,current.status,body.status)"));
+ assert.ok(patch.includes("activeRestaurantRole(client,identity.restaurantId,identity.userId,{lock:true})"));
+ assert.ok(patch.includes("if(!currentRole){"));
+ assert.ok(patch.includes("restaurantTransitionPermission(currentRole,current.status,body.status)"));
  assert.ok(!patch.includes('restaurantTransitionPermission(identity.role,current.status,body.status)'));
  const txStart=patch.indexOf("await client.query('BEGIN')");
- const lock=patch.indexOf("FOR SHARE OF u,r");
+ const lock=patch.indexOf("activeRestaurantRole(client,identity.restaurantId,identity.userId,{lock:true})");
  const insert=patch.indexOf("await client.query('INSERT INTO online_idempotency");
  assert.ok(txStart<lock&&lock<insert,'verificar rol actual ANTES de bloquear y modificar pedido');
 });
@@ -328,4 +328,33 @@ test('No se habilitan cookies en CORS o llamadas autenticadas',()=>{
  assert.ok(app.includes("cache:'no-store',credentials:'omit',signal:controller.signal"));
  const api=readFileSync(new URL('../src/online-api.js',import.meta.url),'utf8');
  assert.ok(api.includes("cache:'no-store',credentials:'omit'"));
+});
+
+test('La pertenencia y el rol se comprueban con SQL parametrizado, no desde el token',async()=>{
+ let calls=[];
+ let row={role:'cashier',plan:'ONLINE',subscription_status:'active'};
+ const db={query:async(sql,values)=>{
+  calls.push({sql,values});
+  return {rows:row?[row]:[]};
+ }};
+ const role=await activeRestaurantRole(db,'restaurant-A','employee-1');
+ assert.equal(role,'cashier');
+ assert.deepEqual(calls[0].values,['restaurant-A','employee-1']);
+ assert.equal(calls[0].sql,MEMBER_SQL);
+ assert.equal(calls[0].sql.includes('FOR SHARE'),false,'lecturas ordinarias no bloquean');
+ row={role:'kitchen',plan:'PLUS',subscription_status:'active'};
+ assert.equal(await activeRestaurantRole(db,'restaurant-A','employee-1',{lock:true}),'kitchen');
+ assert.ok(calls[1].sql.endsWith(' FOR SHARE OF u,r'));
+ assert.deepEqual(calls[1].values,['restaurant-A','employee-1']);
+ row={role:'owner',plan:'LOCAL',subscription_status:'active'};
+ assert.equal(await activeRestaurantRole(db,'restaurant-A','employee-1',{lock:true}),null,'no se puede usar un plan Local como Online');
+ row={role:'manager',plan:'ONLINE',subscription_status:'inactive'};
+ assert.equal(await activeRestaurantRole(db,'restaurant-A','employee-1'),null);
+ row={role:'courier',plan:'ONLINE',subscription_status:'active'};
+ assert.equal(await activeRestaurantRole(db,'restaurant-A','employee-1'),null);
+ row=null;
+ assert.equal(await activeRestaurantRole(db,'restaurant-A','employee-1'),null,'membresía revocada debe quedar sin acceso');
+ assert.equal(verifiedRestaurantRole({role:'owner',plan:'ONLINE',subscription_status:'active'}),'owner');
+ assert.equal(verifiedRestaurantRole({role:'owner',plan:'ONLINE',subscription_status:'inactive'}),null);
+ await assert.rejects(activeRestaurantRole(null,'rest','u'),/Invalid membership lookup/);
 });

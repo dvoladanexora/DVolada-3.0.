@@ -105,3 +105,20 @@ En contraste, al ejecutar `VITE_DVOLADA_INTERNAL_PREVIEW=true npm run dev`, Work
 **IMPORTANTE:** S02–S07 contienen pasos bloqueados por ausencia del backend comercial. Work debe marcarlos como **NO EVALUABLE — requiere API real**, no declararlos aprobados por pruebas de localStorage. No realizar pruebas de carga agresivas ni de explotación sobre dominios públicos sin autorización específica.
 
 Informe de seguridad: docs/SEGURIDAD-PUBLICACION-AUDITORIA.md.
+
+
+## Seguridad adicional para revisar antes de publicar (S09–S14)
+
+**S09 — Imágenes externas y archivos:** una URL HTTPS pública válida debe renderizarse; `https://127.0.0.1`, `https://localhost`, IP de intranet, URL sin HTTPS y SVG deben rechazarse. Subir JPG/PNG/WebP de menos de 5 MB; rechazar fotos de más de 30 megapíxeles. Verificar iPhone 6S por limitaciones de memoria.
+
+**S10 — Exportación Local/Plus:** comprobar que un nombre de cliente con `=1+2`, un carácter invisible Unicode antes de `=1+2` o `@SUM(...)` aparece como texto al abrir CSV, nunca como fórmula. Comprobar impresión desde Caja sin scripts ni ventana que acceda al panel principal.
+
+**S11 — Desarrollo aislado:** `npm run dev` solamente escucha en `127.0.0.1`. Si Work requiere acceso de un navegador remoto puede usar `npm run dev -- --host 0.0.0.0` **únicamente en una instancia aislada con datos ficticios**, nunca en una red abierta ni una máquina que contenga datos comerciales.
+
+**S12 — Arranque servidor:** en un entorno aislado comprobar que sin origen HTTPS y `DVOLADA_ALLOWED_ORIGINS` la API no inicia como `NODE_ENV=production` ni cuando intenta enlazar `0.0.0.0`. Con configuración válida debe conservar aislamiento de restaurantes y responder sin secretos en errores.
+
+**S13 — Paquete público:** ejecutar `npm run build` y verificar que `dist/device-studio.html` **no exista**. Confirmar que `index.html` usa `referrer=no-referrer`. Comprobar que la PWA, catálogo y flujo de prueba interno siguen funcionando sin ese archivo.
+
+**S14 — Publicación bloqueada hasta dependencias reproducibles:** generar, revisar y versionar `package-lock.json` y `server/package-lock.json` y luego ejecutar `npm ci`. El workflow de despliegue no debe publicar si falta cualquiera de esos archivos, si falla `npm audit` o si hay pruebas fallidas.
+
+No dar S10–S14 por aprobados mediante lectura estática solamente. Work debe dejar evidencia de navegador y de instalación/servidor, marcando **NO EVALUABLE** los pasos que necesitan backend aún no implementado.

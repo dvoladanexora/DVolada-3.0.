@@ -330,12 +330,18 @@ test('Campos futuros secretos y costos internos no se propagan a ofertas ni entr
   identity:'0801199000000',supplierCost:1000,internalMargin:38,customerEmail:'email@privado.test',
   items:[{id:1,name:'Baleada',qty:2,supplierCost:50,supplierSecret:'clave'}]
  });
- const assigned=courierPublicOrder(orderWithSecrets);
+ const assigned=courierPublicOrder({...orderWithSecrets,
+  deliveryCoordinates:{lat:14.5,lng:-89.2,internalSecret:'route-token'},
+  location:{lat:14.5,lng:-89.2,apiKey:'not-for-couriers'}
+ });
  for(const field of ['pin','privateToken','stripeSecret','identity','supplierCost','internalMargin','customerEmail'])
   assert.equal(Object.hasOwn(assigned,field),false,'filtración: '+field);
  assert.equal(assigned.name,orderWithSecrets.name);
  assert.equal(assigned.address,orderWithSecrets.address);
  assert.deepEqual(assigned.items,[{id:1,qty:2,name:'Baleada'}]);
+ assert.deepEqual(assigned.deliveryCoordinates,{lat:14.5,lng:-89.2});
+ assert.equal(Object.hasOwn(assigned,'location'),false);
+ assert.equal(Object.hasOwn(assigned.deliveryCoordinates,'internalSecret'),false);
  const offer=courierViewOrder(orderWithSecrets,riderB);
  assert.ok(offer);
  for(const field of ['pin','privateToken','stripeSecret','customerEmail','address','name'])

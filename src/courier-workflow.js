@@ -108,8 +108,7 @@ export const COURIER_ASSIGNED_FIELDS=Object.freeze([
  'id','orderNo','kind','delivery','status','placeId','placeName',
  'createdAt','date','name','phone','address','notes','payment','total','items',
  'courierAssignedAt','courierAccepted','courierId','courierPickedUpAt',
- 'courierArrivalAt','courierDeliveredAt','cancelReason',
- 'deliveryCoordinates','customerCoords','customerLocation','location','deliveryLat','deliveryLng'
+ 'courierArrivalAt','courierDeliveredAt','cancelReason'
 ]);
 export function courierPublicOrder(order){
  if(!order||typeof order!=='object')return null;
@@ -122,6 +121,10 @@ export function courierPublicOrder(order){
    })):[];
   }else result[key]=order[key];
  }
+ // Evita trasladar objetos arbitrarios de ubicación que puedan contener
+ // notas, secretos o atributos no requeridos por la navegación.
+ const coords=courierOrderCoords(order);
+ if(coords)result.deliveryCoordinates=coords;
  return result;
 }
 export function courierViewOrder(order,riderId){

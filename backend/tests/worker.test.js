@@ -6,7 +6,7 @@ import {randomBytes,randomUUID} from 'node:crypto';
 import worker from '../src/index.js';
 import {hmacHex} from '../src/security.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -35,7 +35,7 @@ function sqliteD1(){
 async function fixture(){
  const DB=sqliteD1();
  const env={DB,SESSION_PEPPER:PEPPER,PIN_SECRET,CORS_ORIGINS:'https://dvolada.example,http://localhost:5173',
-  ORDER_CREATION_ENABLED:'true'};
+  ORDER_CREATION_ENABLED:'true',FIREBASE_PROJECT_ID:'dvolada-test'};
  const restaurants=[randomUUID(),randomUUID()];
  for(const [i,id] of restaurants.entries())DB.db.prepare(`INSERT INTO restaurants
  (id,name,plan,subscription_status,online_state,delivery_fee_minor) VALUES(?,?,'ONLINE','active','open',?)`)
@@ -53,6 +53,7 @@ async function fixture(){
  }
  await user('customer');
  await user('customer2');
+ await user('platformAdmin','platform_admin');
  await user('staffA','customer',[restaurants[0],'manager']);
  await user('staffB','customer',[restaurants[1],'manager']);
  const courier=await user('courier','courier');

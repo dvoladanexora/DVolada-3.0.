@@ -136,6 +136,19 @@ const server=http.createServer(async(req,res)=>{
   const client=await pool.connect();
   try{
    await client.query('BEGIN');
+   // Comprobar el acceso EN la transacción: el bloqueo impide que se revoque
+   // el rol, la membresía o el plan mientras se modifica este pedido.
+   const membership=await client.query(
+    'SELECT u.role,r.plan,r.subscription_status FROM restaurant_users u JOIN restaurants r ON r.id=u.restaurant_id WHERE u.restaurant_id=$1 AND u.user_id=$2 AND u.active=TRUE FOR SHARE OF u,r',
+    [identity.restaurantId,identity.userId]
+   );
+   const currentAccess=membership.rows[0];
+   if(!currentAccess||!validRestaurantRole(currentAccess.role)
+    ||currentAccess.subscription_status!=='active'
+    ||!['ONLINE','PLUS'].includes(currentAccess.plan)){
+    await client.query('ROLLBACK');
+    return send(res,403,{error:'Restaurant access revoked or plan inactive'});
+   }
    await client.query('INSERT INTO online_idempotency(restaurant_id,actor_id,idempotency_key,request_hash) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING',[identity.restaurantId,identity.userId,key,hash]);
    const record=await client.query('SELECT request_hash,response_status,response_body FROM online_idempotency WHERE restaurant_id=$1 AND actor_id=$2 AND idempotency_key=$3 FOR UPDATE',[identity.restaurantId,identity.userId,key]);
    const previous=record.rows[0];
@@ -146,8 +159,8 @@ const server=http.createServer(async(req,res)=>{
    const current=found.rows[0];
    if(!current){status=404;response={error:'Order not found'}}
    else if(current.version!==body.expectedVersion){status=409;response={error:'ORDER_CHANGED',current}}
-   else if(!restaurantTransitionPermission(identity.role,current.status,body.status).ok){
-    const denial=restaurantTransitionPermission(identity.role,current.status,body.status);
+   else if(!restaurantTransitionPermission(currentAccess.role,current.status,body.status).ok){
+    const denial=restaurantTransitionPermission(currentAccess.role,current.status,body.status);
     status=denial.status;response={error:denial.reason};
    }else{
     const changed=await client.query('UPDATE online_orders SET status=$1,version=version+1,updated_at=now() WHERE id=$2 AND restaurant_id=$3 RETURNING id,status,version,updated_at',[body.status,match[1],identity.restaurantId]);

@@ -9,12 +9,14 @@
     "test:online": "node --test tests/online-api.test.js",
     "test:preview": "node --test tests/preview-ui.test.js",
     "test:share": "node --test tests/share-sound.test.js",
-    "test:theme": "node --test tests/theme-policy.test.js"
+    "test:theme": "node --test tests/theme-policy.test.js",
+    "test:live": "node --test tests/live-api.test.js"
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "lucide-react": "^0.468.0"
+    "lucide-react": "^0.468.0",
+    "firebase": "^12.0.0"
   },
   "devDependencies": {
     "vite": "^6.0.5",

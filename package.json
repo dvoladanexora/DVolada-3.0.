@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "vite --host 127.0.0.1",
     "build": "node scripts/generate-icons.mjs && vite build && node scripts/version-service-worker.mjs && node scripts/remove-qa-assets.mjs",
     "test:online": "node --test tests/online-api.test.js",
     "test:preview": "node --test tests/preview-ui.test.js",

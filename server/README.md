@@ -58,3 +58,13 @@ La rama de auditoría incorpora `npm --prefix server run test:db`: en GitHub Act
 La migración `004_online_event_integrity.sql` también obliga a que cada evento pertenezca **al mismo restaurante que su pedido** y bloquea versiones de eventos duplicadas mediante índices/clave foránea. Los ensayos intentan insertar explícitamente ambos tipos de datos corruptos y verifican que PostgreSQL los rechace.
 
 **No ejecutar estas pruebas en producción** ni cambiar la condición de la base descartable para apuntarlas a cuentas reales. No confundir estos tests de servidor preliminar con una auditoría de la app comercial integrada.
+
+
+## Protección de solicitudes sin sesión y revocaciones concurrentes
+
+- **Antes de autenticar:** se aplica un límite de **180 solicitudes por minuto y dirección de socket**, más un límite global de **2,400 solicitudes por minuto por instancia**; devuelve HTTP 429 y `Retry-After`. Estos controles también afectan orígenes no permitidos, rutas inexistentes y tokens falsos.
+- Las cabeceras `X-Forwarded-For` y `CF-Connecting-IP` **NO se utilizan como identidad de IP** porque pueden falsificarse si se accede directamente al servidor HTTP. Si hay proxy, varias personas podrían compartir un mismo origen de socket: proteger la IP real y aplicar cuotas distribuidas requiere reglas de Cloudflare WAF / CDN y restringir el acceso directo al backend.
+- La sesión de usuario continúa verificándose en PostgreSQL para cada solicitud. Cuando un administrador revoca el acceso mientras una escritura ya inició, el bloqueo `FOR SHARE OF u,r` hace que la transacción espere y luego niegue los cambios. Este caso se comprueba con una prueba real de bloqueo de PostgreSQL y HTTP.
+- Las peticiones del cliente con token Bearer y la sonda de salud rechazan las redirecciones HTTP (`redirect:'error'`) y no envían cookies ajenas (`credentials:'omit'`).
+- Las claves de idempotencia con vencimiento se limpian **fuera de la API** mediante el script SQL en lotes. El CI ejecuta el script con claves expiradas y verifica que conserva pedidos, eventos y claves válidas de otro negocio.
+- Estas defensas son **por instancia** y no certifican protección frente a bots distribuidos. Falta el proveedor de identidad comercial y la configuración real de borde.

@@ -62,3 +62,20 @@ test('Módulo Local/Plus no exporta fórmulas CSV ni ejecuta scripts en recibos'
  assert.ok(code.includes("logo.addEventListener('load',printNow"));
  assert.ok(code.includes("logo.addEventListener('error',printNow"));
 });
+
+test('Fotografías demasiado grandes no bloquean el editor ni se procesan como SVG',async()=>{
+ const {readPhotoAsThumbnail,MAX_MENU_IMAGE_FILE,MAX_MENU_IMAGE_PIXELS}=await import('../src/restaurant-menu-rules.js');
+ assert.equal(MAX_MENU_IMAGE_PIXELS,30_000_000);
+ await assert.rejects(readPhotoAsThumbnail({type:'image/svg+xml',size:100}),/JPG, PNG o WebP/);
+ await assert.rejects(readPhotoAsThumbnail({type:'image/jpeg',size:MAX_MENU_IMAGE_FILE+1}),/5 MB/);
+ await assert.rejects(readPhotoAsThumbnail({type:'image/png',size:0}),/5 MB/);
+ const source=readFileSync(new URL('../src/restaurant-menu-rules.js',import.meta.url),'utf8');
+ assert.ok(source.includes('widthOriginal*heightOriginal>MAX_MENU_IMAGE_PIXELS'));
+ assert.ok(source.includes("const timeout=setTimeout(()=>done("));
+ assert.ok(source.includes('URL.revokeObjectURL(src)'));
+ assert.ok(source.includes('if(completed)return'));
+});
+test('La web no entrega la URL del visitante como Referer a imágenes, mapas ni CDN',()=>{
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ assert.ok(html.includes('<meta name="referrer" content="no-referrer"/>'));
+});

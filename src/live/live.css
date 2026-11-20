@@ -49,3 +49,7 @@
 [data-theme="dark"] .dvl-roles>button.active:not(.dvl-action){color:#ff9758;border-color:#f26732}
 @media(max-width:780px){.dvl-header{padding:9px 15px}.dvl-header .dvl-head-actions>span{display:none}.dvl-brand small{max-width:170px}.dvl-main{padding:24px 12px}.dvl-columns{grid-template-columns:1fr}.dvl-panel,.dvl-order{padding:18px}.dvl-grid{grid-template-columns:1fr}.dvl-span{grid-column:auto}.dvl-footer{flex-direction:column}.dvl-row{flex-wrap:wrap}.dvl-assign{flex-direction:column;align-items:stretch}.dvl-assign label{width:100%}}
 @media(prefers-reduced-motion:reduce){.dvl-app *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+.dvl-official-logo{width:62px;height:46px;object-fit:contain}
+.dvl-powered{display:inline-flex;align-items:center;gap:7px}
+.dvl-powered img{height:28px;width:auto;max-width:155px;object-fit:contain}

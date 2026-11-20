@@ -6,6 +6,7 @@ import {readJsonBody,validStatusPatch} from './request-validation.js';
 import {parseAllowedOrigins,allowedCorsHeaders} from './cors-policy.js';
 import {validRestaurantRole,restaurantTransitionPermission} from './restaurant-permissions.js';
 import {createActorLimiter} from './actor-rate-limit.js';
+import {createHealthProbe} from './health-probe.js';
 
 const port=Number(process.env.PORT||8080);
 const allowedOrigins=parseAllowedOrigins(process.env.DVOLADA_ALLOWED_ORIGINS);
@@ -22,6 +23,7 @@ if(!databaseUrl||!jwtSecret||Buffer.byteLength(jwtSecret)<32||!issuer||!audience
 }
 const pool=new Pool({connectionString:databaseUrl,max:10,connectionTimeoutMillis:5000,statement_timeout:5000,query_timeout:7000,idleTimeoutMillis:30000});
 const secret=new TextEncoder().encode(jwtSecret);
+const healthReady=createHealthProbe(()=>pool.query('SELECT 1'));
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const send=(res,status,body)=>{res.writeHead(status,{
  'content-type':'application/json; charset=utf-8',
@@ -71,7 +73,8 @@ const server=http.createServer(async(req,res)=>{
  }
  const url=new URL(req.url,'http://localhost');
  if(req.method==='GET'&&url.pathname==='/health'){
-  await pool.query('SELECT 1');return send(res,200,{status:'ok'});
+  const healthy=await healthReady();
+  return send(res,healthy?200:503,{status:healthy?'ok':'unavailable'});
  }
  const identity=await auth(req);
  const quota=(req.method==='PATCH'?checkWriteRate:checkReadRate)(identity.restaurantId+':'+identity.userId);

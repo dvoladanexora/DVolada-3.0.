@@ -145,15 +145,21 @@ export async function assignCourier(req,env,actor,access,orderId){
  }
  return {order:{id,courierId,version:expectedVersion+1},replayed:false};
 }
-export async function courierOrders(env,actor){
+async function assertCourierActive(env,actor){
  requireRole(actor,'courier');
+ const profile=await env.DB.prepare('SELECT active FROM courier_profiles WHERE user_id=?')
+  .bind(actor.userId).first();
+ if(!profile||profile.active!==1)throw new ApiError(403,'COURIER_INACTIVE');
+}
+export async function courierOrders(env,actor){
+ await assertCourierActive(env,actor);
  const {results=[]}=await env.DB.prepare(`${dataOrder} WHERE courier_id=?
   AND status NOT IN ('Entregado','Cancelado','Rechazado') ORDER BY created_at DESC,id LIMIT 20`)
   .bind(actor.userId).all();
  return {orders:results.map(x=>orderDto(x,{includeAddress:true}))};
 }
 export async function courierStatus(req,env,actor,orderId){
- requireRole(actor,'courier');
+ await assertCourierActive(env,actor);
  const body=await readJson(req);requireKeys(body,['status','expectedVersion']);
  const id=requireUuid(orderId);const status=requireText(body.status,1,32,'status');
  const order=await env.DB.prepare(`${dataOrder} WHERE id=? AND courier_id=?`).bind(id,actor.userId).first();
@@ -165,7 +171,7 @@ export async function courierStatus(req,env,actor,orderId){
  return transition(env,actor,{orderId:id,restaurantId:order.restaurant_id,expectedVersion:body.expectedVersion,status,key});
 }
 export async function confirmDelivery(req,env,actor,orderId){
- requireRole(actor,'courier');
+ await assertCourierActive(env,actor);
  const body=await readJson(req);requireKeys(body,['expectedVersion','pin']);
  const id=requireUuid(orderId);const v=requireInteger(body.expectedVersion,1,2147483646,'expectedVersion');
  if(typeof body.pin!=='string'||!/^[0-9]{6}$/.test(body.pin))throw new ApiError(400,'INVALID_PIN');
@@ -242,7 +248,7 @@ export async function customerCreate(req,env,actor){
    VALUES(?,?,?,?)`).bind(actor.userId,key,hash,id)
  ];
  try{await env.DB.batch(stmts)}
- catch(error){const duplicated=await replay();if(duplicated)return duplicated;throw error}
+ catch(error){const duplicated=await replay();if(duplicated)return duplicated;throw sqlConflict(error)}
  return {order:{id,restaurantId,orderNumber,status:'Pendiente',version:1,deliveryMethod,
   subtotalMinor:subtotal,deliveryFeeMinor:fee,totalMinor:subtotal+fee},
   deliveryPin:deliveryMethod==='delivery'?await deliveryPin(env.PIN_SECRET,id):null,replayed:false};

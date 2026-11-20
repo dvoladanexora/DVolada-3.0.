@@ -135,6 +135,8 @@ export function sqlConflict(error){
   if(/STALE_ORDER|STALE_ASSIGNMENT|OFFER_CHANGED/.test(message))return new ApiError(409,'ORDER_CHANGED');
   if(/RESTAURANT_CLOSED/.test(message))return new ApiError(409,'RESTAURANT_NOT_ACCEPTING');
   if(/PRODUCT_CHANGED/.test(message))return new ApiError(409,'PRODUCT_UNAVAILABLE');
+  if(/PHONE_REQUIRED/.test(message))return new ApiError(400,'PHONE_REQUIRED');
+  if(/PHONE_NOT_VERIFIED/.test(message))return new ApiError(403,'PHONE_NOT_VERIFIED');
   if(/IMMUTABLE_ORDER/.test(message))return new ApiError(409,'IMMUTABLE_ORDER');
   if(/INVALID_TRANSITION/.test(message))return new ApiError(422,'INVALID_TRANSITION');
   if(/COURIER_LIMIT/.test(message))return new ApiError(409,'COURIER_LIMIT');

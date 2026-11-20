@@ -7,7 +7,7 @@ import worker from '../src/index.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -403,4 +403,65 @@ test('independent courier can reject an offer, or accept and prevent unauthorize
   by:'courier',method:'PATCH',key:randomUUID(),body:{status:'Recogido',expectedVersion:8}
  });
  assert.equal(pickup.status,200,JSON.stringify(pickup.body));
+});
+
+test('platform can provision a private restaurant, attach staff, publish a priced menu and receive orders',async()=>{
+ const f=await fixture();
+ const create=await f.call('/api/v1/admin/restaurants',{by:'platformAdmin',method:'POST',
+  body:{name:'Restaurante privado',plan:'ONLINE'}});
+ assert.equal(create.status,201,JSON.stringify(create.body));
+ const rid=create.body.restaurant.id;
+ assert.equal(create.body.restaurant.subscriptionStatus,'inactive');
+ const before=await f.call('/api/v1/catalog/restaurants');
+ assert.equal(before.body.restaurants.some(r=>r.id===rid),false);
+ const blocked=await f.call('/api/v1/admin/restaurants',{by:'customer',method:'POST',
+  body:{name:'Suplantación',plan:'ONLINE'}});
+ assert.equal(blocked.status,403);
+ const act=await f.call('/api/v1/admin/restaurants/'+rid,{by:'platformAdmin',method:'PATCH',
+  body:{subscriptionStatus:'active',deliveryFeeMinor:250}});
+ assert.equal(act.status,200,JSON.stringify(act.body));
+ const member=await f.call('/api/v1/admin/restaurants/'+rid+'/members',{by:'platformAdmin',method:'POST',
+  body:{userId:f.tokens.staffA.id,staffRole:'owner'}});
+ assert.equal(member.status,200);
+ const merchant=await f.call('/api/v1/restaurant/availability',{by:'staffA',method:'PATCH',
+  restaurantId:rid,body:{state:'open'}});
+ assert.equal(merchant.status,200,JSON.stringify(merchant.body));
+ const p=await f.call('/api/v1/restaurant/products',{by:'staffA',method:'POST',
+  restaurantId:rid,body:{name:'Baleada de prueba',priceMinor:7750,available:true}});
+ assert.equal(p.status,201,JSON.stringify(p.body));
+ const productId=p.body.product.id;
+ const catalog=await f.call('/api/v1/catalog/restaurants/'+rid+'/products');
+ assert.equal(catalog.status,200);assert.equal(catalog.body.products.length,1);
+ const order=await f.create({restaurantId:rid,productId});
+ assert.equal(order.status,201,JSON.stringify(order.body));
+ assert.equal(order.body.order.totalMinor,8000);
+ const other=await f.call('/api/v1/restaurant/products/'+productId,{
+  by:'staffB',restaurantId:f.restaurants[1],method:'PATCH',body:{priceMinor:1}
+ });
+ assert.equal(other.status,404);
+ const changed=await f.call('/api/v1/restaurant/products/'+productId,{
+  by:'staffA',restaurantId:rid,method:'PATCH',body:{available:false}
+ });
+ assert.equal(changed.status,200);
+ const unavailable=await f.create({restaurantId:rid,productId});
+ assert.equal(unavailable.status,409);
+ const audit=f.DB.db.prepare('SELECT COUNT(*) AS n FROM platform_audit').get();
+ assert.ok(audit.n>=3);
+ assert.ok(f.DB.db.prepare('SELECT COUNT(*) AS n FROM restaurant_audit WHERE restaurant_id=?').get(rid).n>=3);
+});
+
+test('only the platform role can enroll independent verified customers as couriers',async()=>{
+ const f=await fixture();
+ const notAllowed=await f.call('/api/v1/admin/couriers',{by:'customer',method:'POST',
+  body:{userId:f.tokens.customer2.id}});
+ assert.equal(notAllowed.status,403);
+ const enrolled=await f.call('/api/v1/admin/couriers',{by:'platformAdmin',method:'POST',
+  body:{userId:f.tokens.customer2.id}});
+ assert.equal(enrolled.status,201,JSON.stringify(enrolled.body));
+ assert.equal(f.DB.db.prepare('SELECT account_role FROM users WHERE id=?').get(f.tokens.customer2.id).account_role,'courier');
+ const active=f.DB.db.prepare('SELECT active,max_active_orders FROM courier_profiles WHERE user_id=?').get(f.tokens.customer2.id);
+ assert.equal(active.active,1);assert.equal(active.max_active_orders,2);
+ const denyStaff=await f.call('/api/v1/admin/couriers',{by:'platformAdmin',method:'POST',
+  body:{userId:f.tokens.staffA.id}});
+ assert.equal(denyStaff.status,409);
 });

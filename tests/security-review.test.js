@@ -126,6 +126,7 @@ test('Paquete de producción excluye el Device Studio pero conserva QA de desarr
  assert.ok(script.includes("const files=['device-studio.html']"));
  assert.ok(script.includes('rm(target,{force:true})'));
  for(const ci of [validate,deploy])assert.ok(ci.includes('test ! -e dist/device-studio.html'));
+ assert.equal(pkg.scripts.dev,'vite --host 127.0.0.1');
  assert.ok(!pkg.scripts.dev.includes('remove-qa-assets'),
   'La vista de QA puede usarse durante desarrollo, no en producción');
 });

@@ -20,7 +20,7 @@
 | P1 | El módulo de mapa descargaba JS/CSS del CDN sin comprobar integridad. | **Corregido:** hashes SRI oficiales de Leaflet 1.9.4 y CORS anónimo. Mantener proveedores y versiones auditados. |
 | P1 | Datos futuros de la orden podían filtrarse al repartidor mediante copia de objeto. | **Corregido:** lista blanca explícita, ítems mínimos y coordenadas normalizadas; jamás enviar PIN por API de repartidor. |
 | P1 | Herramientas de generación de comandas admiten cadenas del usuario. | **Mitigación:** entidades HTML escapadas, CSP en documento impreso y window.opener anulado. Seguir probando XSS en UI real. |
-| P1 | Vulnerabilidad alta real en sharp 0.34.x/libvips detectada con npm audit. | **Corregido:** sharp actualizado a >=0.35.5. CI volvió a aprobar compilación y npm audit informó **0 vulnerabilidades** en ambos árboles en el corte actual. Dependabot agregado. **Pendiente:** lockfiles versionados y revisiones periódicas. |
+| P1 | Vulnerabilidad alta real en sharp 0.34.x/libvips detectada con npm audit. | **Corregido:** sharp actualizado a >=0.35.5. CI volvió a aprobar compilación y npm audit informó **0 vulnerabilidades** en ambos árboles en el corte actual. Dependabot agregado. **Lockfiles ya versionados en la rama de auditoría, CI con npm ci;** continuar revisiones periódicas. |
 | P1 | Web pública sin CSP HTTP, HSTS, frame-ancestors ni cabeceras definitivas del hosting. | **Pendiente:** aplicar políticas en Cloudflare/hosting definitivo; el CSP preliminar solo cubre los recibos de Cocina. |
 | P1 | No hay prueba transaccional de clientes, repartidores y negocios en dispositivos diferentes. | **Pendiente:** pruebas de autorización horizontal/vertical, reintentos, idempotencia, PIN, límite global de dos entregas, concurrencia y fraude. |
 | P1 | Riesgo de filtración de datos en fotos, chat, historial o GPS. | **Pendiente:** uploads validados en backend, almacenamiento privado, acceso por rol, retención, consentimiento, borrado y política de privacidad. |
@@ -65,11 +65,11 @@ Esta revisión adicional se ejecutó **sin tocar main ni el despliegue público*
 8. **API segura al iniciar:** escucha únicamente en `127.0.0.1` por defecto. Si `NODE_ENV=production` o se solicita enlazar una interfaz de red externa, se exige origen público HTTPS y una lista de frontends HTTPS permitidos. **No prueba que exista el proxy TLS o WAF**.
 9. **Servidor de desarrollo local:** Vite escucha en `127.0.0.1` por defecto para que la vista de administrador y las pruebas internas no se expongan accidentalmente en redes compartidas. El acceso de Work desde otro equipo requerirá abrir el puerto **solo en un entorno aislado de pruebas**.
 10. **Artefacto público mínimo:** la página de pruebas `device-studio.html` se excluye de `dist` en producción y la CI falla si vuelve a aparecer.
-11. **Puerta obligatoria de publicación:** el workflow Pages exige `package-lock.json` y `server/package-lock.json` verificados, `npm ci`, auditoría de dependencias y pruebas completas antes de desplegar. **Los lockfiles todavía no existen en el repositorio** y por tanto el despliegue futuro quedará deliberadamente bloqueado hasta generarlos y revisarlos.
+11. **Puerta obligatoria de publicación:** el workflow Pages exige `package-lock.json` y `server/package-lock.json` verificados, `npm ci`, auditoría de dependencias y pruebas completas antes de desplegar. **Los lockfiles fueron generados y validados después de esta ronda**, solo en la rama de auditoría. Permanecen pendientes de revisión previa a fusión y publicación.
 
 ### Bloqueos que siguen abiertos
 
-- Generar/verificar lockfiles de frontend y servidor a partir de un entorno Node de confianza y versionarlos. No omitir temporalmente la puerta de publicación.
+- Lockfiles de frontend y servidor **generados y versionados en la rama de auditoría** mediante GitHub Actions con pruebas y auditoría. Revisar antes de fusionar y mantener la puerta de publicación.
 - Habilitar identidades/roles reales, permisos comprobados en cada petición, backend y BD de pedidos con transacciones.
 - Diseñar PIN comercial validado únicamente por servidor, protección antifraude, pago/conciliación, protección WAF/distribuida y límites de datos personales.
 - Establecer headers reales `Content-Security-Policy`, `Strict-Transport-Security` y otros en el hosting definitivo y ejecutar QA de navegador, dispositivos y permisos.
@@ -82,4 +82,15 @@ Esta revisión adicional se ejecutó **sin tocar main ni el despliegue público*
 - [GitHub Actions #44682423061](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44682423061): **195/195 pruebas automatizadas aprobadas**, cero fallos/omitidas, build Vite exitoso, chequeo de que Device Studio no aparece en `dist`.
 - Auditoría npm del frontend y servidor preliminar en el mismo run: **0 vulnerabilidades conocidas** en el árbol instalado de ese momento.
 - Las correcciones solo están en `audit/online-integral-work-2026-11`, PR #74 **sin fusionar**. No se ha hecho una prueba de penetración ni se ha comprobado la base de datos y la infraestructura de producción.
-- **Bloqueador nuevo:** no están versionados los lockfiles; el workflow de publicación **debe fallar** hasta que se generen/revisen y se puedan instalar con `npm ci`. No deshabilitar la puerta para poder publicar más rápido.
+- **Bloqueador histórico ya resuelto en la rama auditada:** los lockfiles se generaron/validaron y el CI usa `npm ci`. No están fusionados a `main`; conservar el bloqueo de publicación si falta alguno. No deshabilitar la puerta para poder publicar más rápido.
+
+## Revisión posterior — instalación reproducible y roles con bloqueo
+
+- GitHub Actions generó y versionó `package-lock.json` y `server/package-lock.json` tras validar los cambios mediante pruebas y auditoría. Desde entonces el CI usa `npm ci` en ambas carpetas.
+- `server/src/tenant-access.js` establece una única verificación de membresía activa, rol válido y plan Online/Plus. La API la usa tanto para lecturas como para escrituras; en cambios de estado usa `FOR SHARE OF u,r` antes de cualquier mutación de la orden y comprueba el rol actual bajo la transacción.
+- La API y la sonda de estado del panel Restaurante usan `credentials:'omit'` y no se autoriza CORS con credenciales; los tokens Bearer no deben guardarse en localStorage.
+- El workflow de Pages exige que el repositorio y rama sean exactamente `dvoladanexora/DVolada-3.0.` y `main`, inclusive en publicaciones manuales.
+- El perfil Cliente tiene opción para borrar **solo los datos locales del usuario** (perfil, pedidos de prueba, carrito, favoritos, mensajes y direcciones). No borra datos de otro rol ni representa un proceso de eliminación en una base de datos comercial.
+- Se incluyó migración `003_idempotency_retention.sql` y ejemplo de mantenimiento por lotes para limitar la persistencia de claves de idempotencia. **No se ha ejecutado ni probado todavía en PostgreSQL real**.
+
+**Advertencia permanente:** ninguna cantidad de pruebas unitarias o auditorías npm garantiza invulnerabilidad; los pedidos, PIN, pagos y cuentas comerciales siguen pendientes de integración segura y QA con dispositivos distintos.

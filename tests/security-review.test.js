@@ -50,3 +50,15 @@ test('Errores de base de datos no registran datos privados ni mensajes SQL',()=>
  assert.ok(!server.includes("console.error('API error',e)"));
  assert.ok(server.includes("return send(res,500,{error:'Internal server error',requestId})"));
 });
+
+test('Módulo Local/Plus no exporta fórmulas CSV ni ejecuta scripts en recibos',()=>{
+ const code=readFileSync(new URL('../src/PartnerConsole.jsx',import.meta.url),'utf8');
+ assert.ok(code.includes("import {csvFromRows} from './restaurant-export.js'"));
+ assert.ok(code.includes('const csv=csvFromRows(rows)'));
+ assert.ok(!code.includes("const csv='\\uFEFF'+rows.map"));
+ assert.ok(code.includes("try{w.opener=null}catch{}"));
+ assert.ok(code.includes('Content-Security-Policy'));
+ assert.ok(!code.includes('<script>window.onload'));
+ assert.ok(code.includes("logo.addEventListener('load',printNow"));
+ assert.ok(code.includes("logo.addEventListener('error',printNow"));
+});

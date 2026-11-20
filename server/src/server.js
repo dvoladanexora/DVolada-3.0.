@@ -29,10 +29,18 @@ const send=(res,status,body)=>{res.writeHead(status,{
  'cross-origin-resource-policy':'same-site'
  });res.end(JSON.stringify(body))};
 async function auth(req){
- const token=/^Bearer (.+)$/i.exec(req.headers.authorization||'')?.[1];
- if(!token)throw Object.assign(Error('Authentication required'),{code:401});
- const {payload}=await jwtVerify(token,secret,{issuer,audience,algorithms:['HS256']});
- if(!uuid.test(payload.restaurant_id||'')||!uuid.test(payload.sub||''))throw Object.assign(Error('Invalid identity'),{code:401});
+ const token=/^Bearer ([A-Za-z0-9._-]+)$/i.exec(String(req.headers.authorization||''))?.[1];
+ if(!token||token.length>4096)throw Object.assign(Error('Authentication required'),{code:401});
+ let payload;
+ try{({payload}=await jwtVerify(token,secret,{issuer,audience,algorithms:['HS256']}))}
+ catch{throw Object.assign(Error('Invalid or expired token'),{code:401})}
+ // JWTs sin exp o con vida arbitraria no pueden conceder acceso indefinido.
+ const now=Math.floor(Date.now()/1000);
+ if(typeof payload.restaurant_id!=='string'||typeof payload.sub!=='string'
+  ||!uuid.test(payload.restaurant_id)||!uuid.test(payload.sub)
+  ||!Number.isSafeInteger(payload.iat)||!Number.isSafeInteger(payload.exp)
+  ||payload.iat>now+30||payload.exp<=now||payload.exp-payload.iat>3600)
+  throw Object.assign(Error('Invalid identity or token lifetime'),{code:401});
  // Nunca confiar en role/permissions del JWT: pueden haber sido revocados.
  // Consultar membresía ACTIVA en cada solicitud y negar si no existe.
  const {rows}=await pool.query(

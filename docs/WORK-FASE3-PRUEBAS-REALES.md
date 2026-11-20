@@ -75,3 +75,11 @@ Por cada incidencia, Work debe registrar: **ID**, panel, entorno/navegador, comm
 5. **Decisión final del usuario:** solo después de aprobar las pruebas, decidir fusionar/publicar o seguir corrigiendo.
 
 Documento ampliado: `docs/WORK-ENTREGA-INTEGRAL-ONLINE.md`. Mantener PR #74 como borrador mientras se ejecuta el QA.
+
+
+## Gate adicional de publicación (posterior a E01–E20)
+**E21 — Protección del público frente a pedidos ficticios.** Probar localmente un build **de producción** (sin activar ninguna bandera DEV): la navegación por el catálogo es posible, pero iniciar checkout o confirmar una orden debe informar que Dvolada todavía no tiene pedidos comerciales habilitados. No deben crearse filas `dv_orders` nuevas ni mostrarse números de pedido como recibidos por restaurantes.
+
+En contraste, al ejecutar `VITE_DVOLADA_INTERNAL_PREVIEW=true npm run dev`, Work **sí debe poder probar los pedidos ficticios** de E01–E20. Mantener esta condición claramente separada en los resultados.
+
+**Nota:** E21 es un gate de seguridad de publicación; no obliga a desplegar el frontend al público para efectuar la comprobación.

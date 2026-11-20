@@ -5,9 +5,13 @@ import {jwtVerify} from 'jose';
 import {readJsonBody,validStatusPatch} from './request-validation.js';
 import {parseAllowedOrigins,allowedCorsHeaders} from './cors-policy.js';
 import {validRestaurantRole,restaurantTransitionPermission} from './restaurant-permissions.js';
+import {createActorLimiter} from './actor-rate-limit.js';
 
 const port=Number(process.env.PORT||8080);
 const allowedOrigins=parseAllowedOrigins(process.env.DVOLADA_ALLOWED_ORIGINS);
+// Cuotas por empleado para evitar abuso ordinario. WAF distribuido sigue pendiente.
+const checkReadRate=createActorLimiter({limit:600,windowMs:60_000});
+const checkWriteRate=createActorLimiter({limit:180,windowMs:60_000});
 const databaseUrl=process.env.DATABASE_URL;
 const jwtSecret=process.env.DVOLADA_JWT_SECRET;
 const issuer=process.env.DVOLADA_JWT_ISSUER;
@@ -70,6 +74,11 @@ const server=http.createServer(async(req,res)=>{
   await pool.query('SELECT 1');return send(res,200,{status:'ok'});
  }
  const identity=await auth(req);
+ const quota=(req.method==='PATCH'?checkWriteRate:checkReadRate)(identity.restaurantId+':'+identity.userId);
+ if(!quota.allowed){
+  res.setHeader('Retry-After',String(quota.retryAfterSeconds));
+  return send(res,429,{error:'Request limit reached; retry later'});
+ }
  if(req.method==='GET'&&url.pathname==='/api/v1/restaurant/capabilities')
   return send(res,200,{online:true,local:false,restaurantId:identity.restaurantId});
  if(req.method==='GET'&&url.pathname==='/api/v1/restaurant/orders'){

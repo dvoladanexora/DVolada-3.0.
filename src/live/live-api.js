@@ -54,6 +54,8 @@ export function createLiveApi({baseUrl,getSessionToken,fetchImpl=fetch}){
   assignCourier:(restaurantId,order,courierId,key)=>request('/api/v1/restaurant/orders/'+s(order.id)+'/assign',
    {restaurantId,method:'PATCH',key,body:{courierId,expectedVersion:order.version}}),
   courierOrders:()=>request('/api/v1/courier/orders'),
+  courierOffer:(order,action,key)=>request('/api/v1/courier/orders/'+s(order.id)+'/offer',
+   {method:'POST',key,body:{action,expectedVersion:order.version}}),
   courierStatus:(order,status,key)=>request('/api/v1/courier/orders/'+s(order.id)+'/status',
    {method:'PATCH',key,body:{status,expectedVersion:order.version}}),
   courierDeliver:(order,pin,key)=>request('/api/v1/courier/orders/'+s(order.id)+'/deliver',

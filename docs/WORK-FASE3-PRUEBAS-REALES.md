@@ -122,3 +122,15 @@ Informe de seguridad: docs/SEGURIDAD-PUBLICACION-AUDITORIA.md.
 **S14 — Publicación bloqueada hasta dependencias reproducibles:** generar, revisar y versionar `package-lock.json` y `server/package-lock.json` y luego ejecutar `npm ci`. El workflow de despliegue no debe publicar si falta cualquiera de esos archivos, si falla `npm audit` o si hay pruebas fallidas.
 
 No dar S10–S14 por aprobados mediante lectura estática solamente. Work debe dejar evidencia de navegador y de instalación/servidor, marcando **NO EVALUABLE** los pasos que necesitan backend aún no implementado.
+
+## S15–S18 — Revisión final de permisos, dependencias y datos del dispositivo
+
+**S15 — Revocación en plena operación:** cuando exista backend comercial, iniciar un cambio de estado con dos dispositivos, revocar el acceso del empleado antes de confirmar y verificar que el servidor devuelve 403. Probar también un cambio de rol Caja → Cocina y plan Online → inactivo. **NO EVALUABLE** sin base de datos y proveedor de identidad reales. La regla está cubierta provisionalmente por pruebas unitarias de consulta SQL.
+
+**S16 — Cookies y sesiones:** comprobar en red que la API con bearer token no envía cookies de sesión involuntarias; la sonda de `/health` no debe enviarlas. No almacenar tokens reales en `localStorage`.
+
+**S17 — Borrar mis datos del dispositivo:** con datos ficticios, añadir favoritos, direcciones y un pedido de prueba. Desde Mi perfil, confirmar `Borrar mis datos de este dispositivo`. Deben desaparecer esos datos tras recargar; otro negocio de la demostración no debe perder su menú ni sus preferencias. Repetir en dispositivo móvil. Si hay dos pestañas abiertas, cerrarlas antes para evitar que reescriban datos.
+
+**S18 — Lockfiles y publicación segura:** comprobar `npm ci` en frontend y servidor, auditorías npm y `npm run test:all`. Los flujos manuales de GitHub Pages no deben desplegar desde ramas distintas de `main`. No fusionar ni publicar durante QA sin autorización.
+
+**Persisten como NO EVALUABLE:** pruebas reales de autorización, pagos, PIN comercial, WAF y base de datos PostgreSQL hasta que esos servicios estén implementados y conectados.

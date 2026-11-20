@@ -217,7 +217,7 @@ export default function LiveApp(){
  const fee=deliveryMethod==='delivery'?restaurant?.delivery_fee_minor??0:0;
  const canManage=['owner','manager'].includes(selectedBusiness?.staff_role);
  return <div className="dvl-app">
-  <header className="dvl-header"><div className="dvl-brand"><span className="dvl-brandmark">D</span><div><strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
+  <header className="dvl-header"><div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada" /><div><strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
    <div className="dvl-head-actions">{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy} onClick={logout}><LogOut size={15}/> Salir</Action>}</div></header>
   <main className="dvl-main">
   <div className="dvl-intro"><span className="dvl-kicker">NEXORA SYSTEMS · DVOLADA ONLINE</span>
@@ -322,7 +322,7 @@ export default function LiveApp(){
     <section className="dvl-panel"><h2>Negocios afiliados</h2><div className="dvl-stack">{adminRestaurants.map(r=><div className="dvl-row" key={r.id}>
      <strong>{r.name}</strong><span>{r.plan} · {r.subscription_status} · {r.online_state} · {r.order_count} pedidos</span></div>)}</div></section>
     </div>}
-   <footer className="dvl-footer"><span>Powered by Nexora Systems</span><span>Acceso seguro · Dvolada Online</span></footer>
+   <footer className="dvl-footer"><span className="dvl-powered">Powered by <img src={import.meta.env.BASE_URL+'file_00000000e77081fd8cf8ee8349e461b6.png'} alt="Nexora Systems" /></span><span>Acceso seguro · Dvolada Online</span></footer>
   </>}
   </main></div>;
 }

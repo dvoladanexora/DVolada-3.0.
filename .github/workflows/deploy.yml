@@ -16,6 +16,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
+    # workflow_dispatch también debe respetar la rama de publicación aprobada.
+    if: github.ref == 'refs/heads/main' && github.repository == 'dvoladanexora/DVolada-3.0.'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -46,6 +48,7 @@ jobs:
         with:
           path: dist
   deploy:
+    if: github.ref == 'refs/heads/main' && github.repository == 'dvoladanexora/DVolada-3.0.'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

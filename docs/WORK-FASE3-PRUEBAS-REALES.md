@@ -134,3 +134,14 @@ No dar S10–S14 por aprobados mediante lectura estática solamente. Work debe d
 **S18 — Lockfiles y publicación segura:** comprobar `npm ci` en frontend y servidor, auditorías npm y `npm run test:all`. Los flujos manuales de GitHub Pages no deben desplegar desde ramas distintas de `main`. No fusionar ni publicar durante QA sin autorización.
 
 **Persisten como NO EVALUABLE:** pruebas reales de autorización, pagos, PIN comercial, WAF y base de datos PostgreSQL hasta que esos servicios estén implementados y conectados.
+
+
+## S19–S21 — Validación de seguridad con PostgreSQL real
+
+**S19 — Aislamiento de API y SQL:** ejecutar `npm --prefix server run test:db` exclusivamente contra la base `dvolada_security_test` descartable. Revisar que A no pueda leer B y que tanto el JWT como permisos revocados sean rechazados. Confirmar que la migración `004_online_event_integrity.sql` impide crear eventos de otros negocios.
+
+**S20 — Concurrencia e idempotencia:** confirmar que dos empleados con la misma versión de pedido no consiguen dos actualizaciones, y que una clave reutilizada en negocios distintos no cruza resultados. En la app comercial, repetir con dispositivos reales y las sesiones verdaderas.
+
+**S21 — Cabeceras y abuso:** rechazar JSON mayor de 4 KB, cerrar la conexión tras 413, invalidar cursores alterados y rechazar orígenes externos no autorizados. En producción comprobar WAF, límites distribuidos por IP/cuenta y registros sin datos sensibles.
+
+**Importante:** la suite PostgreSQL sí usa una base real, pero **sigue siendo una API preliminar sin frontend comercial conectado**. No marcar pruebas de pagos, entrega, PIN, notificaciones o fraude como aprobadas sin implementar esos servicios.

@@ -25,6 +25,11 @@ if(!deployment.ok){console.error('Refusing insecure API startup:',deployment.rea
 // Cuotas por empleado para evitar abuso ordinario. WAF distribuido sigue pendiente.
 const checkReadRate=createActorLimiter({limit:600,windowMs:60_000});
 const checkWriteRate=createActorLimiter({limit:180,windowMs:60_000});
+// Denegar también solicitudes SIN sesión, antes de verificar JWT o consultar SQL.
+// Clave de IP de SOCKET: X-Forwarded-For / CF-Connecting-IP NO son confiables
+// si el puerto Node puede recibir tráfico directo. Cloudflare WAF es obligatorio.
+const checkPreAuthRate=createActorLimiter({limit:180,windowMs:60_000,maxEntries:3000});
+const checkInstanceRate=createActorLimiter({limit:2400,windowMs:60_000,maxEntries:1});
 const databaseUrl=process.env.DATABASE_URL;
 const jwtSecret=process.env.DVOLADA_JWT_SECRET;
 const issuer=process.env.DVOLADA_JWT_ISSUER;
@@ -69,6 +74,12 @@ const server=http.createServer(async(req,res)=>{
  const requestId=randomUUID();
  res.setHeader('X-Request-ID',requestId);
  try{
+ const globalQuota=checkInstanceRate('all-requests');
+ const ipQuota=checkPreAuthRate('socket:'+String(req.socket?.remoteAddress||'unknown'));
+ if(!globalQuota.allowed||!ipQuota.allowed){
+  res.setHeader('Retry-After',String(Math.max(globalQuota.retryAfterSeconds,ipQuota.retryAfterSeconds)));
+  return send(res,429,{error:'Request limit reached; retry later'});
+ }
  const origin=req.headers.origin;
  if(origin){
   const cors=allowedCorsHeaders(origin,allowedOrigins);

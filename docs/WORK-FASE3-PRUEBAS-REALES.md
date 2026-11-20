@@ -83,3 +83,25 @@ Documento ampliado: `docs/WORK-ENTREGA-INTEGRAL-ONLINE.md`. Mantener PR #74 como
 En contraste, al ejecutar `VITE_DVOLADA_INTERNAL_PREVIEW=true npm run dev`, Work **sí debe poder probar los pedidos ficticios** de E01–E20. Mantener esta condición claramente separada en los resultados.
 
 **Nota:** E21 es un gate de seguridad de publicación; no obliga a desplegar el frontend al público para efectuar la comprobación.
+
+## Controles de seguridad para Work (solo entorno de pruebas autorizado)
+
+**S01 — XSS:** escribir textos ficticios con caracteres HTML en productos, notas, direcciones, mensajes y cancelaciones. Deben mostrarse como texto, no ejecutar código. Imprimir comandas y exportar CSV para verificar el escape.
+
+**S02 — Aislamiento de negocios:** abrir A y B en sesiones distintas de prueba. Un empleado de A no debe ver ni cambiar pedidos de B. En demo local esto no prueba permisos reales; debe repetirse cuando exista backend autenticado.
+
+**S03 — Revocación:** al conectar el proveedor de identidad, desactivar la membresía de un empleado en BD mientras conserva el token. Toda consulta/modificación posterior debe devolver 403. Probar roles de Caja, Cocina, gerente y usuario inexistente.
+
+**S04 — Repartidor y PIN:** ofertas solo incluyen cantidades y negocio, nunca datos del cliente; asignados ven únicamente datos necesarios. Nunca mostrar PIN ni secretos en panel repartidor o respuestas API.
+
+**S05 — Antifraude:** modificar en el navegador el importe, ID de negocio, descuentos, estado y PIN; los cambios no deben ser aceptados por el servidor real. Verificar límite global de dos entregas por repartidor entre móviles.
+
+**S06 — API:** solicitudes sin JWT, JWT vencido, firma incorrecta, rol ajeno, ID de otro restaurante, JSON inválido, límite de bytes, idempotencia repetida y solicitudes excesivas deben devolver 401/403/400/409/413/422/429 según corresponda, sin errores internos ni filtraciones de información.
+
+**S07 — Publicación:** el build de producción debe impedir pedidos ficticios; la vista demo de Vite solo puede abrirse localmente. Verificar HTTPS, CSP/HSTS, políticas de origen, WAF, alertas y controles de almacenamiento antes de exponer una API real.
+
+**S08 — Dependencias:** el corte de auditoría debe tener resultado npm audit sin vulnerabilidades altas o críticas; generar lockfiles y verificar instalación reproducible antes del lanzamiento. Revisar alertas de GitHub/Dependabot.
+
+**IMPORTANTE:** S02–S07 contienen pasos bloqueados por ausencia del backend comercial. Work debe marcarlos como **NO EVALUABLE — requiere API real**, no declararlos aprobados por pruebas de localStorage. No realizar pruebas de carga agresivas ni de explotación sobre dominios públicos sin autorización específica.
+
+Informe de seguridad: docs/SEGURIDAD-PUBLICACION-AUDITORIA.md.

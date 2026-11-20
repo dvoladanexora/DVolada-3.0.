@@ -137,8 +137,9 @@ test('Seguridad HTTP real y aislamiento de restaurantes con PostgreSQL', {skip:!
    assert.equal(denied.status,403);
    assert.equal((await pool.query('SELECT version,status FROM online_orders WHERE id=$1',[orderC])).rows[0].status,'Pendiente');
   });
+  const sharedIdempotencyKey=randomUUID();
   await t.test('Caja acepta una vez y reintento idempotente devuelve lo mismo',async()=>{
-   const key=randomUUID();
+   const key=sharedIdempotencyKey;
    const first=await patch(orderA,'Aceptado',1,tokens.cashier,key);
    assert.equal(first.status,200,JSON.stringify(first.body));
    assert.equal(first.body.order.version,2);
@@ -151,6 +152,26 @@ test('Seguridad HTTP real y aislamiento de restaurantes con PostgreSQL', {skip:!
    assert.equal((await patch(orderA,'Listo',2,tokens.cashier)).status,422);
    assert.equal((await patch(orderA,'Preparando',2,tokens.cashier)).status,403);
    assert.equal((await patch(orderB,'Aceptado',1,tokens.cashier)).status,404);
+  });
+  await t.test('Idempotencia y cambios tienen aislamiento por negocio y actor',async()=>{
+   // Repetir la MISMA clave de cliente en dos negocios no puede cruzar respuestas.
+   const b=await patch(orderB,'Aceptado',1,tokens.ownerB,sharedIdempotencyKey);
+   assert.equal(b.status,200,JSON.stringify(b.body));
+   assert.equal(b.body.order.id,orderB);
+   const aChanges=await call('/api/v1/restaurant/orders/changes');
+   const bChanges=await call('/api/v1/restaurant/orders/changes',{token:tokens.ownerB});
+   assert.equal(aChanges.status,200);
+   assert.equal(bChanges.status,200);
+   assert.ok(aChanges.body.events.length>=1);
+   assert.equal(bChanges.body.events.length,1);
+   assert.ok(aChanges.body.events.every(e=>e.order_id!==orderB));
+   assert.ok(bChanges.body.events.every(e=>e.order_id===orderB));
+   const keys=await pool.query(
+    'SELECT restaurant_id,actor_id FROM online_idempotency WHERE idempotency_key=$1',
+    [sharedIdempotencyKey]
+   );
+   assert.equal(keys.rows.length,2,'la misma clave no se comparte entre actores o negocios');
+   assert.deepEqual(new Set(keys.rows.map(x=>x.restaurant_id)),new Set([rA,rB]));
   });
   await t.test('La base impide eventos cruzados y versiones de evento duplicadas',async()=>{
    // El rechazo ocurre EN PostgreSQL, sin depender de las verificaciones de la API.

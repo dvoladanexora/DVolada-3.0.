@@ -1,5 +1,7 @@
 name: Validar cambios Dvolada
 on:
+  push:
+    branches: [prelaunch/phase-2-worker-d1]
   pull_request:
     branches: [main]
     paths-ignore:

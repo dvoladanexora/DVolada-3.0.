@@ -161,7 +161,7 @@ const server=http.createServer(async(req,res)=>{
   }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
  }
  return send(res,404,{error:'Not found'});
- }catch(e){if(e.code===401||e.code===403||e.code===400||e.code===413||e.code===415)return send(res,e.code,{error:e.message});if(e.code==='ERR_JWT_EXPIRED'||e.code?.startsWith?.('ERR_JWT'))return send(res,401,{error:'Invalid or expired token'});// Evitar registrar mensajes SQL, cuerpos de pedidos, JWT, PIN o datos del cliente.
+ }catch(e){if(e.code===413){res.setHeader('Connection','close');return send(res,413,{error:'Request too large'})}if(e.code===401||e.code===403||e.code===400||e.code===415)return send(res,e.code,{error:e.message});if(e.code==='ERR_JWT_EXPIRED'||e.code?.startsWith?.('ERR_JWT'))return send(res,401,{error:'Invalid or expired token'});// Evitar registrar mensajes SQL, cuerpos de pedidos, JWT, PIN o datos del cliente.
  const safeCode=typeof e.code==='string'&&/^[A-Z0-9_]{1,30}$/.test(e.code)?e.code:'UNEXPECTED';
  console.error('API internal error',JSON.stringify({requestId,code:safeCode}));
  return send(res,500,{error:'Internal server error',requestId})}

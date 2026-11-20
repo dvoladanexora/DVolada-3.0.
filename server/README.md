@@ -3,7 +3,7 @@
 **No desplegado ni conectado al frontend.** API de prueba con Node.js + PostgreSQL, separada del plan Local. La web estática de GitHub Pages no ejecuta este servidor.
 
 ## Preparación
-1. Crear una base PostgreSQL de pruebas y aplicar **en orden** `sql/001_online_core.sql` y `sql/002_restaurant_membership.sql`. Sin la segunda migración la API no puede autenticar empleados.
+1. Crear una base PostgreSQL de pruebas y aplicar **en orden** `sql/001_online_core.sql`, `sql/002_restaurant_membership.sql` y `sql/003_idempotency_retention.sql`. Sin la segunda migración la API no puede autenticar empleados.
 2. En `server/`, ejecutar `npm install`.
 3. Configurar `DATABASE_URL`, `DVOLADA_JWT_SECRET` (mínimo 32 bytes aleatorios), `DVOLADA_JWT_ISSUER`, `DVOLADA_JWT_AUDIENCE`, `DVOLADA_ALLOWED_ORIGINS` (orígenes HTTPS del frontend separados por comas) y `PORT`. No guardar secretos en Git ni en variables `VITE_*`.
 4. Ejecutar `npm run check` y `npm start`.
@@ -32,7 +32,7 @@
 - El JWT debe incluir `iat` y `exp`, con vigencia máxima de 3600 s, firma HS256 con secreto aleatorio, emisor/audiencia validada. La membresía y el rol se comprueban **en cada solicitud** en SQL, no en el JWT.
 - La matriz inicial limita **Caja** a Pendiente → Aceptado/Rechazado; **Cocina** a Aceptado → Preparando → Listo; propietarios/gerentes a las transiciones implementadas. Repartidores, cancelaciones reales y PIN de entrega todavía no están autorizados por esta API.
 - El servicio de mapas carga Leaflet con firmas SRI verificadas en la página oficial; el GPS y rutas externas requerirán consentimiento y una política de privacidad antes de la comercialización.
-- Generar y versionar lockfiles de dependencias (frontend y servidor) antes del despliegue, activar controles de vulnerabilidades y CI de auditoría. El flujo CI actual usa `npm install` porque todavía no hay lockfile reproducible.
+- Generar y versionar lockfiles de dependencias (frontend y servidor) antes del despliegue, activar controles de vulnerabilidades y CI de auditoría. La rama de auditoría ya contiene `package-lock.json` y `server/package-lock.json`; el CI emplea `npm ci` y audita ambos árboles. No confundir esta validación con integración PostgreSQL real.
 
 
 ## Protección de arranque en producción
@@ -43,3 +43,9 @@
 - Las pruebas de seguridad de la revisión están en `npm run test:security`; GitHub Actions también ejecuta `npm audit` para impedir publicar dependencias con alertas de severidad alta o crítica.
 - El endpoint `GET /health` consolida consultas y usa una caché corta por instancia; no registrar JWT, PIN, direcciones ni mensajes SQL en logs. Los errores 500 incluyen un `requestId` correlacionable con el registro del servidor.
 - **No apto todavía para uso comercial:** quedan por integrar el proveedor de identidad, la base multiusuario de pedidos, sincronización, seguridad del PIN y del pago, WAF, backup/restauración y pruebas reales de autorización.
+
+## Mantenimiento de idempotencia y datos
+- La migración `003_idempotency_retention.sql` crea `expires_at` con retención inicial de **7 días** e índice de expiración.
+- `sql/maintenance_idempotency_cleanup.sql` elimina como máximo 1,000 claves expiradas por ejecución usando `FOR UPDATE SKIP LOCKED`. Debe ejecutarse en una tarea autorizada y monitorizada, nunca desde una solicitud HTTP.
+- No elimina pedidos ni eventos; probar la migración y el mantenimiento en PostgreSQL antes de automatizarlos.
+- El CI con `npm ci` y auditoría no sustituye pruebas de carga, control de acceso multiusuario ni respaldo/restauración.

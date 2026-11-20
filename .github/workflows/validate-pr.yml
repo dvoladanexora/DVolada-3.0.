@@ -47,6 +47,8 @@ jobs:
         run: npm run test:courier
       - name: Pruebas integrales de pedidos, extras y PWA
         run: npm run test:integration
+      - name: Pruebas preventivas de seguridad y exposición de datos
+        run: npm run test:security
       - name: Validar sintaxis del servidor preliminar
         run: npm run check:server
       - name: Compilar aplicación

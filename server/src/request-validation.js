@@ -4,10 +4,19 @@
 const problem=(message,code)=>Object.assign(Error(message),{code});
 
 /** Rechaza null/arrays antes de leer propiedades del PATCH. */
+const patchKeys=new Set(['expectedVersion','status']);
+/** Contrato cerrado para evitar que el cliente intente incluir precio,
+ * dueño, restaurante, PIN o permisos en una transición de estado.
+ * El rechazo no sustituye la comprobación del rol y de la orden en SQL.
+ */
 export function validStatusPatch(body){
  return Boolean(body&&typeof body==='object'&&!Array.isArray(body)
+  &&Object.keys(body).length===2
+  &&Object.keys(body).every(key=>patchKeys.has(key))
+  &&Object.hasOwn(body,'expectedVersion')&&Object.hasOwn(body,'status')
   &&Number.isSafeInteger(body.expectedVersion)&&body.expectedVersion>=1
-  &&typeof body.status==='string'&&body.status.length>0&&body.status.length<=40);
+  &&typeof body.status==='string'
+  &&['Aceptado','Rechazado','Preparando','Listo','Cancelado'].includes(body.status));
 }
 
 /** Máximo de bytes reales, no de caracteres Unicode; sin parser de JSON en streaming. */

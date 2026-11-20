@@ -53,3 +53,5 @@ jobs:
         run: npm run check:server
       - name: Compilar aplicación
         run: npm run build
+      - name: Evitar publicar páginas internas de QA
+        run: test ! -e dist/device-studio.html

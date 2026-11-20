@@ -223,7 +223,7 @@ export default function LiveApp(){
    setSelectedPin({id:order.id,pin:data.deliveryPin,status:data.order.status});
   },{refresh:false})
  }
- async function action(fn){const result=await run(fn);if(result)setStatus('Cambio confirmado en el servidor.')}
+ async function action(fn){const result=await run(fn);if(result)setStatus('Cambio confirmado en el servidor.');return result}
  const userRole=session?.user?.role;
  const availableScopes=[
   ...(userRole==='customer'?['customer']:[]),
@@ -248,6 +248,8 @@ export default function LiveApp(){
   {offline&&<div className="dvl-offline" role="alert"><WifiOff size={19}/> Sin conexión. Los pedidos se muestran como potencialmente desactualizados; las acciones están bloqueadas.</div>}
   <WaitOrError message={status}/>
   <WaitOrError message={error} warning/>
+  {session&&<div className="dvl-id-note"><span>ID de vinculación: <code>{formattedUserId}</code></span><Action kind="text"
+   onClick={()=>navigator.clipboard?.writeText(formattedUserId).catch(()=>{})}>Copiar</Action></div>}
   {!configured&&<section className="dvl-panel"><ShieldCheck/><h2>Integración pendiente</h2>
    <p>Esta versión espera la cuenta exclusiva de Cloudflare y el proyecto Firebase de Dvolada.
    No muestra pedidos ni datos privados de demostración.</p></section>}
@@ -310,7 +312,38 @@ export default function LiveApp(){
     <section className="dvl-panel"><div className="dvl-row"><h2>Centro de pedidos</h2><label>Negocio<select value={selectedRestaurantId}
      onChange={e=>setSelectedRestaurantId(e.target.value)}>{session.restaurants?.map(r=><option key={r.restaurant_id} value={r.restaurant_id}>{r.name}</option>)}</select></label></div>
      <p className="dvl-muted">Solo los empleados autorizados pueden cambiar estados; los cambios simultáneos generan conflicto.</p>
-    </section><div className="dvl-grid">{orders.map(o=><OrderCard key={o.id} order={o}>
+    </section>
+    {canManage&&<section className="dvl-panel"><h2>Menú y disponibilidad</h2>
+     <p className="dvl-muted">El estado y los precios se guardan en el servidor, no en este dispositivo.</p>
+     <div className="dvl-inline dvl-control-actions">
+      <span>Estado: <strong>{restaurantCapabilities?.onlineState||'Desconocido'}</strong></span>
+      {['open','paused','closed'].map(state=><Action key={state} kind="secondary"
+       disabled={busy||offline||restaurantCapabilities?.onlineState===state}
+       onClick={()=>action(()=>api.updateAvailability(selectedRestaurantId,state))}>
+       {state==='open'?'Abrir':state==='paused'?'Pausar':'Cerrar'}</Action>)}
+     </div>
+     <div className="dvl-grid dvl-editor">
+      <label>Nuevo producto<input value={newProductName} maxLength={150} onChange={e=>setNewProductName(e.target.value)} placeholder="Nombre del producto"/></label>
+      <label>Precio (L)<input type="number" min="0" step=".01" value={newProductPrice} onChange={e=>setNewProductPrice(e.target.value)} placeholder="95.00"/></label>
+      <Action disabled={busy||offline||newProductName.trim().length<2||!Number.isFinite(Number(newProductPrice))||Number(newProductPrice)<=0}
+       onClick={async()=>{const saved=await action(()=>api.createProduct(selectedRestaurantId,{name:newProductName.trim(),
+        priceMinor:Math.round(Number(newProductPrice)*100),available:true}));
+        if(saved){setNewProductName('');setNewProductPrice('')}}}>Añadir al menú</Action>
+     </div>
+     <div className="dvl-stack dvl-manage-menu">{manageProducts.map(p=><div className="dvl-row" key={p.id}>
+      <div><strong>{p.name}</strong><small>{p.available?'Disponible':'Agotado'} · {price(p.price_minor)}</small></div>
+      <div className="dvl-inline">
+       <input aria-label={'Nuevo precio '+p.name} type="number" min="0" step=".01" placeholder="Nuevo precio" className="dvl-price-input"
+        value={editPrices[p.id]??''} onChange={e=>setEditPrices(x=>({...x,[p.id]:e.target.value}))}/>
+       <Action kind="secondary" disabled={busy||offline||!editPrices[p.id]||!Number.isFinite(Number(editPrices[p.id]))}
+        onClick={async()=>{const saved=await action(()=>api.updateProduct(selectedRestaurantId,p.id,{priceMinor:Math.round(Number(editPrices[p.id])*100)}));
+         if(saved)setEditPrices(v=>({...v,[p.id]:''}))}}>Guardar precio</Action>
+       <Action kind="secondary" disabled={busy||offline} onClick={()=>action(()=>api.updateProduct(selectedRestaurantId,p.id,{available:!Boolean(p.available)}))}>
+        {p.available?'Agotar':'Habilitar'}</Action>
+      </div>
+     </div>)}</div>
+    </section>}
+    <div className="dvl-grid">{orders.map(o=><OrderCard key={o.id} order={o}>
       <div className="dvl-inline">{(staffTransitions[o.status]||[]).map(next=><Action key={next} disabled={busy||offline}
         onClick={()=>action(()=>api.restaurantStatus(selectedRestaurantId,o,next,newKey()))}>{next}</Action>)}</div>
       {o.status==='Listo'&&o.deliveryMethod==='pickup'&&<Action disabled={busy||offline} onClick={()=>action(()=>api.restaurantStatus(selectedRestaurantId,o,'Entregado',newKey()))}>Entregar en mostrador</Action>}
@@ -347,6 +380,41 @@ export default function LiveApp(){
      <div><strong>{adminStats?.couriers?.active??'—'}</strong><span>Repartidores habilitados</span></div></div></section>
     <section className="dvl-panel"><h2>Negocios afiliados</h2><div className="dvl-stack">{adminRestaurants.map(r=><div className="dvl-row" key={r.id}>
      <strong>{r.name}</strong><span>{r.plan} · {r.subscription_status} · {r.online_state} · {r.order_count} pedidos</span></div>)}</div></section>
+    <section className="dvl-panel">
+     <h2>Alta de negocios y afiliados</h2>
+     <p className="dvl-muted">Solo Nexora puede activar suscripciones y vincular personal. El negocio se crea cerrado e inactivo por seguridad.</p>
+     <div className="dvl-grid dvl-editor">
+      <label>Nuevo restaurante<input value={newRestaurantName} maxLength={160} onChange={e=>setNewRestaurantName(e.target.value)} placeholder="Nombre comercial"/></label>
+      <label>Plan<select value={newRestaurantPlan} onChange={e=>setNewRestaurantPlan(e.target.value)}>
+       <option value="ONLINE">Dvolada Cloud</option><option value="LOCAL">Dvolada Local</option><option value="PLUS">Dvolada Plus</option></select></label>
+      <Action disabled={busy||offline||newRestaurantName.trim().length<2}
+       onClick={async()=>{const result=await action(()=>api.adminCreateRestaurant({name:newRestaurantName,plan:newRestaurantPlan}));
+        if(result){setAdminSelectedId(result.restaurant.id);setNewRestaurantName('')}}}>Crear negocio</Action>
+     </div>
+     <label>Negocio para administrar<select value={adminSelectedId} onChange={e=>setAdminSelectedId(e.target.value)}>
+      <option value="">Seleccionar</option>{adminRestaurants.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
+     <div className="dvl-inline dvl-control-actions">
+      {adminRestaurants.filter(r=>r.id===adminSelectedId).map(r=><React.Fragment key={r.id}>
+       <Action kind="secondary" disabled={busy||offline||r.subscription_status==='active'}
+        onClick={()=>action(()=>api.adminUpdateRestaurant(r.id,{subscriptionStatus:'active'}))}>Activar suscripción</Action>
+       <Action kind="secondary" disabled={busy||offline||r.subscription_status==='inactive'}
+        onClick={()=>action(()=>api.adminUpdateRestaurant(r.id,{subscriptionStatus:'inactive'}))}>Suspender</Action>
+      </React.Fragment>)}
+     </div>
+     <div className="dvl-grid dvl-editor">
+      <label>ID de usuario verificado<input value={adminMemberId} onChange={e=>setAdminMemberId(e.target.value)} placeholder="UUID del usuario"/></label>
+      <label>Rol del empleado<select value={adminStaffRole} onChange={e=>setAdminStaffRole(e.target.value)}>
+       {['owner','manager','kitchen','cashier'].map(s=><option value={s} key={s}>{s}</option>)}</select></label>
+      <Action disabled={busy||offline||!adminSelectedId||adminMemberId.length<32}
+       onClick={()=>action(()=>api.adminAssignMember(adminSelectedId,{userId:adminMemberId.trim(),staffRole:adminStaffRole}))}>
+       Vincular empleado</Action>
+     </div>
+     <div className="dvl-grid dvl-editor">
+      <label>ID de repartidor<input value={adminCourierId} onChange={e=>setAdminCourierId(e.target.value)} placeholder="UUID de usuario verificado"/></label>
+      <Action disabled={busy||offline||adminCourierId.length<32}
+       onClick={()=>action(()=>api.adminEnrollCourier(adminCourierId.trim()))}>Habilitar repartidor</Action>
+     </div>
+    </section>
     </div>}
    <footer className="dvl-footer"><span className="dvl-powered">Powered by <img src={import.meta.env.BASE_URL+'file_00000000e77081fd8cf8ee8349e461b6.png'} alt="Nexora Systems" /></span><span>Acceso seguro · Dvolada Online</span></footer>
   </>}

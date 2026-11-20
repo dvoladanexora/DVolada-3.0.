@@ -88,3 +88,40 @@ test('accepts localhost HTTP only for development and normalizes origin',async()
  await api.listOrders();
  assert.equal(captured,'http://localhost:8787/api/v1/restaurant/orders');
 });
+
+test('invalid JSON payload on successful response is never treated as a valid confirmation',async()=>{
+ for(const payload of [null,[],42,'OK']){
+  const api=createOnlineApi({baseUrl:'https://api.example.com',getAccessToken:()=> 'x',
+   fetchImpl:async()=>({ok:true,status:200,json:async()=>payload})});
+  await assert.rejects(api.listOrders(),error=>error instanceof OnlineApiError&&error.status===502);
+ }
+ const malformed=createOnlineApi({baseUrl:'https://api.example.com',getAccessToken:()=> 'x',
+  fetchImpl:async()=>({ok:true,status:200,json:async()=>{throw Error('Invalid JSON')}})});
+ await assert.rejects(malformed.listOrders(),error=>error instanceof OnlineApiError&&error.status===502);
+});
+test('HTTP error with null, text or bad JSON returns a structured error',async()=>{
+ for(const payload of [null,[],0,'Internal error']){
+  const api=createOnlineApi({baseUrl:'https://api.example.com',getAccessToken:()=> 'x',
+   fetchImpl:async()=>({ok:false,status:503,json:async()=>payload})});
+  await assert.rejects(api.listOrders(),error=>error instanceof OnlineApiError&&error.status===503&&error.message==='Error de servidor');
+ }
+ const badJson=createOnlineApi({baseUrl:'https://api.example.com',getAccessToken:()=> 'x',
+  fetchImpl:async()=>({ok:false,status:502,json:async()=>{throw Error('Broken JSON')}})});
+ await assert.rejects(badJson.listOrders(),error=>error instanceof OnlineApiError&&error.status===502);
+});
+test('lost acknowledgement of status PATCH is never retried automatically',async()=>{
+ let calls=0;
+ const api=createOnlineApi({baseUrl:'https://api.example.com',getAccessToken:()=> 'x',
+  fetchImpl:async()=>{calls++;throw TypeError('Network lost')}});
+ await assert.rejects(api.updateStatus({id:'abc',version:2},'Listo'),error=>{
+  assert.ok(error instanceof OnlineApiError);assert.equal(error.status,0);
+  assert.match(error.message,/Verificá el estado actual/);return true;
+ });
+ assert.equal(calls,1,'Nunca repetir una mutación cuando se desconoce si el servidor la recibió');
+});
+test('aborted API requests keep their abort signal instead of being reported as a network failure',async()=>{
+ const ctrl=new AbortController();ctrl.abort();
+ const stop=Object.assign(Error('Request aborted'),{name:'AbortError'});
+ const api=createOnlineApi({baseUrl:'https://api.example.com',getAccessToken:()=> 'x',fetchImpl:async()=>{throw stop}});
+ await assert.rejects(api.listOrders(ctrl.signal),e=>e===stop);
+});

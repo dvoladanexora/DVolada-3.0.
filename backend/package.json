@@ -13,6 +13,8 @@
     "deploy:production": "cf deploy --mode production"
   },
   "devDependencies": {
-    "cf": "1.0.0-rc.2"
+    "cf": "1.0.0-rc.2",
+    "vite": "^7.1.0",
+    "@cloudflare/vite-plugin": "^2.0.0-rc.0"
   }
 }

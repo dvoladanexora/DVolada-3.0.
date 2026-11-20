@@ -26,7 +26,7 @@ export function resolveCartProduct(line,menu){
  if(exact)return exact;
  if(line?.productId===undefined&&typeof line?.id==='string'){
   const prefix=line.id.split('-')[0];
-  if(/^\\d+$/.test(prefix))return items.find(item=>String(item.id)===prefix)||null;
+  if(/^\d+$/.test(prefix))return items.find(item=>String(item.id)===prefix)||null;
  }
  return null;
 }

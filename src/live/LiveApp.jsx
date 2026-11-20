@@ -51,6 +51,11 @@ export default function LiveApp(){
  const [deliveryAddress,setDeliveryAddress]=useState(''),[deliveryMethod,setDeliveryMethod]=useState('delivery');
  const [orders,setOrders]=useState([]),[selectedRestaurantId,setSelectedRestaurantId]=useState('');
  const [couriers,setCouriers]=useState([]),[courierChoice,setCourierChoice]=useState({});
+ const [manageProducts,setManageProducts]=useState([]),[newProductName,setNewProductName]=useState(''),[newProductPrice,setNewProductPrice]=useState('');
+ const [editPrices,setEditPrices]=useState({}),[restaurantCapabilities,setRestaurantCapabilities]=useState(null);
+ const [newRestaurantName,setNewRestaurantName]=useState(''),[newRestaurantPlan,setNewRestaurantPlan]=useState('ONLINE');
+ const [adminSelectedId,setAdminSelectedId]=useState(''),[adminMemberId,setAdminMemberId]=useState(''),[adminStaffRole,setAdminStaffRole]=useState('owner');
+ const [adminCourierId,setAdminCourierId]=useState('');
  const [selectedPin,setSelectedPin]=useState(null),[pinEntry,setPinEntry]=useState('');
  const [adminStats,setAdminStats]=useState(null),[adminRestaurants,setAdminRestaurants]=useState([]);
  const [busy,setBusy]=useState(false),[offline,setOffline]=useState(!navigator.onLine);
@@ -76,8 +81,12 @@ export default function LiveApp(){
   if(!api||!sessionRef.current||!navigator.onLine)return;
   if(view==='customer'){const result=await api.customerOrders();if(alive.current)setOrders(result.orders||[])}
   if(view==='restaurant'&&restaurantId){
-   const [result,eligible]=await Promise.all([api.restaurantOrders(restaurantId),api.eligibleCouriers(restaurantId).catch(()=>({couriers:[]}))]);
-   if(alive.current){setOrders(result.orders||[]);setCouriers(eligible.couriers||[])}
+   const [result,eligible,menu,capabilities]=await Promise.all([
+    api.restaurantOrders(restaurantId),api.eligibleCouriers(restaurantId).catch(()=>({couriers:[]})),
+    api.restaurantProducts(restaurantId),api.restaurantCapabilities(restaurantId)
+   ]);
+   if(alive.current){setOrders(result.orders||[]);setCouriers(eligible.couriers||[]);
+    setManageProducts(menu.products||[]);setRestaurantCapabilities(capabilities)}
   }
   if(view==='courier'){const r=await api.courierOrders();if(alive.current)setOrders(r.orders||[])}
   if(view==='admin'){
@@ -228,6 +237,7 @@ export default function LiveApp(){
  const restaurant=restaurants.find(r=>r.id===shoppingRestaurant);
  const fee=deliveryMethod==='delivery'?restaurant?.delivery_fee_minor??0:0;
  const canManage=['owner','manager'].includes(selectedBusiness?.staff_role);
+ const formattedUserId=session?.user?.id||'';
  return <div className="dvl-app">
   <header className="dvl-header"><div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada" /><div><strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
    <div className="dvl-head-actions"><label className="dvl-theme">Tema<select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy} onClick={logout}><LogOut size={15}/> Salir</Action>}</div></header>

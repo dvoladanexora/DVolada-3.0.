@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import {randomBytes,randomUUID} from 'node:crypto';
 import worker from '../src/index.js';
 import {hmacHex} from '../src/security.js';
+import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
 const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
@@ -294,4 +295,67 @@ test('platform admin analytics require an independent platform role',async()=>{
  const couriers=await f.call('/api/v1/restaurant/couriers',{by:'staffA',restaurantId:f.restaurants[0]});
  assert.equal(couriers.status,200);
  assert.equal(couriers.body.couriers.length,1);
+});
+
+test('Firebase RS256 token validation rejects altered signature, project and unverified email',async()=>{
+ const keys=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,
+  publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);
+ const jwk=await crypto.subtle.exportKey('jwk',keys.publicKey);
+ Object.assign(jwk,{kid:'test-kid',alg:'RS256',use:'sig'});
+ const now=Math.floor(Date.now()/1000);
+ const claims={iss:'https://securetoken.google.com/dvolada-test',aud:'dvolada-test',
+  sub:'firebase-uid-123',email:'cliente@example.com',email_verified:true,
+  iat:now-10,exp:now+600,auth_time:now-15,firebase:{sign_in_provider:'password'}};
+ const sign=async payload=>{
+  const encode=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
+  const part=encode({alg:'RS256',typ:'JWT',kid:'test-kid'})+'.'+encode(payload);
+  const signature=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',keys.privateKey,
+   new TextEncoder().encode(part));
+  return part+'.'+Buffer.from(signature).toString('base64url');
+ };
+ const fetchImpl=async()=>({ok:true,json:async()=>({keys:[jwk]})});
+ const valid=await sign(claims);
+ assert.equal((await verifyFirebaseIdToken(valid,'dvolada-test',{fetchImpl,now})).firebaseUid,claims.sub);
+ await assert.rejects(()=>verifyFirebaseIdToken(valid,'other-project',{fetchImpl,now}),/FIREBASE_IDENTITY_UNVERIFIED/);
+ await assert.rejects(()=>verifyFirebaseIdToken(await sign({...claims,email_verified:false}),'dvolada-test',{fetchImpl,now}),/FIREBASE_IDENTITY_UNVERIFIED/);
+ await assert.rejects(()=>verifyFirebaseIdToken(await sign({...claims,exp:now-1}),'dvolada-test',{fetchImpl,now}),/FIREBASE_IDENTITY_UNVERIFIED/);
+ const tampered=valid.slice(0,-2)+(valid.endsWith('ab')?'cd':'ab');
+ await assert.rejects(()=>verifyFirebaseIdToken(tampered,'dvolada-test',{fetchImpl,now}),/FIREBASE_TOKEN_INVALID/);
+});
+
+test('verified identity exchanges for a revocable customer session without role escalation',async()=>{
+ const f=await fixture();
+ const req=()=>new Request('https://api.example.test/api/v1/auth/exchange',{method:'POST',
+  headers:{'Content-Type':'application/json','CF-Connecting-IP':'192.0.2.100'},
+  body:JSON.stringify({idToken:'x'.repeat(150),deviceLabel:'Android'})});
+ const verify=async()=>({firebaseUid:'uid-verified-001',email:'valid@example.com',
+  name:'Cliente real',role:'platform_admin'});
+ const r=await exchangeFirebase(req(),f.env,{verify});
+ assert.match(r.sessionToken,/^[A-Za-z0-9_-]{43}$/);
+ assert.equal(r.role,'customer');
+ assert.ok(r.expiresAt>Math.floor(Date.now()/1000));
+ const userRow=f.DB.db.prepare('SELECT account_role FROM users WHERE firebase_uid=?').get('uid-verified-001');
+ assert.equal(userRow.account_role,'customer');
+ const current=await worker.fetch(new Request('https://api.example.test/api/v1/auth/me',
+  {headers:{Authorization:'Bearer '+r.sessionToken}}),f.env);
+ assert.equal(current.status,200);
+ const duplicate=await exchangeFirebase(req(),f.env,{verify});
+ assert.equal(duplicate.role,'customer');
+ assert.equal(f.DB.db.prepare("SELECT COUNT(*) AS n FROM users WHERE firebase_uid='uid-verified-001'").get().n,1);
+ const logout=await worker.fetch(new Request('https://api.example.test/api/v1/auth/logout',{method:'POST',
+  headers:{Authorization:'Bearer '+r.sessionToken}}),f.env);
+ assert.equal(logout.status,204);
+ const after=await worker.fetch(new Request('https://api.example.test/api/v1/auth/me',
+  {headers:{Authorization:'Bearer '+r.sessionToken}}),f.env);
+ assert.equal(after.status,401);
+});
+
+test('Firebase exchange enforces per-source throttle',async()=>{
+ const f=await fixture();
+ const req=()=>new Request('https://api.example.test/api/v1/auth/exchange',{method:'POST',
+  headers:{'Content-Type':'application/json','CF-Connecting-IP':'198.51.100.8'},
+  body:JSON.stringify({idToken:'x'.repeat(150)})});
+ const verify=async()=>({firebaseUid:'u',email:'valid@example.com',name:'test'});
+ for(let i=0;i<10;i++)assert.equal((await exchangeFirebase(req(),f.env,{verify})).role,'customer');
+ await assert.rejects(()=>exchangeFirebase(req(),f.env,{verify}),e=>e.status===429);
 });

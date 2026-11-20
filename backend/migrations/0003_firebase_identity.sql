@@ -1,7 +1,7 @@
 -- Dvolada auth provider binding. Assign elevated roles only through approved back-office provisioning.
 ALTER TABLE users ADD COLUMN firebase_uid TEXT;
 ALTER TABLE users ADD COLUMN verified_email TEXT;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_firebase_uid ON users(firebase_uid) WHERE firebase_uid IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_firebase_uid ON users(firebase_uid);
 CREATE TABLE IF NOT EXISTS auth_login_attempts (
   ip_hash TEXT NOT NULL,
   window_5m INTEGER NOT NULL,

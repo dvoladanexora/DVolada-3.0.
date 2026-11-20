@@ -3,13 +3,16 @@ import './CourierMap.css';
 
 const LEAFLET_CSS='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 const LEAFLET_JS='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+// Firmas SRI oficiales de Leaflet 1.9.4. Bloquean scripts o estilos alterados por CDN.
+const LEAFLET_CSS_INTEGRITY='sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+const LEAFLET_JS_INTEGRITY='sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
 let leafletPromise;
 function loadLeaflet(){
  if(window.L)return Promise.resolve(window.L);
  if(!leafletPromise){
   leafletPromise=new Promise((resolve,reject)=>{
-   if(!document.querySelector('[data-dv-leaflet-css]')){const css=document.createElement('link');css.rel='stylesheet';css.href=LEAFLET_CSS;css.dataset.dvLeafletCss='1';document.head.appendChild(css)}
-   const script=document.createElement('script');script.src=LEAFLET_JS;script.onload=()=>window.L?resolve(window.L):reject(Error('Mapa no disponible'));script.onerror=()=>reject(Error('No se pudo cargar Leaflet'));document.head.appendChild(script);
+   if(!document.querySelector('[data-dv-leaflet-css]')){const css=document.createElement('link');css.rel='stylesheet';css.href=LEAFLET_CSS;css.integrity=LEAFLET_CSS_INTEGRITY;css.crossOrigin='anonymous';css.dataset.dvLeafletCss='1';document.head.appendChild(css)}
+   const script=document.createElement('script');script.src=LEAFLET_JS;script.integrity=LEAFLET_JS_INTEGRITY;script.crossOrigin='anonymous';script.onload=()=>window.L?resolve(window.L):reject(Error('Mapa no disponible'));script.onerror=()=>reject(Error('No se pudo cargar Leaflet'));document.head.appendChild(script);
   }).catch(e=>{leafletPromise=null;throw e});
  }
  return leafletPromise;

@@ -6,14 +6,15 @@ import {randomBytes,randomUUID} from 'node:crypto';
 import worker from '../src/index.js';
 import {hmacHex} from '../src/security.js';
 
-const migration=readFileSync(new URL('../migrations/0001_core.sql',import.meta.url),'utf8');
+const migrations=['0001_core.sql','0002_checkout_guards.sql'].map(file=>
+ readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
 
 function sqliteD1(){
  const db=new DatabaseSync(':memory:');
  db.exec('PRAGMA foreign_keys = ON;');
- db.exec(migration);
+ for(const sql of migrations)db.exec(sql);
  function statement(sql,values=[]){
   return {
    bind(...args){return statement(sql,args)},

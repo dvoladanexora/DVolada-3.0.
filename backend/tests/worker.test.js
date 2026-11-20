@@ -7,7 +7,7 @@ import worker from '../src/index.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -189,7 +189,11 @@ test('courier assignment, two active orders maximum, PIN verification and comple
  assert.equal((await assign(b.id)).status,200);
  assert.equal((await assign(c.id)).status,409);
  assert.equal((await f.call('/api/v1/courier/orders',{by:'courier'})).body.orders.length,2);
- let version=5;
+ const offered=await f.call('/api/v1/courier/orders/'+a.id+'/offer',{
+  by:'courier',method:'POST',key:randomUUID(),body:{action:'accept',expectedVersion:5}
+ });
+ assert.equal(offered.status,200,JSON.stringify(offered.body));
+ let version=6;
  for(const status of ['Recogido','En camino','En ubicación']){
   const step=await f.call('/api/v1/courier/orders/'+a.id+'/status',{
    by:'courier',method:'PATCH',key:randomUUID(),body:{status,expectedVersion:version}
@@ -208,7 +212,7 @@ test('courier assignment, two active orders maximum, PIN verification and comple
  assert.equal(finish.status,200);
  assert.equal(finish.body.order.status,'Entregado');
  assert.equal((await assign(c.id)).status,200);
- assert.equal(f.DB.db.prepare('SELECT COUNT(*) AS n FROM online_order_events WHERE order_id=?').get(a.id).n,9);
+ assert.equal(f.DB.db.prepare('SELECT COUNT(*) AS n FROM online_order_events WHERE order_id=?').get(a.id).n,10);
 });
 
 test('logout revokes only the current session',async()=>{
@@ -358,4 +362,45 @@ test('Firebase exchange enforces per-source throttle',async()=>{
  const verify=async()=>({firebaseUid:'u',email:'valid@example.com',name:'test'});
  for(let i=0;i<10;i++)assert.equal((await exchangeFirebase(req(),f.env,{verify})).role,'customer');
  await assert.rejects(()=>exchangeFirebase(req(),f.env,{verify}),e=>e.status===429);
+});
+
+test('independent courier can reject an offer, or accept and prevent unauthorized pickup',async()=>{
+ const f=await fixture();
+ const createReady=async()=>{
+  const result=await f.create();
+  const id=result.body.order.id;
+  for(const [s,v] of [['Aceptado',1],['Preparando',2],['Listo',3]]){
+   assert.equal((await f.status(id,'staffA',s,v)).status,200);
+  }
+  return id;
+ };
+ const id=await createReady();
+ const assign=async(version,key=randomUUID())=>f.call('/api/v1/restaurant/orders/'+id+'/assign',{
+  by:'staffA',restaurantId:f.restaurants[0],method:'PATCH',key,
+  body:{courierId:f.tokens.courier.id,expectedVersion:version}
+ });
+ assert.equal((await assign(4)).status,200);
+ const withoutAcceptance=await f.call('/api/v1/courier/orders/'+id+'/status',{
+  by:'courier',method:'PATCH',key:randomUUID(),body:{status:'Recogido',expectedVersion:5}
+ });
+ assert.equal(withoutAcceptance.status,422);
+ const rejectKey=randomUUID();
+ const reject=()=>f.call('/api/v1/courier/orders/'+id+'/offer',{
+  by:'courier',method:'POST',key:rejectKey,body:{action:'reject',expectedVersion:5}
+ });
+ assert.equal((await reject()).status,200);
+ const replay=await reject();assert.equal(replay.status,200);assert.equal(replay.body.replayed,true);
+ const current=f.DB.db.prepare('SELECT version,courier_id,courier_response FROM online_orders WHERE id=?').get(id);
+ assert.equal(current.version,6);assert.equal(current.courier_id,null);
+ assert.equal(current.courier_response,'unassigned');
+ assert.equal((await assign(6)).status,200);
+ const accepted=await f.call('/api/v1/courier/orders/'+id+'/offer',{
+  by:'courier',method:'POST',key:randomUUID(),body:{action:'accept',expectedVersion:7}
+ });
+ assert.equal(accepted.status,200);
+ assert.equal(accepted.body.order.courierResponse,'accepted');
+ const pickup=await f.call('/api/v1/courier/orders/'+id+'/status',{
+  by:'courier',method:'PATCH',key:randomUUID(),body:{status:'Recogido',expectedVersion:8}
+ });
+ assert.equal(pickup.status,200,JSON.stringify(pickup.body));
 });

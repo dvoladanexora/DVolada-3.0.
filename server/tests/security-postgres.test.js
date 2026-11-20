@@ -193,6 +193,48 @@ test('Seguridad HTTP real y aislamiento de restaurantes con PostgreSQL', {skip:!
    assert.equal((await patch(orderC,'Aceptado',1,tokens.cashier)).status,403);
    await pool.query("UPDATE restaurant_users SET role='cashier' WHERE restaurant_id=$1 AND user_id=$2",[rA,cashier]);
   });
+  await t.test('Una revocación confirmada durante la transacción bloquea el pedido',async()=>{
+   const admin=await pool.connect();
+   let transactionOpen=false,pendingPatch=null;
+   try{
+    await admin.query('BEGIN');transactionOpen=true;
+    await admin.query(
+     'SELECT role FROM restaurant_users WHERE restaurant_id=$1 AND user_id=$2 FOR UPDATE',
+     [rA,cashier]
+    );
+    // El cambio todavía no está confirmado; el auth inicial ve el rol
+    // anterior, pero el SELECT FOR SHARE transaccional DEBE esperar.
+    await admin.query(
+     'UPDATE restaurant_users SET active=FALSE WHERE restaurant_id=$1 AND user_id=$2',
+     [rA,cashier]
+    );
+    pendingPatch=patch(orderD,'Aceptado',1,tokens.cashier);
+    let waiting=false;
+    for(let attempts=0;attempts<50;attempts++){
+     const {rows}=await pool.query(
+      "SELECT count(*)::int AS waiting FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND wait_event_type='Lock' AND query LIKE $1",
+      ['%FOR SHARE OF u,r%']
+     );
+     if(rows[0].waiting>0){waiting=true;break}
+     await sleep(40);
+    }
+    assert.equal(waiting,true,'la solicitud debe estar esperando el bloqueo de membresía en PostgreSQL');
+    await admin.query('COMMIT');transactionOpen=false;
+    const result=await pendingPatch;
+    assert.equal(result.status,403,'el empleado no debe completar cambios una vez revocado');
+    const order=(await pool.query('SELECT version,status FROM online_orders WHERE id=$1',[orderD])).rows[0];
+    assert.deepEqual(order,{version:1,status:'Pendiente'});
+    const {rows}=await pool.query(
+     'SELECT count(*)::int AS n FROM online_order_events WHERE order_id=$1',[orderD]
+    );
+    assert.equal(rows[0].n,0,'una revocación no puede dejar eventos de pedido');
+   }finally{
+    if(transactionOpen)await admin.query('ROLLBACK');
+    admin.release();
+    if(pendingPatch)await pendingPatch.catch(()=>{});
+    await pool.query('UPDATE restaurant_users SET active=TRUE WHERE restaurant_id=$1 AND user_id=$2',[rA,cashier]);
+   }
+  });
   await t.test('Cambios simultáneos no duplican eventos ni saltan versiones',async()=>{
    const [one,two]=await Promise.all([
     patch(orderC,'Aceptado',1,tokens.cashier),

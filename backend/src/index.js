@@ -7,7 +7,6 @@ import {
  courierOrders,courierStatus,courierOffer,confirmDelivery,customerCreate,customerOrders,
  customerOrder,customerCancel
 } from './orders.js';
-import {exchangeFirebase} from './firebase-identity.js';
 import {createRestaurant,updateRestaurant,assignMember,enrollCourier,createProduct,
  updateProduct,updateAvailability} from './management.js';
 
@@ -39,8 +38,6 @@ async function route(req,env){
     FROM products WHERE restaurant_id=? AND available=1 ORDER BY name,id LIMIT 150`).bind(id).all();
   return respond(req,env,200,{restaurant:rest,products:results});
  }
- if(method==='POST'&&path==='/api/v1/auth/exchange')
-  return respond(req,env,200,await exchangeFirebase(req,env));
  const actor=await identity(req,env);
  if(['POST','PATCH'].includes(method))await mutationRateLimit(env,actor);
  if(method==='GET'&&path==='/api/v1/auth/me'){

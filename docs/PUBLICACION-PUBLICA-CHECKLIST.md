@@ -43,3 +43,10 @@ El servidor Node/PostgreSQL `server/` tiene comprobaciones preliminares de ident
 6. Decidir expresamente con el usuario qué versión se publicará primero: **catálogo informativo sin pedidos** o **plataforma comercial con servidor**.
 
 **Regla obligatoria:** no fusionar PR #74 ni publicar o activar cobros en la web hasta tener autorización expresa del usuario y haber completado las puertas correspondientes.
+
+
+## Puerta obligatoria añadida en la auditoría de seguridad
+
+**Estado actual: BLOQUEADO PARA PUBLICACIÓN COMERCIAL.** Antes de fusionar y desplegar, generar y revisar `package-lock.json` y `server/package-lock.json`. El workflow de Pages ahora utiliza `npm ci` y rechaza automáticamente los despliegues que no tengan esos archivos o que fallen las pruebas/auditorías.
+
+La rama de auditoría incluye defensas adicionales: rechazo de operaciones de menú con imágenes locales/internas, PIN demo con Web Crypto, CSV de Local/Plus sin fórmulas ejecutables, impresión sin JavaScript, archivos internos de QA excluidos del build y API que se niega a iniciar públicamente sin HTTPS y CORS permitido. **Eso no reemplaza la API comercial, el WAF ni pruebas de penetración.** Ver `docs/SEGURIDAD-PUBLICACION-AUDITORIA.md`.

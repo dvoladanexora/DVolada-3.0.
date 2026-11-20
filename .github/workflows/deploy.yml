@@ -23,11 +23,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
+      - name: Exigir dependencias reproducibles antes de publicar
+        run: |
+          test -f package-lock.json || { echo "::error::Falta package-lock.json revisado"; exit 1; }
+          test -f server/package-lock.json || { echo "::error::Falta server/package-lock.json revisado"; exit 1; }
+      - name: Instalar versiones aprobadas sin alterar dependencias
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix server ci --ignore-scripts --no-audit --no-fund
       - name: Bloquear publicación por dependencias vulnerables
         run: |
           npm audit --audit-level=high
-          npm --prefix server install --package-lock-only --ignore-scripts --no-audit --no-fund
           npm --prefix server audit --omit=dev --audit-level=high
       - name: Ejecutar TODAS las pruebas antes de publicar
         run: npm run test:all

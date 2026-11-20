@@ -4,6 +4,7 @@ import {createOnlineApi,OnlineApiError,conflictMessage} from '../src/online-api.
 import {readJsonBody,validStatusPatch} from '../server/src/request-validation.js';
 import {parseAllowedOrigins,allowedCorsHeaders} from '../server/src/cors-policy.js';
 import {validRestaurantRole,restaurantTransitionPermission} from '../server/src/restaurant-permissions.js';
+import {createActorLimiter} from '../server/src/actor-rate-limit.js';
 import {readFileSync} from 'node:fs';
 
 test('requires HTTPS and an authenticated token provider',()=>{
@@ -229,4 +230,29 @@ test('JWT debe estar firmado, expirar y pertenecer a una persona y negocio váli
  assert.ok(server.includes('server.headersTimeout=10000'));
  assert.ok(server.includes("content-security-policy"));
  assert.ok(server.includes("referrer-policy"));
+});
+
+test('Limitador local de abuso controla acciones por empleado, restaura cuota y avisa cuándo reintentar',()=>{
+ const quota=createActorLimiter({limit:2,windowMs:4000,maxEntries:2});
+ assert.deepEqual(quota('resto-A:empleado-A',10000),{allowed:true,retryAfterSeconds:0});
+ assert.deepEqual(quota('resto-A:empleado-A',10500),{allowed:true,retryAfterSeconds:0});
+ assert.deepEqual(quota('resto-A:empleado-A',11000),{allowed:false,retryAfterSeconds:3});
+ assert.equal(quota('resto-B:empleado-A',11000).allowed,true,'el límite no se comparte entre negocios');
+ assert.equal(quota('resto-A:empleado-A',14001).allowed,true,'después de la ventana reabre el cupo');
+ assert.equal(quota('',15000).allowed,false,'identidad faltante se rechaza');
+ const server=readFileSync(new URL('../server/src/server.js',import.meta.url),'utf8');
+ assert.ok(server.includes('const checkReadRate=createActorLimiter({limit:600,windowMs:60_000})'));
+ assert.ok(server.includes('const checkWriteRate=createActorLimiter({limit:180,windowMs:60_000})'));
+ assert.ok(server.includes("identity.restaurantId+':'+identity.userId"));
+ assert.ok(server.includes("res.setHeader('Retry-After'"));
+ assert.ok(server.includes('return send(res,429,'));
+});
+test('Limitador nunca permite configuraciones sin capacidad ni cuotas negativas',()=>{
+ for(const arg of [{limit:0},{limit:-2},{windowMs:0},{maxEntries:0}])
+  assert.throws(()=>createActorLimiter(arg));
+ const q=createActorLimiter({limit:1,windowMs:2000,maxEntries:1});
+ assert.equal(q('a',10000).allowed,true);
+ assert.equal(q('a',10001).allowed,false);
+ assert.equal(q('b',10002).allowed,true,'sin crecimiento indefinido del mapa');
+ assert.equal(q('a',10003).allowed,true,'una entrada expulsada se reinicia al reaparecer');
 });

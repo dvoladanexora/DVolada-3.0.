@@ -27,7 +27,7 @@ La rama integral es la que Work debe **revisar en conjunto**. Los otros PR perma
 - Chat, avisos, notificaciones push y recepción de incidencias en un servidor.
 - Pruebas visuales/E2E con múltiples dispositivos y simulación de fallos bajo una API real.
 
-**No declarar «100% listo para ventas» ni anunciar servicio de entrega real con la web de demostración.** La meta de esta auditoría es preparar una base limpia y una especificación de aceptación que permita a Work implementar lo faltante.
+**No declarar «100% listo para ventas» ni anunciar servicio de entrega real con la web de demostración.** La meta de esta auditoría es preparar una base limpia para que **Work ejecute QA real y documente incidencias**, sin desplegar ni modificar código salvo autorización. Implementar el backend comercial será un alcance distinto.
 
 ## 2. Iniciar revisión local
 
@@ -44,7 +44,7 @@ VITE_DVOLADA_INTERNAL_PREVIEW=true npm run dev
 En el portal DEV, seleccionar un restaurante ficticio desde el acceso Restaurante y una identidad ficticia desde Repartidores. **No reutilizar estos accesos en producción.**
 
 ### Arquitectura sugerida (por decidir con Work)
-La API Node/PostgreSQL en `server/` es un esqueleto **incompleto y aislado**. Sus estados solo cubren una parte del flujo (por ejemplo, no tiene todas las transiciones de programados, cancelaciones y repartidores) y no está integrada con React. Work debe definir si conviene continuarla o diseñar **Workers + D1 + R2 + autenticación** en la cuenta Cloudflare independiente de Dvolada. No migrar ni desplegar en la cuenta de SIAC o Sindex. **No crear ni configurar Cloudflare hasta recibir la indicación del usuario.**
+La API Node/PostgreSQL en `server/` es un esqueleto **incompleto y aislado**. Sus estados solo cubren una parte del flujo (por ejemplo, no tiene todas las transiciones de programados, cancelaciones y repartidores) y no está integrada con React. Tras terminar el QA, el usuario decidirá si se continúa esta API o se desarrolla **Workers + D1 + R2 + autenticación** en la cuenta Cloudflare independiente de Dvolada. No migrar ni desplegar en la cuenta de SIAC o Sindex. **No crear ni configurar Cloudflare hasta recibir la indicación del usuario.**
 
 ## 3. Contratos operativos mínimos
 1. **Identidad**. La API determina `userId`, `restaurantId` y `riderId` a partir de sesión validada; no acepta esos valores libres del navegador. Roles separados: cliente, administrador negocio, Caja, Cocina y repartidor.
@@ -353,3 +353,27 @@ Esto reduce transferencia/procesamiento inicial, **pero no demuestra FPS ni tiem
 7. Cargar paneles diferidos sin red o con conexión muy lenta; asegurar que el usuario vea estado de carga y no una página en blanco. Repetir con actualización de PWA y una versión vieja cacheada.
 
 **Nota importante:** el resultado es preparación de frontend y pruebas automatizadas; **no equivale a certificación de operación real ni sustituye backend seguro, transacciones, pagos y sincronización multi-dispositivo.** Fase 3 debe auditar la integración y preparar entrega para Work; no fusionar/publicar este PR sin autorización.
+
+
+## 16. Fase 3 — Auditoría final de código y transferencia para pruebas reales (20/11/2026)
+
+**Validación más reciente de código:** [GitHub Actions #44671145386](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44671145386), **168 pruebas aprobadas (nueve suites), cero fallos/omitidas**, compilación Vite y sintaxis del servidor preliminar correctas. La auditoría no incluye navegador real, operación comercial ni autenticación real.
+
+### Errores encontrados y corregidos en la Fase 3
+- **Identificador UUID de producto:** antes, el carrito y «Volvé a pedir» podían convertir un ID con guiones en su primer segmento, haciendo que un producto creado en Menú apareciera como inexistente. Ahora `resolveCartProduct` busca por ID exacto y solo habilita compatibilidad con productos numéricos antiguos. Se persiste `productId` en todas las líneas nuevas.
+- **Límite de extras:** el editor rechazará nueve o más extras distintos en vez de recortarlos silenciosamente a ocho. Mensaje accesible y prueba de regresión.
+- **Respuestas y cortes de API:** el cliente `online-api.js` rechaza JSON inválido o nulo, captura fallos de conexión y no repite automáticamente un `PATCH` cuyo resultado podría haberse perdido. La persona debe releer el estado.
+- **Servidor preliminar:** `server/src/request-validation.js` comprueba tamaño del cuerpo JSON en **bytes UTF‑8** (no caracteres) y rechaza cuerpos nulos, arrays, versiones inválidas y solicitudes sin `Content-Type: application/json` controladamente.
+- **Cargas diferidas:** `LazyPanelBoundary` muestra una recuperación accionable cuando falla una descarga JS, sin pantalla blanca. En Repartidor se aísla el fallo de GPS/mapa/diálogo para conservar el panel.
+- **Carga de 120 pedidos:** prueba integrada de tres negocios, aceptación y preparación por Caja/Cocina, límite estricto de dos entregas, recogida, ruta, llegada por GPS de demo y validación de PIN. Comprobación de que no se mezclan las colas.
+- **Modo producción:** no se habilitaron pagos, repartidores reales, tokens ni paneles internos públicos.
+
+### Estado de entrega
+- **Fase 1:** estabilidad de órdenes/catálogos y localStorage.
+- **Fase 2:** listas grandes, carga diferida, teclado, lector de pantalla, optimización.
+- **Fase 3:** correcciones de integración, seguridad de solicitudes y plan de pruebas reales.
+
+**Archivo principal para Work:** `docs/WORK-FASE3-PRUEBAS-REALES.md`. Contiene pasos, 20 escenarios E01–E20, dispositivos, datos ficticios, prioridades P0/P1/P2 y formato de evidencias. Work debe **probar y reportar**: no implementar backend, no arreglar código, no publicar ni fusionar sin una nueva autorización del usuario.
+
+### Advertencia de límites
+No es correcto afirmar «100% listo para vender» ni que los cuatro paneles se sincronizan entre dispositivos. Los resultados de Actions validan **reglas y compilación del prototipo local**, no la experiencia real de usuario. En producción siguen pendientes arquitectura de identidad, API, transacciones, cobros, asignación y PIN confiables. El PR #74 continúa como borrador.

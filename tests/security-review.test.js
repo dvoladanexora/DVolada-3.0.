@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {generateDemoPin} from '../src/demo-pin.js';
+import {CUSTOMER_STORAGE_KEYS,clearLocalCustomerData} from '../src/customer-privacy.js';
 import {validProductionDeployment} from '../server/src/deployment-guard.js';
 import {neutralizeSpreadsheetFormula,csvFromRows} from '../src/restaurant-export.js';
 
@@ -129,4 +130,32 @@ test('Paquete de producción excluye el Device Studio pero conserva QA de desarr
  assert.equal(pkg.scripts.dev,'vite --host 127.0.0.1');
  assert.ok(!pkg.scripts.dev.includes('remove-qa-assets'),
   'La vista de QA puede usarse durante desarrollo, no en producción');
+});
+
+test('El cliente puede borrar sus datos locales sin destruir la configuración del negocio',()=>{
+ const saved=new Map([
+  ...CUSTOMER_STORAGE_KEYS.map((key,i)=>[key,'private-'+i]),
+  ['dv_places','business-catalog'],['dv_fee_payments','business-payments'],
+  ['dv_couriers','independent-courier-admin'],['dv_online_settings_1','restaurant-settings']
+ ]);
+ const storage={removeItem:key=>saved.delete(key)};
+ const cleared=clearLocalCustomerData(storage);
+ assert.equal(cleared.ok,true);assert.deepEqual(cleared.failed,[]);
+ assert.equal(cleared.removed,CUSTOMER_STORAGE_KEYS.length);
+ for(const key of CUSTOMER_STORAGE_KEYS)assert.equal(saved.has(key),false,key);
+ for(const key of ['dv_places','dv_fee_payments','dv_couriers','dv_online_settings_1'])
+  assert.equal(saved.has(key),true,'No debe borrar datos de restaurante: '+key);
+ assert.equal(clearLocalCustomerData(null).ok,false);
+ let attempts=0;
+ const failed=clearLocalCustomerData({removeItem:()=>{attempts++;throw Error('Storage blocked')}});
+ assert.equal(failed.ok,false);assert.equal(attempts,CUSTOMER_STORAGE_KEYS.length);
+});
+test('La opción de privacidad exige confirmación antes de borrar o recargar',()=>{
+ const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(app.includes("import {clearLocalCustomerData} from './customer-privacy.js'"));
+ assert.ok(app.includes('Borrar mis datos de este dispositivo'));
+ assert.ok(app.includes("if(!window.confirm('¿Borrar perfil"));
+ assert.ok(app.includes('clearLocalCustomerData(localStorage)'));
+ assert.ok(app.includes("if(!result.ok){notify("));
+ assert.ok(app.includes('window.location.reload()'));
 });

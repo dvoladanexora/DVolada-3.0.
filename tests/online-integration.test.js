@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
-import {offeredExtrasFor,validateCartCatalog,splitRestaurantCart,cartCheckoutTotal,sameCartLine,changeCartQuantity,changeCartInstruction} from '../src/customer-order-rules.js';
+import {offeredExtrasFor,validateCartCatalog,splitRestaurantCart,cartCheckoutTotal,sameCartLine,changeCartQuantity,changeCartInstruction,resolveCartProduct} from '../src/customer-order-rules.js';
 import {canMoveRestaurantOrder,kitchenQueues,scheduledOrderState} from '../src/kitchen-operations.js';
 import {applyOrderStatus,decisionForOrder} from '../src/restaurant-order-flow.js';
 import {cancelDemoOrder,changeDemoRestaurantOrder,persistDemoOrders,mutateDemoOrders} from '../src/order-demo-operations.js';
@@ -729,4 +729,26 @@ test('Una descarga diferida fallida no deja Cliente o Repartidor en una pantalla
  assert.ok(boundary.includes('window.location.reload()'));
  assert.ok(boundary.includes('Tu carrito y tus pedidos de prueba guardados'));
  assert.ok(css.includes('.dv-load-failure button:focus-visible'));
+});
+
+test('UUID creados en el menú pueden comprarse y repetirse sin romper el identificador',()=>{
+ const uid='9baf03dd-8f42-4b51-984a-9d9483aa0b2b';
+ const meal={id:uid,name:'Baleada especial',price:65,available:true};
+ const p=restaurant('local-1','Comedor',[meal][0]);
+ const simple={id:uid,placeId:'local-1',name:meal.name,price:65,qty:1};
+ assert.equal(resolveCartProduct(simple,[meal]),meal);
+ assert.equal(validateCartCatalog([simple],[p]),null);
+ const withId={...simple,productId:uid};
+ assert.equal(validateCartCatalog([withId],[p]),null);
+ const customized={...simple,id:uid+'-abc123',productId:uid};
+ assert.equal(resolveCartProduct(customized,[meal]),meal);
+ assert.equal(validateCartCatalog([customized],[p]),null);
+ const numeric={id:'101-random-custom',placeId:2,price:90,qty:1};
+ assert.equal(resolveCartProduct(numeric,[{id:101,name:'Almuerzo',price:90}])?.id,101);
+ assert.equal(resolveCartProduct({id:uid+'-missing'},[meal]),null,
+  'no usar el primer segmento de un UUID como alias');
+ const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(app.includes('productId:item.productId??item.id'));
+ assert.ok(app.includes('const current=resolveCartProduct(item,place.items)'));
+ assert.ok(app.includes('const base=resolveCartProduct(line,place.items)'));
 });

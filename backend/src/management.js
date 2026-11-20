@@ -82,6 +82,7 @@ export async function createProduct(req,env,actor,access){
  requireStaff(access.staff_role,['owner','manager']);
  const body=await readJson(req);requireKeys(body,['name','priceMinor','available']);
  const name=requireText(body.name,2,150,'name'),price=countMinor(body.priceMinor);
+ if(body.available!==undefined&&typeof body.available!=='boolean')throw new ApiError(400,'INVALID_INPUT');
  const available=body.available===false?0:1;
  const id=crypto.randomUUID();
  await env.DB.batch([

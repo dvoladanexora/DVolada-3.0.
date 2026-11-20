@@ -193,7 +193,7 @@ test('Rol y membresía SQL son obligatorios; permisos del JWT no autorizan por s
  assert.match(MEMBER_SQL,/FROM restaurant_users u JOIN restaurants r ON r.id=u.restaurant_id/);
  assert.match(MEMBER_SQL,/u.restaurant_id=\$1 AND u.user_id=\$2 AND u.active=TRUE/);
  assert.ok(server.includes('activeRestaurantRole(pool,payload.restaurant_id,payload.sub)'));
- assert.ok(server.includes('role:'));
+ assert.ok(server.includes('return {restaurantId:payload.restaurant_id,userId:payload.sub,role};'));
  assert.ok(!server.includes('identity.permissions.includes'));
  assert.ok(!server.includes('payload.permissions.includes'));
 });

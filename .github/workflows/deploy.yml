@@ -26,6 +26,8 @@ jobs:
       - run: npm install --no-audit --no-fund
       - name: Probar API Online antes de publicar
         run: npm run test:online
+      - name: Comprobar temas oficiales antes de publicar
+        run: npm run test:theme
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

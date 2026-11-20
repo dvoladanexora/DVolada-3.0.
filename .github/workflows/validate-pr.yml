@@ -1,5 +1,7 @@
 name: Validar cambios Dvolada
 on:
+  push:
+    branches: [prelaunch/phase-2-worker-d1]
   pull_request:
     branches: [main]
     paths-ignore:
@@ -28,5 +30,15 @@ jobs:
         run: npm run test:preview
       - name: Pruebas de compartir, instalación y sonido
         run: npm run test:share
+      - name: Probar colores oficiales y modo claro/oscuro
+        run: npm run test:theme
+      - name: Validar sintaxis del servidor legado aislado
+        run: node --check server/src/server.js
+      - name: Validar backend Cloudflare con base SQLite y flujos reales
+        run: node --experimental-sqlite --test backend/tests/worker.test.js
+      - name: Compilar Worker Cloudflare sin desplegar ni usar credenciales
+        run: |
+          npm install --prefix backend --no-audit --no-fund
+          npm run deploy:dry --prefix backend
       - name: Compilar aplicación
         run: npm run build

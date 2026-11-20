@@ -143,7 +143,7 @@ test('preliminary server reads bounded UTF-8 JSON and rejects non-object payload
  for(const input of ['null','[]','false','42','"hello"','{broken']){
   await assert.rejects(readJsonBody(body([input])),e=>e.code===400);
  }
- await assert.rejects(readJsonBody(body(['{"note":"','😀'.repeat(1020),'"}'])),e=>e.code===413);
+ await assert.rejects(readJsonBody(body(['{"note":"','😀'.repeat(1030),'"}'])),e=>e.code===413);
  await assert.rejects(readJsonBody(body(['x'.repeat(2048),'x'.repeat(2050)])),e=>e.code===413);
  const server=readFileSync(new URL('../server/src/server.js',import.meta.url),'utf8');
  assert.ok(server.includes('const body=await readJsonBody(req)'));

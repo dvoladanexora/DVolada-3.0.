@@ -133,6 +133,9 @@ export function idempotencyKey(req){
 export function sqlConflict(error){
   const message=String(error?.message||error);
   if(/STALE_ORDER|STALE_ASSIGNMENT/.test(message))return new ApiError(409,'ORDER_CHANGED');
+  if(/RESTAURANT_CLOSED/.test(message))return new ApiError(409,'RESTAURANT_NOT_ACCEPTING');
+  if(/PRODUCT_CHANGED/.test(message))return new ApiError(409,'PRODUCT_UNAVAILABLE');
+  if(/IMMUTABLE_ORDER/.test(message))return new ApiError(409,'IMMUTABLE_ORDER');
   if(/INVALID_TRANSITION/.test(message))return new ApiError(422,'INVALID_TRANSITION');
   if(/COURIER_LIMIT/.test(message))return new ApiError(409,'COURIER_LIMIT');
   if(/COURIER_INACTIVE/.test(message))return new ApiError(409,'COURIER_UNAVAILABLE');

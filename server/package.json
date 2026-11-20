@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "check": "node --check src/server.js"
+    "check": "node --check src/server.js",
+    "test:db": "node --test tests/security-postgres.test.js"
   },
   "dependencies": {
     "pg": "^8.13.1",

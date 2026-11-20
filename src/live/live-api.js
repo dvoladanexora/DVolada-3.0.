@@ -49,6 +49,13 @@ export function createLiveApi({baseUrl,getSessionToken,fetchImpl=fetch}){
   restaurantOrder:(restaurantId,id)=>request('/api/v1/restaurant/orders/'+s(id),{restaurantId}),
   restaurantCapabilities:restaurantId=>request('/api/v1/restaurant/capabilities',{restaurantId}),
   eligibleCouriers:restaurantId=>request('/api/v1/restaurant/couriers',{restaurantId}),
+  restaurantProducts:restaurantId=>request('/api/v1/restaurant/products',{restaurantId}),
+  createProduct:(restaurantId,body)=>request('/api/v1/restaurant/products',
+    {method:'POST',restaurantId,body}),
+  updateProduct:(restaurantId,id,body)=>request('/api/v1/restaurant/products/'+s(id),
+    {method:'PATCH',restaurantId,body}),
+  updateAvailability:(restaurantId,state)=>request('/api/v1/restaurant/availability',
+    {method:'PATCH',restaurantId,body:{state}}),
   restaurantStatus:(restaurantId,order,status,key)=>request('/api/v1/restaurant/orders/'+s(order.id)+'/status',
    {restaurantId,method:'PATCH',key,body:{expectedVersion:order.version,status}}),
   assignCourier:(restaurantId,order,courierId,key)=>request('/api/v1/restaurant/orders/'+s(order.id)+'/assign',
@@ -61,6 +68,10 @@ export function createLiveApi({baseUrl,getSessionToken,fetchImpl=fetch}){
   courierDeliver:(order,pin,key)=>request('/api/v1/courier/orders/'+s(order.id)+'/deliver',
    {method:'POST',key,body:{expectedVersion:order.version,pin}}),
   adminOverview:()=>request('/api/v1/admin/overview'),
-  adminRestaurants:()=>request('/api/v1/admin/restaurants')
+  adminRestaurants:()=>request('/api/v1/admin/restaurants'),
+  adminCreateRestaurant:body=>request('/api/v1/admin/restaurants',{method:'POST',body}),
+  adminUpdateRestaurant:(id,body)=>request('/api/v1/admin/restaurants/'+s(id),{method:'PATCH',body}),
+  adminAssignMember:(id,body)=>request('/api/v1/admin/restaurants/'+s(id)+'/members',{method:'POST',body}),
+  adminEnrollCourier:userId=>request('/api/v1/admin/couriers',{method:'POST',body:{userId}})
  };
 }

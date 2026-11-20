@@ -159,3 +159,25 @@ test('La opción de privacidad exige confirmación antes de borrar o recargar',(
  assert.ok(app.includes("if(!result.ok){notify("));
  assert.ok(app.includes('window.location.reload()'));
 });
+
+test('Retención de idempotencia permite limpiar lotes sin borrar pedidos ni eventos',()=>{
+ const migration=readFileSync(new URL('../server/sql/003_idempotency_retention.sql',import.meta.url),'utf8');
+ const cleanup=readFileSync(new URL('../server/sql/maintenance_idempotency_cleanup.sql',import.meta.url),'utf8');
+ assert.ok(migration.includes('ALTER TABLE online_idempotency'));
+ assert.ok(migration.includes('expires_at timestamptz NOT NULL DEFAULT'));
+ assert.ok(migration.includes("interval '7 days'"));
+ assert.ok(migration.includes('idx_online_idempotency_expires_at'));
+ assert.ok(cleanup.includes('DELETE FROM online_idempotency'));
+ assert.ok(cleanup.includes('WHERE expires_at < now()'));
+ assert.ok(cleanup.includes('LIMIT 1000'));
+ assert.ok(cleanup.includes('FOR UPDATE SKIP LOCKED'));
+ assert.ok(!cleanup.includes('DELETE FROM online_orders'));
+ assert.ok(!cleanup.includes('DELETE FROM online_order_events'));
+});
+test('Publicación manual solo puede desplegar la rama main de este repositorio',()=>{
+ const deploy=readFileSync(new URL('../.github/workflows/deploy.yml',import.meta.url),'utf8');
+ const expected="github.ref == 'refs/heads/main' && github.repository == 'dvoladanexora/DVolada-3.0.'";
+ assert.equal(deploy.split(expected).length-1,2,'build y deploy requieren main y repo exacto');
+ assert.ok(deploy.includes('npm ci --no-audit --no-fund'));
+ assert.ok(deploy.includes('npm --prefix server ci --ignore-scripts'));
+});

@@ -314,7 +314,11 @@ export default function LiveApp(){
     <p className="dvl-muted">Máximo dos pedidos activos. La confirmación final exige el PIN del cliente.</p></section>
     <div className="dvl-grid">{orders.map(o=><OrderCard key={o.id} order={o}>
       <p>{o.deliveryAddress||'Dirección por confirmar'}</p>
-      {courierTransitions[o.status]&&<Action disabled={busy||offline}
+      {o.courierResponse==='offered'&&<div className="dvl-inline">
+       <Action disabled={busy||offline} onClick={()=>action(()=>api.courierOffer(o,'accept',newKey()))}>Aceptar pedido</Action>
+       <Action kind="secondary" disabled={busy||offline} onClick={()=>action(()=>api.courierOffer(o,'reject',newKey()))}>Rechazar</Action>
+      </div>}
+      {o.courierResponse==='accepted'&&courierTransitions[o.status]&&<Action disabled={busy||offline}
        onClick={()=>action(()=>api.courierStatus(o,courierTransitions[o.status],newKey()))}>{courierTransitions[o.status]}</Action>}
       {o.status==='En ubicación'&&<><label>PIN del cliente<input inputMode="numeric" type="password"
        maxLength={6} placeholder="6 dígitos" value={selectedPin?.id===o.id?pinEntry:''}

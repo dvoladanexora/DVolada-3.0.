@@ -16,7 +16,21 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dvolada_test
+          POSTGRES_PASSWORD: isolated-ci-only-not-production
+          POSTGRES_DB: dvolada_security_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dvolada_test -d dvolada_security_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,6 +46,10 @@ jobs:
           npm --prefix server audit --omit=dev --audit-level=high
       - name: Pruebas de API Online
         run: npm run test:online
+      - name: Verificar aislamiento y cambios simultáneos contra PostgreSQL descartable
+        env:
+          DVOLADA_TEST_DATABASE_URL: postgres://dvolada_test:isolated-ci-only-not-production@127.0.0.1:5432/dvolada_security_test
+        run: npm --prefix server run test:db
       - name: Pruebas de bienvenida, feed y publicidad
         run: npm run test:preview
       - name: Pruebas de compartir, instalación y sonido

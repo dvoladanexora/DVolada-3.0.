@@ -714,3 +714,19 @@ test('Módulos secundarios del Cliente se importan de forma diferida con indicad
  assert.ok(css.includes('.dv-feature-loading'));
  assert.ok(css.includes('prefers-reduced-motion:reduce'));
 });
+
+test('Una descarga diferida fallida no deja Cliente o Repartidor en una pantalla vacía',()=>{
+ const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ const courier=readFileSync(new URL('../src/CourierOnlineDashboard.jsx',import.meta.url),'utf8');
+ const boundary=readFileSync(new URL('../src/LazyPanelBoundary.jsx',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
+ assert.ok(app.includes('<LazyPanelBoundary><App/></LazyPanelBoundary>'));
+ assert.ok(app.includes('<LazyPanelBoundary><PwaUpdatePrompt/></LazyPanelBoundary>'));
+ assert.equal(courier.split('<LazyPanelBoundary><React.Suspense').length-1,3);
+ assert.equal(courier.split('</React.Suspense></LazyPanelBoundary>').length-1,3);
+ assert.ok(boundary.includes('static getDerivedStateFromError()'));
+ assert.ok(boundary.includes('role="alert"'));
+ assert.ok(boundary.includes('window.location.reload()'));
+ assert.ok(boundary.includes('Tu carrito y tus pedidos de prueba guardados'));
+ assert.ok(css.includes('.dv-load-failure button:focus-visible'));
+});

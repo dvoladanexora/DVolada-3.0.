@@ -8,6 +8,7 @@ import {validRestaurantRole,restaurantTransitionPermission} from './restaurant-p
 import {createActorLimiter} from './actor-rate-limit.js';
 import {createHealthProbe} from './health-probe.js';
 import {validProductionDeployment} from './deployment-guard.js';
+import {activeRestaurantRole} from './tenant-access.js';
 
 const port=Number(process.env.PORT||8080);
 // No publicar HTTP directamente: exponer la API sólo detrás de un proxy TLS.
@@ -60,15 +61,9 @@ async function auth(req){
   throw Object.assign(Error('Invalid identity or token lifetime'),{code:401});
  // Nunca confiar en role/permissions del JWT: pueden haber sido revocados.
  // Consultar membresía ACTIVA en cada solicitud y negar si no existe.
- const {rows}=await pool.query(
-  'SELECT u.role,r.plan,r.subscription_status FROM restaurant_users u JOIN restaurants r ON r.id=u.restaurant_id WHERE u.restaurant_id=$1 AND u.user_id=$2 AND u.active=TRUE',
-  [payload.restaurant_id,payload.sub]
- );
- if(!rows.length||!validRestaurantRole(rows[0].role))
-  throw Object.assign(Error('Restaurant membership inactive or missing'),{code:403});
- if(rows[0].subscription_status!=='active'||!['ONLINE','PLUS'].includes(rows[0].plan))
-  throw Object.assign(Error('Online plan not active'),{code:403});
- return {restaurantId:payload.restaurant_id,userId:payload.sub,role:rows[0].role};
+ const role=await activeRestaurantRole(pool,payload.restaurant_id,payload.sub);
+ if(!role)throw Object.assign(Error('Restaurant membership inactive or plan invalid'),{code:403});
+ return {restaurantId:payload.restaurant_id,userId:payload.sub,role};
 }
 const server=http.createServer(async(req,res)=>{
  const requestId=randomUUID();
@@ -138,14 +133,8 @@ const server=http.createServer(async(req,res)=>{
    await client.query('BEGIN');
    // Comprobar el acceso EN la transacción: el bloqueo impide que se revoque
    // el rol, la membresía o el plan mientras se modifica este pedido.
-   const membership=await client.query(
-    'SELECT u.role,r.plan,r.subscription_status FROM restaurant_users u JOIN restaurants r ON r.id=u.restaurant_id WHERE u.restaurant_id=$1 AND u.user_id=$2 AND u.active=TRUE FOR SHARE OF u,r',
-    [identity.restaurantId,identity.userId]
-   );
-   const currentAccess=membership.rows[0];
-   if(!currentAccess||!validRestaurantRole(currentAccess.role)
-    ||currentAccess.subscription_status!=='active'
-    ||!['ONLINE','PLUS'].includes(currentAccess.plan)){
+   const currentRole=await activeRestaurantRole(client,identity.restaurantId,identity.userId,{lock:true});
+   if(!currentRole){
     await client.query('ROLLBACK');
     return send(res,403,{error:'Restaurant access revoked or plan inactive'});
    }
@@ -159,8 +148,8 @@ const server=http.createServer(async(req,res)=>{
    const current=found.rows[0];
    if(!current){status=404;response={error:'Order not found'}}
    else if(current.version!==body.expectedVersion){status=409;response={error:'ORDER_CHANGED',current}}
-   else if(!restaurantTransitionPermission(currentAccess.role,current.status,body.status).ok){
-    const denial=restaurantTransitionPermission(currentAccess.role,current.status,body.status);
+   else if(!restaurantTransitionPermission(currentRole,current.status,body.status).ok){
+    const denial=restaurantTransitionPermission(currentRole,current.status,body.status);
     status=denial.status;response={error:denial.reason};
    }else{
     const changed=await client.query('UPDATE online_orders SET status=$1,version=version+1,updated_at=now() WHERE id=$2 AND restaurant_id=$3 RETURNING id,status,version,updated_at',[body.status,match[1],identity.restaurantId]);

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createOnlineApi,OnlineApiError,conflictMessage} from '../src/online-api.js';
 import {readJsonBody,validStatusPatch} from '../server/src/request-validation.js';
+import {parseAllowedOrigins,allowedCorsHeaders} from '../server/src/cors-policy.js';
 import {readFileSync} from 'node:fs';
 
 test('requires HTTPS and an authenticated token provider',()=>{
@@ -149,4 +150,31 @@ test('preliminary server reads bounded UTF-8 JSON and rejects non-object payload
  assert.ok(server.includes('const body=await readJsonBody(req)'));
  assert.ok(server.includes('if(!validStatusPatch(body))'));
  assert.ok(server.includes('return send(res,415'));
+});
+
+test('CORS permite exclusivamente orígenes exactos HTTPS o localhost para las pruebas',()=>{
+ const origins=parseAllowedOrigins('https://dvolada.example.com,https://dvolada.example.com/,http://localhost:5173,https://nexora.example.com');
+ assert.deepEqual(origins,['https://dvolada.example.com','http://localhost:5173','https://nexora.example.com']);
+ const allowed=allowedCorsHeaders('https://dvolada.example.com',origins);
+ assert.equal(allowed['Access-Control-Allow-Origin'],'https://dvolada.example.com');
+ assert.equal(allowed['Access-Control-Allow-Credentials'],'true');
+ assert.match(allowed['Access-Control-Allow-Headers'],/Authorization/);
+ assert.match(allowed['Access-Control-Allow-Headers'],/Idempotency-Key/);
+ assert.equal(allowed.Vary,'Origin');
+ for(const bad of ['*','https://attacker.example.com','https://dvolada.example.com.attacker.test',
+  'https://dvolada.example.com.evil','null']){
+  assert.equal(allowedCorsHeaders(bad,origins),null);
+ }
+ assert.deepEqual(parseAllowedOrigins('*,https://user:pass@evil.test,http://evil.test,https://evil.test/redirect,'+
+  'javascript:alert(1),https://site.test?debug=1'),[]);
+});
+test('Servidor comprueba origen antes de autenticación y preflight explícito',()=>{
+ const src=readFileSync(new URL('../server/src/server.js',import.meta.url),'utf8');
+ assert.ok(src.includes('parseAllowedOrigins(process.env.DVOLADA_ALLOWED_ORIGINS)'));
+ assert.ok(src.includes('const cors=allowedCorsHeaders(origin,allowedOrigins)'));
+ assert.ok(src.includes("return send(res,403,{error:'Origin not allowed'})"));
+ assert.ok(src.includes("if(req.method==='OPTIONS')"));
+ assert.ok(src.indexOf("if(req.method==='OPTIONS')")<src.indexOf("const identity=await auth(req)"));
+ assert.ok(src.includes("res.writeHead(204);res.end();return;"));
+ assert.ok(!src.includes("'Access-Control-Allow-Origin':'*'"));
 });

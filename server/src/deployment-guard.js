@@ -8,6 +8,7 @@ export function validProductionDeployment({nodeEnv='development',publicApiOrigin
  try{url=new URL(publicApiOrigin)}catch{return {ok:false,reason:'DVOLADA_PUBLIC_API_ORIGIN HTTPS required'}}
  if(url.protocol!=='https:'||url.origin!==publicApiOrigin||url.username||url.password||url.search||url.hash
   ||url.hostname==='localhost'||url.hostname.endsWith('.localhost')
+  ||!url.hostname.includes('.')||/(?:\.local|\.internal|\.lan|\.invalid|\.test|\.onion)$/.test(url.hostname)
   ||url.hostname.startsWith('[')||/^\d+(?:\.\d+){3}$/.test(url.hostname))
   return {ok:false,reason:'Production API requires a public HTTPS origin'};
  if(!Array.isArray(allowedOrigins)||!allowedOrigins.length)

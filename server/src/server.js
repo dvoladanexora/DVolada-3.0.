@@ -13,8 +13,10 @@ const port=Number(process.env.PORT||8080);
 // No publicar HTTP directamente: exponer la API sólo detrás de un proxy TLS.
 const bindHost=process.env.DVOLADA_BIND_HOST||'127.0.0.1';
 const allowedOrigins=parseAllowedOrigins(process.env.DVOLADA_ALLOWED_ORIGINS);
+const requiresPublicSecurity=process.env.NODE_ENV==='production'
+ ||!['127.0.0.1','localhost','::1'].includes(bindHost);
 const deployment=validProductionDeployment({
- nodeEnv:process.env.NODE_ENV,
+ nodeEnv:requiresPublicSecurity?'production':'development',
  publicApiOrigin:process.env.DVOLADA_PUBLIC_API_ORIGIN,
  allowedOrigins
 });

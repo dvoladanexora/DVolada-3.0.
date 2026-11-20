@@ -7,9 +7,18 @@ import {parseAllowedOrigins,allowedCorsHeaders} from './cors-policy.js';
 import {validRestaurantRole,restaurantTransitionPermission} from './restaurant-permissions.js';
 import {createActorLimiter} from './actor-rate-limit.js';
 import {createHealthProbe} from './health-probe.js';
+import {validProductionDeployment} from './deployment-guard.js';
 
 const port=Number(process.env.PORT||8080);
+// No publicar HTTP directamente: exponer la API sólo detrás de un proxy TLS.
+const bindHost=process.env.DVOLADA_BIND_HOST||'127.0.0.1';
 const allowedOrigins=parseAllowedOrigins(process.env.DVOLADA_ALLOWED_ORIGINS);
+const deployment=validProductionDeployment({
+ nodeEnv:process.env.NODE_ENV,
+ publicApiOrigin:process.env.DVOLADA_PUBLIC_API_ORIGIN,
+ allowedOrigins
+});
+if(!deployment.ok){console.error('Refusing insecure API startup:',deployment.reason);process.exit(1)}
 // Cuotas por empleado para evitar abuso ordinario. WAF distribuido sigue pendiente.
 const checkReadRate=createActorLimiter({limit:600,windowMs:60_000});
 const checkWriteRate=createActorLimiter({limit:180,windowMs:60_000});
@@ -158,4 +167,4 @@ server.requestTimeout=15000;
 server.headersTimeout=10000;
 server.timeout=20000;
 server.maxHeadersCount=60;
-server.listen(port,()=>console.log('Dvolada Online API listening on '+port));
+server.listen(port,bindHost,()=>console.log('Dvolada Online API listening on '+bindHost+':'+port));

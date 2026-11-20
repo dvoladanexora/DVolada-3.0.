@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {generateDemoPin} from '../src/demo-pin.js';
+import {validProductionDeployment} from '../server/src/deployment-guard.js';
 import {neutralizeSpreadsheetFormula,csvFromRows} from '../src/restaurant-export.js';
 
 test('PIN de prueba usa números criptográficos de seis dígitos sin sesgo de módulo',()=>{
@@ -78,4 +79,26 @@ test('Fotografías demasiado grandes no bloquean el editor ni se procesan como S
 test('La web no entrega la URL del visitante como Referer a imágenes, mapas ni CDN',()=>{
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  assert.ok(html.includes('<meta name="referrer" content="no-referrer"/>'));
+});
+
+test('Configuración de producción requiere HTTPS público y lista de orígenes',()=>{
+ const good={nodeEnv:'production',publicApiOrigin:'https://api.dvolada.example.com',allowedOrigins:['https://dvolada.example.com']};
+ assert.deepEqual(validProductionDeployment(good),{ok:true});
+ for(const url of [
+  '', 'http://api.dvolada.example.com','https://localhost','https://localhost:8787',
+  'https://127.0.0.1','https://127.1','https://192.168.0.1',
+  'https://[::1]','https://intranet','https://api.local',
+  'https://api.example.test','https://api.example.com/path',
+  'https://api.example.com/?x=1','https://user:pass@api.example.com',
+ ]){
+  assert.equal(validProductionDeployment({...good,publicApiOrigin:url}).ok,false,url);
+ }
+ assert.equal(validProductionDeployment({...good,allowedOrigins:[]}).ok,false);
+ assert.equal(validProductionDeployment({...good,allowedOrigins:['http://localhost:5173']}).ok,false);
+ assert.equal(validProductionDeployment({nodeEnv:'development',publicApiOrigin:'',allowedOrigins:[]}).ok,true);
+ const server=readFileSync(new URL('../server/src/server.js',import.meta.url),'utf8');
+ assert.ok(server.includes("process.env.DVOLADA_BIND_HOST||'127.0.0.1'"));
+ assert.ok(server.includes("validProductionDeployment({"));
+ assert.ok(server.includes("if(!deployment.ok){console.error('Refusing insecure API startup:'"));
+ assert.ok(server.includes('server.listen(port,bindHost,'));
 });

@@ -5,12 +5,25 @@ export const MENU_CATEGORIES=Object.freeze(['Almuerzos','Desayunos','Baleadas','
 export const MENU_IMAGE_LIMIT=220_000;
 export const MAX_MENU_IMAGE_FILE=5*1024*1024;
 const validImageMime=new Set(['image/jpeg','image/png','image/webp']);
+/** Bloquea direcciones locales en imágenes proporcionadas por terceros.
+ * No se pretende validar DNS aquí: en producción las fotos se deben
+ * almacenar y servir desde un host de medios confiable.
+ */
 export function safeCatalogImage(value){
  const s=String(value||'').trim();
  if(!s)return '';
  if(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/i.test(s)&&s.length<=MENU_IMAGE_LIMIT*1.42)return s;
- try{const url=new URL(s);if(url.protocol==='https:'&&!url.username&&!url.password&&url.href.length<=1500)return url.href}catch{}
- return '';
+ try{
+  const url=new URL(s);
+  if(url.protocol!=='https:'||url.username||url.password||url.href.length>1500)return '';
+  const host=url.hostname.toLowerCase().replace(/\.$/,'');
+  // URL normaliza variantes IPv4 como 127.1, 0x7f000001 y 2130706433.
+  if(!host||!host.includes('.')||/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)
+   ||host.startsWith('[')
+   ||/(?:^|\.)(?:localhost|local|internal|lan|home|intranet|onion|test|invalid)$/.test(host)
+   ||host==='metadata.google.internal')return '';
+  return url.href;
+ }catch{return ''}
 }
 export const cleanMenuExtras=(value,limit=8)=>{
  const vals=Array.isArray(value)?value:String(value||'').split(/[,\n]/);

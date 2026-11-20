@@ -7,7 +7,7 @@ import worker from '../src/index.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -49,6 +49,7 @@ async function fixture(){
    .run(sessionId,id,await hmacHex(PEPPER,'session:v1:'+token),Math.floor(Date.now()/1000)+86400);
   if(membership)DB.db.prepare('INSERT INTO restaurant_memberships(restaurant_id,user_id,staff_role) VALUES(?,?,?)')
     .run(membership[0],id,membership[1]);
+  if(role==='customer'&&!membership)DB.db.prepare('UPDATE users SET phone_e164=?,phone_verified_at=? WHERE id=?').run('+50498765432',Math.floor(Date.now()/1000),id);
   tokens[label]={id,token,sessionId};
   return tokens[label];
  }
@@ -76,9 +77,9 @@ async function fixture(){
   return {status:res.status,body:json,headers:res.headers};
  }
  async function create({by='customer',restaurantId=restaurants[0],productId=productIds[0],
-  key=randomUUID(),items,deliveryAddress='Barrio El Centro, casa 10',deliveryMethod='delivery'}={}){
+  key=randomUUID(),items,deliveryAddress='Barrio El Centro, casa 10',deliveryMethod='delivery',phone='+50498765432'}={}){
   return call('/api/v1/customer/orders',{by,method:'POST',key,body:{
-   restaurantId,items:items??[{productId,quantity:1}],deliveryMethod,deliveryAddress
+   restaurantId,items:items??[{productId,quantity:1}],deliveryMethod,deliveryAddress,phone
   }});
  }
  async function status(order,who,newStatus,expectedVersion,restaurantId=restaurants[0],key=randomUUID()){
@@ -464,4 +465,20 @@ test('only the platform role can enroll independent verified customers as courie
  const denyStaff=await f.call('/api/v1/admin/couriers',{by:'platformAdmin',method:'POST',
   body:{userId:f.tokens.staffA.id}});
  assert.equal(denyStaff.status,409);
+});
+
+test('checkout rejects missing or unverified customer phone; anonymous catalogue stays open',async()=>{
+ const f=await fixture();
+ const catalog=await worker.fetch(new Request('https://api.example.test/api/v1/catalog/restaurants'),f.env);
+ assert.equal(catalog.status,200);
+ const invalid=await f.create({phone:'98765432'});
+ assert.equal(invalid.status,400,JSON.stringify(invalid.body));
+ const wrong=await f.create({phone:'+50499990000'});
+ assert.equal(wrong.status,403,JSON.stringify(wrong.body));
+ f.DB.db.prepare('UPDATE users SET phone_verified_at=NULL WHERE id=?').run(f.tokens.customer.id);
+ const unverified=await f.create();
+ assert.equal(unverified.status,403);
+ assert.equal(unverified.body.error,'PHONE_NOT_VERIFIED');
+ const orders=f.DB.db.prepare('SELECT COUNT(*) AS n FROM online_orders').get();
+ assert.equal(orders.n,0);
 });

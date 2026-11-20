@@ -317,8 +317,8 @@ test('Firebase RS256 token validation rejects altered signature, project and unv
  const valid=await sign(claims);
  assert.equal((await verifyFirebaseIdToken(valid,'dvolada-test',{fetchImpl,now})).firebaseUid,claims.sub);
  await assert.rejects(()=>verifyFirebaseIdToken(valid,'other-project',{fetchImpl,now}),/FIREBASE_IDENTITY_UNVERIFIED/);
- await assert.rejects(()=>verifyFirebaseIdToken(await sign({...claims,email_verified:false}),'dvolada-test',{fetchImpl,now}),/FIREBASE_IDENTITY_UNVERIFIED/);
- await assert.rejects(()=>verifyFirebaseIdToken(await sign({...claims,exp:now-1}),'dvolada-test',{fetchImpl,now}),/FIREBASE_IDENTITY_UNVERIFIED/);
+ await assert.rejects(async()=>verifyFirebaseIdToken(await sign({...claims,email_verified:false}),'dvolada-test',{fetchImpl,now}),/FIREBASE_IDENTITY_UNVERIFIED/);
+ await assert.rejects(async()=>verifyFirebaseIdToken(await sign({...claims,exp:now-1}),'dvolada-test',{fetchImpl,now}),/FIREBASE_IDENTITY_UNVERIFIED/);
  const tampered=valid.slice(0,-2)+(valid.endsWith('ab')?'cd':'ab');
  await assert.rejects(()=>verifyFirebaseIdToken(tampered,'dvolada-test',{fetchImpl,now}),/FIREBASE_TOKEN_INVALID/);
 });

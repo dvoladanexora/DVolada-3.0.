@@ -100,5 +100,6 @@ test('Configuración de producción requiere HTTPS público y lista de orígenes
  assert.ok(server.includes("process.env.DVOLADA_BIND_HOST||'127.0.0.1'"));
  assert.ok(server.includes("validProductionDeployment({"));
  assert.ok(server.includes("if(!deployment.ok){console.error('Refusing insecure API startup:'"));
+ assert.ok(server.includes("||!['127.0.0.1','localhost','::1'].includes(bindHost)"));
  assert.ok(server.includes('server.listen(port,bindHost,'));
 });

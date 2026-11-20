@@ -8,6 +8,8 @@ import {
  customerOrder,customerCancel
 } from './orders.js';
 import {exchangeFirebase} from './firebase-identity.js';
+import {createRestaurant,updateRestaurant,assignMember,enrollCourier,createProduct,
+ updateProduct,updateAvailability} from './management.js';
 
 async function route(req,env){
  assertConfiguration(env);
@@ -73,6 +75,16 @@ async function route(req,env){
    GROUP BY r.id ORDER BY r.name,r.id LIMIT 150`).all();
   return respond(req,env,200,{restaurants:results});
  }
+ if(method==='POST'&&path==='/api/v1/admin/restaurants')
+  return respond(req,env,201,await createRestaurant(req,env,actor));
+ const platformRestaurant=/^\/api\/v1\/admin\/restaurants\/([0-9a-f-]+)$/i.exec(path);
+ if(method==='PATCH'&&platformRestaurant)
+  return respond(req,env,200,await updateRestaurant(req,env,actor,platformRestaurant[1]));
+ const platformMember=/^\/api\/v1\/admin\/restaurants\/([0-9a-f-]+)\/members$/i.exec(path);
+ if(method==='POST'&&platformMember)
+  return respond(req,env,200,await assignMember(req,env,actor,platformMember[1]));
+ if(method==='POST'&&path==='/api/v1/admin/couriers')
+  return respond(req,env,201,await enrollCourier(req,env,actor));
  if(path.startsWith('/api/v1/restaurant/')){
   const access=await restaurantAccess(req,env,actor);
   requireStaff(access.staff_role,['owner','manager','kitchen','cashier']);
@@ -94,6 +106,13 @@ async function route(req,env){
     GROUP BY c.user_id HAVING COUNT(o.id)<c.max_active_orders ORDER BY u.display_name LIMIT 60`).all();
    return respond(req,env,200,{couriers:results});
   }
+  if(method==='POST'&&path==='/api/v1/restaurant/products')
+   return respond(req,env,201,await createProduct(req,env,actor,access));
+  const productRoute=/^\/api\/v1\/restaurant\/products\/([0-9a-f-]+)$/i.exec(path);
+  if(method==='PATCH'&&productRoute)
+   return respond(req,env,200,await updateProduct(req,env,actor,access,productRoute[1]));
+  if(method==='PATCH'&&path==='/api/v1/restaurant/availability')
+   return respond(req,env,200,await updateAvailability(req,env,actor,access));
   if(method==='GET'&&path==='/api/v1/restaurant/products'){
    const {results=[]}=await env.DB.prepare(`SELECT id,name,price_minor,available
      FROM products WHERE restaurant_id=? ORDER BY name,id LIMIT 150`).bind(access.restaurantId).all();

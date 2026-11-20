@@ -115,3 +115,15 @@ La suite cubre:
 **Limitación:** los escenarios se ejecutan con identidades y restaurantes ficticios. El proveedor de identidad comercial, pagos, PIN de entrega y operación real de repartidores aún no existen en esta API; estas pruebas **no los certifican**.
 
 Corte verificado con 216/216 pruebas: https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44689967466
+
+
+## Prevención de abuso sin cuenta y revocación durante operaciones
+
+- Se implantó una cuota **previa a JWT/SQL**, por socket de conexión (180 solicitudes/minuto) y por instancia (2,400 solicitudes/minuto). Está probada con peticiones reales que falsifican `X-Forwarded-For`; finalmente devuelve `429` y `Retry-After`, incluso cuando el atacante presenta un token inválido o después presenta uno válido.
+- En PostgreSQL 16, una prueba de concurrencia **mantiene la fila de membresía bloqueada por un administrador**, inicia un PATCH contra el servidor real y comprueba que el parche queda esperando `FOR SHARE`. Al confirmar la revocación, devuelve **403**, sin modificar pedido ni registrar evento.
+- Se ejecutó realmente `maintenance_idempotency_cleanup.sql`: una clave vencida se elimina y otra aún válida de otro restaurante se conserva, igual que los pedidos y eventos.
+- Las peticiones con Bearer token no siguen redirecciones HTTP (se utiliza `redirect:'error'`), por defensa adicional frente a endpoints mal configurados.
+- **Importante:** el límite local por socket no es un WAF distribuido; cuando un proxy comparte socket entre varios visitantes, hay que definir las cuotas por IP original y cuenta en el borde Cloudflare, proteger el origen y evitar confiar en cabeceras de IP no verificadas.
+- Validación: [CI #44691834472](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44691834472), **219/219 pruebas aprobadas**, build Vite y auditorías de ambos paquetes sin hallazgos conocidos.
+
+**No representa autorización para pedidos comerciales.** El servidor preliminar aún carece del proveedor de identidad, integración con frontend, control de precios/cupones/pagos y PIN comercial validado en backend.

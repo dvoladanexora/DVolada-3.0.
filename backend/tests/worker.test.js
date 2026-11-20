@@ -225,3 +225,30 @@ test('online ordering is disabled by default until approved launch',async()=>{
  assert.equal(blocked.status,503);
  assert.equal(blocked.body.error,'ORDER_CREATION_DISABLED');
 });
+
+test('database guards reject closed restaurants and products from another tenant',async()=>{
+ const f=await fixture();
+ f.DB.db.prepare("UPDATE restaurants SET online_state='closed' WHERE id=?").run(f.restaurants[0]);
+ const blocked=await f.create();
+ assert.equal(blocked.status,409);
+ assert.throws(()=>f.DB.db.prepare(`INSERT INTO online_orders
+  (id,restaurant_id,customer_id,order_number,delivery_method,delivery_address,
+   status,version,subtotal_minor,delivery_fee_minor,total_minor)
+   VALUES(?,?,?,?,?,?,?,1,100,0,100)`).run(randomUUID(),f.restaurants[0],
+  f.tokens.customer.id,randomUUID(),'pickup','','Pendiente'),/RESTAURANT_CLOSED/);
+ f.DB.db.prepare("UPDATE restaurants SET online_state='open' WHERE id=?").run(f.restaurants[0]);
+ const valid=await f.create();
+ assert.equal(valid.status,201);
+ assert.throws(()=>f.DB.db.prepare(`INSERT INTO online_order_items(id,order_id,product_id,name_snapshot,
+   unit_price_minor,quantity,line_total_minor) VALUES(?,?,?,?,?,1,?)`).run(
+   randomUUID(),valid.body.order.id,f.productIds[1],'Otro negocio',10050,10050
+ ),/PRODUCT_CHANGED/);
+});
+
+test('suspended couriers lose access even with a valid user session',async()=>{
+ const f=await fixture();
+ f.DB.db.prepare("UPDATE courier_profiles SET active=0 WHERE user_id=?").run(f.tokens.courier.id);
+ const denied=await f.call('/api/v1/courier/orders',{by:'courier'});
+ assert.equal(denied.status,403);
+ assert.equal(denied.body.error,'COURIER_INACTIVE');
+});

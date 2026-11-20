@@ -80,3 +80,21 @@ test('El editor acepta un turno que cierra al día siguiente sin duplicar jornad
  const ui=readFileSync(new URL('../src/RestaurantBusinessSettings.jsx',import.meta.url),'utf8');
  assert.ok(ui.includes('se considera el día siguiente'));
 });
+
+test('Cambio de restaurante cancela fotos antiguas y señala campos inválidos antes de guardar',()=>{
+ const src=readFileSync(new URL('../src/RestaurantBusinessSettings.jsx',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../src/restaurant-business-settings.css',import.meta.url),'utf8');
+ assert.ok(src.includes('photoRequest=useRef(0),formRef=useRef(null)'));
+ assert.ok(src.includes('photoRequest.current++;\n  setPhotoBusy(false);'));
+ assert.ok(src.includes('return ()=>{photoRequest.current++}'));
+ assert.ok(src.includes('const request=++photoRequest.current'));
+ assert.ok(src.includes('if(request===photoRequest.current){edit(\'image\',value)'));
+ assert.ok(src.includes('if(request===photoRequest.current)setErrors('));
+ assert.ok(src.includes('if(request===photoRequest.current)setPhotoBusy(false)'));
+ assert.ok(src.includes('if(photoBusy)return'));
+ assert.ok(src.includes('formRef.current?.querySelector(\'[aria-invalid="true"]\')?.focus()'));
+ for(const key of ['name','type','description','address','phone','image'])
+  assert.ok(src.includes('aria-invalid={Boolean(errors.'+key+')}'),key);
+ assert.ok(src.includes('dv-business-error-summary" role="alert"'));
+ assert.ok(css.includes('.dv-business-settings [aria-invalid=true]'));
+});

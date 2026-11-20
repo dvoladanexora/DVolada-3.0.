@@ -323,3 +323,32 @@ test('Repartidor carga herramientas bajo demanda y pagina ofertas e historial',(
  assert.ok(css.includes('.dv-rider-lazy-status'));
  assert.ok(css.includes(':focus-visible'));
 });
+
+test('Campos futuros secretos y costos internos no se propagan a ofertas ni entregas',()=>{
+ const orderWithSecrets=order('privado','Listo',{
+  pin:'654321',privateToken:'token-interno',stripeSecret:'test-secret',
+  identity:'0801199000000',supplierCost:1000,internalMargin:38,customerEmail:'email@privado.test',
+  items:[{id:1,name:'Baleada',qty:2,supplierCost:50,supplierSecret:'clave'}]
+ });
+ const assigned=courierPublicOrder(orderWithSecrets);
+ for(const field of ['pin','privateToken','stripeSecret','identity','supplierCost','internalMargin','customerEmail'])
+  assert.equal(Object.hasOwn(assigned,field),false,'filtración: '+field);
+ assert.equal(assigned.name,orderWithSecrets.name);
+ assert.equal(assigned.address,orderWithSecrets.address);
+ assert.deepEqual(assigned.items,[{id:1,qty:2,name:'Baleada'}]);
+ const offer=courierViewOrder(orderWithSecrets,riderB);
+ assert.ok(offer);
+ for(const field of ['pin','privateToken','stripeSecret','customerEmail','address','name'])
+  assert.equal(Object.hasOwn(offer,field),false,field);
+ const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(ui.includes('orders={courierViewOrders(orders,previewCourierId)}'));
+});
+test('Carga de mapas desde CDN exige firmas de integridad oficiales verificadas',()=>{
+ const source=readFileSync(new URL('../src/CourierMap.jsx',import.meta.url),'utf8');
+ assert.ok(source.includes('LEAFLET_CSS_INTEGRITY='));
+ assert.ok(source.includes('LEAFLET_JS_INTEGRITY='));
+ assert.ok(source.includes("css.integrity=LEAFLET_CSS_INTEGRITY"));
+ assert.ok(source.includes("script.integrity=LEAFLET_JS_INTEGRITY"));
+ assert.ok(source.includes("css.crossOrigin='anonymous'"));
+ assert.ok(source.includes("script.crossOrigin='anonymous'"));
+});

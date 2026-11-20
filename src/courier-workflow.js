@@ -100,10 +100,32 @@ export function applyCourierAction(orders,orderId,action,riderId,options={},at=n
  * El navegador de demostración conserva los originales para validar acciones;
  * en producción la API debe devolver esta proyección desde el servidor.
  */
+/** Campos explícitos permitidos en la vista asignada. No usar ...rest:
+ * un futuro campo sensible (PIN, documento, secreto, auditoría) no debe
+ * aparecer automáticamente en el panel repartidor.
+ */
+export const COURIER_ASSIGNED_FIELDS=Object.freeze([
+ 'id','orderNo','kind','delivery','status','placeId','placeName',
+ 'createdAt','date','name','phone','address','notes','payment','total','items',
+ 'courierAssignedAt','courierAccepted','courierId','courierPickedUpAt',
+ 'courierArrivalAt','courierDeliveredAt','cancelReason'
+]);
 export function courierPublicOrder(order){
- if(!order)return null;
- const {pin,identity,dni,customerId,rnp,...rest}=order;
- return {...rest};
+ if(!order||typeof order!=='object')return null;
+ const result={};
+ for(const key of COURIER_ASSIGNED_FIELDS){
+  if(!Object.hasOwn(order,key))continue;
+  if(key==='items'){
+   result.items=Array.isArray(order.items)?order.items.slice(0,200).map(item=>({
+    id:item?.id,qty:item?.qty,name:item?.name
+   })):[];
+  }else result[key]=order[key];
+ }
+ // Evita trasladar objetos arbitrarios de ubicación que puedan contener
+ // notas, secretos o atributos no requeridos por la navegación.
+ const coords=courierOrderCoords(order);
+ if(coords)result.deliveryCoordinates=coords;
+ return result;
 }
 export function courierViewOrder(order,riderId){
  if(isRiderOwner(order,riderId))return courierPublicOrder(order);

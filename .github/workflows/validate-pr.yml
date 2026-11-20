@@ -1,7 +1,9 @@
 name: Validar cambios Dvolada
 on:
+  push:
+    branches: [audit/online-integral-work-2026-11]
   pull_request:
-    branches: [main]
+    # Validar también los PR apilados sobre ramas de trabajo; nunca desplegar por este flujo.
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
@@ -9,21 +11,45 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: validar-dvolada-${{ github.event.pull_request.number }}
+  group: validar-dvolada-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dvolada_test
+          POSTGRES_PASSWORD: isolated-ci-only-not-production
+          POSTGRES_DB: dvolada_security_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dvolada_test -d dvolada_security_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Instalar dependencias
-        run: npm install --no-audit --no-fund
+      - name: Instalar dependencias con versiones reproducibles
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix server ci --ignore-scripts --no-audit --no-fund
+      - name: Revisar vulnerabilidades críticas y altas de dependencias públicas
+        run: |
+          npm audit --audit-level=high
+          npm --prefix server audit --omit=dev --audit-level=high
       - name: Pruebas de API Online
         run: npm run test:online
+      - name: Verificar aislamiento y cambios simultáneos contra PostgreSQL descartable
+        env:
+          DVOLADA_TEST_DATABASE_URL: postgres://dvolada_test:isolated-ci-only-not-production@127.0.0.1:5432/dvolada_security_test
+        run: npm --prefix server run test:db
       - name: Pruebas de bienvenida, feed y publicidad
         run: npm run test:preview
       - name: Pruebas de compartir, instalación y sonido
@@ -38,5 +64,13 @@ jobs:
         run: npm run test:hardening
       - name: Pruebas de repartidores, asignaciones, PIN y GPS
         run: npm run test:courier
+      - name: Pruebas integrales de pedidos, extras y PWA
+        run: npm run test:integration
+      - name: Pruebas preventivas de seguridad y exposición de datos
+        run: npm run test:security
+      - name: Validar sintaxis del servidor preliminar
+        run: npm run check:server
       - name: Compilar aplicación
         run: npm run build
+      - name: Evitar publicar páginas internas de QA
+        run: test ! -e dist/device-studio.html

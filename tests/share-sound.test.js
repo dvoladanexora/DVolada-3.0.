@@ -13,8 +13,8 @@ test('Invitar amigos es público, Club sigue oculto',()=>{
  assert.ok(more.includes("['invite','Invitar amigos',Share2]"));
  assert.ok(more.includes("['install','Instalar Dvolada',Download]"));
  assert.ok(more.includes("['sound-settings','Sonidos y avisos',Volume2]"));
- assert.ok(app.includes("page==='invite'&&<ShareInstallHub"));
- assert.ok(app.includes("page==='install'&&<ShareInstallHub"));
+ assert.ok(app.includes("page==='invite'&&<React.Suspense fallback={featureLoading}><ShareInstallHub"));
+ assert.ok(app.includes("page==='install'&&<React.Suspense fallback={featureLoading}><ShareInstallHub"));
 });
 test('QR y enlaces usan ruta base sin inventar incentivos',()=>{
  assert.ok(hub.includes('new URL(base'));

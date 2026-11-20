@@ -70,3 +70,8 @@
  .dv-kitchen-overview,.dv-kitchen-lane,.dv-kitchen-order{background:var(--ow-card,var(--surface))}
  .dv-kitchen-order-note,.dv-kitchen-timer,.dv-kitchen-service{background:var(--ow-bg,var(--soft))}
 }
+/* Fase 2: lotes de tarjetas accesibles; evita cientos de nodos en móviles/tablets. */
+.dv-kitchen-load-more{width:100%;min-height:48px;display:flex;align-items:center;justify-content:center;padding:12px 14px;border:1px solid var(--ow-line,var(--line));border-radius:12px;background:var(--ow-bg,var(--soft));color:var(--ow-ink,var(--ink));font-size:13px;font-weight:800;cursor:pointer}
+.dv-kitchen-load-more:hover{border-color:var(--accent)}
+.dv-kitchen-load-more:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media(max-width:760px){.dv-kitchen-lane-orders{overscroll-behavior:contain}.dv-kitchen-progress{min-height:52px}.dv-kitchen-order-actions button{min-height:44px}}

@@ -81,6 +81,70 @@ test('editor Cloud incluye CRUD, fotos, filtros, alertas y notas sobre modo loca
  assert.ok(panel.includes("screen==='menu'&&<RestaurantMenuEditor"));
  assert.ok(wrapper.includes('onCatalogChange={onCatalogChange}'));
  assert.ok(main.includes('onCatalogChange={saveRestaurantMenu}'));
- assert.ok(main.includes("localStorage.setItem('dv_places',content)"));
- assert.ok(main.includes('content.length>3200000'));
+ assert.ok(main.includes('mutateDemoPlaces(localStorage,places,latest=>'));
+ const bridge=readFileSync(new URL('../src/restaurant-demo-bridge.js',import.meta.url),'utf8');
+ assert.ok(bridge.includes('content.length>3_200_000'));
+});
+
+test('Editor descarta subidas tardías al cancelar, cambiar de producto o reabrir',()=>{
+ const src=readFileSync(new URL('../src/RestaurantMenuEditor.jsx',import.meta.url),'utf8');
+ assert.ok(src.includes('photoRequest=useRef(0)'));
+ assert.ok(src.includes('const request=++photoRequest.current'));
+ assert.ok(src.includes("if(request===photoRequest.current)setField('image',url)"));
+ assert.ok(src.includes('if(request===photoRequest.current)setPhotoBusy(false)'));
+ assert.ok(src.includes('const closeEditor=()=>{photoRequest.current++;setPhotoBusy(false)'));
+ assert.ok(src.includes('const openEditor=(item=null)=>{\n  photoRequest.current++;setPhotoBusy(false)'));
+ assert.ok(src.includes("setForm(current=>current?{...current,[key]:value}:current)"));
+});
+
+test('Menú extenso se carga por bloques y las validaciones llevan al campo incorrecto',()=>{
+ const ui=readFileSync(new URL('../src/RestaurantMenuEditor.jsx',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../src/restaurant-menu-editor.css',import.meta.url),'utf8');
+ assert.ok(ui.includes('useState(24)'));
+ assert.ok(ui.includes('setVisibleCount(24),[restaurant?.id,query,category,stock]'));
+ assert.ok(ui.includes('matching.slice(0,visibleCount).map(item='));
+ assert.ok(ui.includes('matching.length>visibleCount'));
+ assert.ok(ui.includes('setVisibleCount(count=>count+24)'));
+ assert.ok(ui.includes('aria-invalid={Boolean(errors.category)}'));
+ assert.ok(ui.includes('aria-invalid={Boolean(errors.description)}'));
+ assert.ok(ui.includes('aria-invalid={Boolean(errors.image)}'));
+ assert.ok(ui.includes("requestAnimationFrame(()=>formRef.current?.querySelector('[aria-invalid=\"true\"]')?.focus())"));
+ assert.ok(ui.includes('role="alert">Revisá los campos marcados'));
+ assert.ok(css.includes('.dv-menu-load-more'));
+ assert.ok(css.includes('.dv-menu-photo-upload:focus-within'));
+});
+
+test('más de ocho extras se rechaza claramente en lugar de guardarlos incompletos',()=>{
+ const valid='Extra 1, Extra 2, Extra 3, Extra 4, Extra 5, Extra 6, Extra 7, Extra 8';
+ const invalid=valid+', Extra 9';
+ assert.equal(cleanMenuExtras(invalid).length,8,'el listado visual puede limitarse a ocho');
+ assert.equal(cleanMenuExtras(invalid,9).length,9,'la validación debe contar la novena opción');
+ assert.equal(validateMenuDraft({...basic(),extras:valid}).extras,undefined);
+ assert.match(validateMenuDraft({...basic(),extras:invalid}).extras,/Máximo 8 extras/);
+ assert.throws(()=>makeMenuProduct({...basic(),extras:invalid}),/Revisá los datos/);
+ assert.equal(validateMenuDraft({...basic(),extras:valid+', extra 1'}).extras,undefined,
+  'opciones repetidas no deben contar dos veces');
+ const editor=readFileSync(new URL('../src/RestaurantMenuEditor.jsx',import.meta.url),'utf8');
+ assert.ok(editor.includes('aria-invalid={Boolean(errors.extras)}'));
+ assert.ok(editor.includes('role="alert">{errors.extras}'));
+});
+
+test('Las fotos del catálogo no pueden forzar solicitudes a localhost o redes privadas',()=>{
+ const blocked=[
+  'https://localhost/photo.jpg','https://localhost./photo.jpg',
+  'https://foo.localhost/photo.png','https://my-router.local/pic.jpg',
+  'https://company.internal/image.png','https://router.lan/icon.png',
+  'https://127.0.0.1/photo.jpg','https://127.1/photo.jpg',
+  'https://0x7f000001/image.jpg','https://2130706433/image.jpg',
+  'https://192.168.1.1/image.jpg','https://10.0.0.2/photo.jpg',
+  'https://172.16.0.1/icon.png','https://169.254.169.254/latest/meta-data/',
+  'https://[::1]/image.png','https://[fe80::1]/image.png',
+  'https://intranet/image.jpg',
+ ];
+ for(const raw of blocked)assert.equal(safeCatalogImage(raw),'',raw);
+ for(const value of [
+  'https://images.example.com/catalog/baleada.webp',
+  'https://cdn.example.org/a.png?version=3',
+ ])assert.equal(safeCatalogImage(value),value);
+ assert.ok(validateMenuDraft({...basic(),image:'https://127.1/secret'}).image);
 });

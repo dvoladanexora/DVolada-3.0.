@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {applyOrderStatus,stageElapsedMinutes,decisionForOrder,allowedDecision} from '../src/restaurant-order-flow.js';
 import {neutralizeSpreadsheetFormula,quoteCsv,csvFromRows,historyCsvRows} from '../src/restaurant-export.js';
-import {decodeDemoStorageEvent,recordRestaurantShift,shiftLogKey} from '../src/restaurant-demo-bridge.js';
+import {decodeDemoStorageEvent,recordRestaurantShift,shiftLogKey,normalizeRestaurantShiftLog,mutateDemoPlaces} from '../src/restaurant-demo-bridge.js';
 
 const at=new Date('2026-11-19T06:00:00.000Z');
 const sample={id:'100',placeId:1,status:'Pendiente',kind:'food',createdAt:'2026-11-19T05:30:00.000Z',items:[{name:'Pollo',qty:2}]};
@@ -93,7 +93,8 @@ test('La vista de Caja no debe modificar estados de Cocina y viceversa',()=>{
  assert.ok(src.includes("screen==='inicio'&&current.status==='Pendiente'"));
  assert.ok(src.includes("screen==='kitchen'&&current.status==='Aceptado'"));
  assert.ok(src.includes('RestaurantOrderDecisionDialog'));
- assert.ok(src.includes('onUpdate(decisionOrder.id,status,metadata)'));
+ assert.ok(src.includes("onUpdate(decisionOrder.id,status,metadata,decisionOrder.status,'cashier',business?.id)"));
+ assert.ok(src.includes('if(!response?.ok)'));
  assert.ok(src.includes('csvFromRows(historyCsvRows(records))'));
 });
 test('El guardado de pruebas es tolerante a fallas de almacenamiento',()=>{
@@ -115,7 +116,8 @@ test('Cancelación de un pedido aceptado puede volver a Aceptado al rechazar la 
 });
 test('Cancelaciones de pedidos aceptados se revisan en Caja, no se borran directamente',()=>{
  const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
- assert.ok(main.includes("const immediate=['Programado','Pendiente'].includes(cancelOrder.status)"));
+ assert.ok(main.includes('cancelDemoOrder(latest,cancelOrder.id,reason)'));
+ assert.ok(main.includes('courierOrdersRef.current=outcome.orders'));
 });
 
 test('Preview local permite probar varios restaurantes sin exponer login ficticio en la web pública',()=>{
@@ -127,4 +129,112 @@ test('Preview local permite probar varios restaurantes sin exponer login fictici
  assert.ok(login.includes('import.meta.env.DEV'));
  assert.ok(main.includes('restaurantId={previewRestaurantId??places[0]?.id}'));
  assert.ok(main.includes('INTERNAL_PREVIEW_ENABLED&&affiliateSession'));
+});
+
+test('Relevo local dañado no rompe Caja ni muestra notas de otro negocio',()=>{
+ const good=recordRestaurantShift('A','Se entregó el inventario al siguiente turno.',[],at);
+ const other={...good,id:'other',restaurantId:'B'};
+ assert.deepEqual(normalizeRestaurantShiftLog('texto','A'),[]);
+ assert.deepEqual(normalizeRestaurantShiftLog({records:[good]},'A'),[]);
+ assert.deepEqual(normalizeRestaurantShiftLog(null,'A'),[]);
+ const recovered=normalizeRestaurantShiftLog([
+  null,[],{id:'invalid',restaurantId:'A',note:'',at:'mal',activeOrders:'dos'},
+  other,good,{...good,id:'bad-date',at:'no es fecha'},
+  {...good,id:'bad-orders',activeOrders:-3}
+ ],'A');
+ assert.equal(recovered.length,1);
+ assert.equal(recovered[0].restaurantId,'A');
+ assert.equal(recovered[0].note,good.note);
+ assert.equal(recovered[0].activeOrders,0);
+ const long=Array.from({length:35},(_,i)=>({...good,id:'shift-'+i}));
+ assert.equal(normalizeRestaurantShiftLog(long,'A').length,25);
+ const workspace=readFileSync(new URL('../src/OnlineWorkspace.jsx',import.meta.url),'utf8');
+ assert.ok(workspace.includes('normalizeRestaurantShiftLog(get('));
+});
+
+test('Eventos de otras pestañas rechazan productos dañados antes de cambiar la tienda',()=>{
+ const valid={key:'dv_places',newValue:JSON.stringify([{id:1,name:'Negocio',items:[{id:100,name:'Pizza',price:90}]}])};
+ assert.deepEqual(decodeDemoStorageEvent(valid)?.rows[0].items[0].name,'Pizza');
+ const invalid=[
+  {key:'dv_places',newValue:JSON.stringify([{id:1,items:[null]}])},
+  {key:'dv_places',newValue:JSON.stringify([{id:1,items:[{id:100,name:'Pizza',price:{bogus:true}}]}])},
+  {key:'dv_orders',newValue:JSON.stringify([{id:1,status:null}])},
+ ];
+ for(const event of invalid)assert.equal(decodeDemoStorageEvent(event),null);
+ assert.deepEqual(decodeDemoStorageEvent({key:'dv_orders',newValue:JSON.stringify([{id:'X',status:'Pendiente'}])})?.rows[0].status,'Pendiente');
+});
+
+test('Dos pestañas pueden editar ficha y menú sin eliminar cambios anteriores',()=>{
+ const original=[{id:1,name:'Doña Rosa',items:[{id:11,name:'Baleada',price:45}],isOpen:true},
+  {id:2,name:'Otro local',items:[{id:22,name:'Pollo',price:80}],isOpen:true}];
+ const disk=new Map([['dv_places',JSON.stringify(original)]]);
+ const storage={getItem:key=>disk.get(key)??null,setItem:(key,val)=>disk.set(key,val)};
+ const staleA=structuredClone(original),staleB=structuredClone(original);
+ const changed=mutateDemoPlaces(storage,staleA,latest=>latest.map(p=>p.id===1?{...p,name:'Doña Rosa Renovada'}:p));
+ assert.equal(changed.ok,true);
+ const menu=mutateDemoPlaces(storage,staleB,latest=>latest.map(p=>p.id===1?{...p,items:[...p.items,{id:12,name:'Refresco',price:25}]}:p));
+ assert.equal(menu.ok,true);
+ const saved=JSON.parse(disk.get('dv_places'));
+ assert.equal(saved[0].name,'Doña Rosa Renovada');
+ assert.deepEqual(saved[0].items.map(item=>item.name),['Baleada','Refresco']);
+ assert.deepEqual(saved[1],original[1],'el segundo negocio no se toca');
+});
+
+test('Estado de restaurante cambiado en otra pestaña se conserva al editar su catálogo',()=>{
+ const before=[{id:1,name:'Local',items:[{id:1,name:'Baleada',price:50}],isPaused:false}];
+ const disk=new Map([['dv_places',JSON.stringify(before)]]);
+ const storage={getItem:k=>disk.get(k)??null,setItem:(k,v)=>disk.set(k,v)};
+ assert.equal(mutateDemoPlaces(storage,before,places=>places.map(p=>({...p,isPaused:true}))).ok,true);
+ const menu=mutateDemoPlaces(storage,before,places=>places.map(p=>({...p,items:[{id:1,name:'Baleada',price:60}]})));
+ assert.equal(menu.ok,true);
+ const after=JSON.parse(disk.get('dv_places'))[0];
+ assert.equal(after.isPaused,true);
+ assert.equal(after.items[0].price,60);
+});
+
+test('Datos corruptos, cuotas llenas y productos inválidos bloquean guardado de restaurantes',()=>{
+ const original=[{id:1,name:'Restaurante',items:[{id:1,name:'Plato',price:75}]}];
+ let content=JSON.stringify(original),writes=0;
+ const storage={getItem:()=>content,setItem:(key,next)=>{writes++;content=next}};
+ assert.equal(mutateDemoPlaces(storage,original,()=>[{id:1,items:[null]}]).ok,false);
+ assert.equal(writes,0);
+ for(const malformed of ['{','{}','[null]','[{"id":2,"items":[null]}]']){
+  content=malformed;
+  assert.equal(mutateDemoPlaces(storage,original,p=>p).ok,false);
+  assert.equal(content,malformed);
+ }
+ assert.equal(writes,0);
+ const blocked={getItem:()=>JSON.stringify(original),setItem:()=>{throw Error('Quota')}};
+ assert.equal(mutateDemoPlaces(blocked,original,p=>p).ok,false);
+ assert.equal(mutateDemoPlaces(null,original,p=>p).ok,false);
+});
+
+test('Eventos de pestañas no admiten IDs de pedido repetidos',()=>{
+ const order={id:'DV-1',status:'Pendiente'};
+ assert.equal(decodeDemoStorageEvent({key:'dv_orders',newValue:JSON.stringify([order,{...order}])}),null);
+ assert.equal(decodeDemoStorageEvent({key:'dv_orders',newValue:JSON.stringify([{id:1,status:'Pendiente'},{id:'1',status:'Pendiente'}])}),null);
+ assert.ok(decodeDemoStorageEvent({key:'dv_orders',newValue:JSON.stringify([order])}));
+});
+
+test('Choque sobre el mismo menú devuelve conflicto y deja intactos los datos',()=>{
+ const original=[{id:1,name:'Negocio',items:[{id:10,name:'Baleada',price:50}]}];
+ let disk=JSON.stringify(original),writes=0;
+ const storage={getItem:()=>disk,setItem:(key,content)=>{disk=content;writes++}};
+ const stateBefore=structuredClone(original);
+ const first=mutateDemoPlaces(storage,stateBefore,latest=>latest.map(p=>({...p,items:[{id:10,name:'Baleada',price:55}]})));
+ assert.equal(first.ok,true);
+ assert.equal(writes,1);
+ const conflicting=mutateDemoPlaces(storage,stateBefore,latest=>{
+  if(JSON.stringify(latest[0].items)!==JSON.stringify(stateBefore[0].items))
+   return {ok:false,reason:'El menú cambió en otra pestaña.'};
+  return latest.map(p=>({...p,items:[{id:10,name:'Baleada',price:60}]}));
+ });
+ assert.equal(conflicting.ok,false);
+ assert.match(conflicting.reason,/otra pestaña/);
+ assert.equal(writes,1,'no se sobrescribe el cambio remoto');
+ assert.equal(JSON.parse(disk)[0].items[0].price,55);
+ const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(ui.includes('JSON.stringify(current.items)!==JSON.stringify(visible.items)'));
+ assert.ok(ui.includes('JSON.stringify(visible?.[key])!==JSON.stringify(current[key])'));
+ assert.ok(ui.includes('restaurantStatus(visible)!==restaurantStatus(current)'));
 });

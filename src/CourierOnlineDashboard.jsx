@@ -1,8 +1,11 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
+import LazyPanelBoundary from './LazyPanelBoundary.jsx';
 import {AlertCircle,ArrowLeft,ArrowRight,Bike,Check,CheckCheck,ChevronRight,Clock3,Eye,EyeOff,Headphones,History,MapPin,Navigation,Package,Phone,Plus,Route,Search,ShieldCheck,Store,Volume2,WifiOff,X} from 'lucide-react';
-import CourierMap from './CourierMap.jsx';
-import CourierGpsArrival from './CourierGpsArrival.jsx';
-import CourierAcceptDialog from './CourierAcceptDialog.jsx';
+// Cargar mapa, GPS y diálogo solo cuando el repartidor abre esa función.
+const CourierMap=React.lazy(()=>import('./CourierMap.jsx'));
+const CourierGpsArrival=React.lazy(()=>import('./CourierGpsArrival.jsx'));
+const CourierAcceptDialog=React.lazy(()=>import('./CourierAcceptDialog.jsx'));
+const lazyPanelFallback=<p className="dv-rider-lazy-status" role="status">Cargando esta herramienta…</p>;
 import {DEMO_RIDERS,MAX_ACTIVE_DELIVERIES,courierQueues,courierPublicOrder,courierOrderCoords,courierRestaurantCoords,riderKey,riderIssueKey,buildCourierIssue,pinAttemptKey,sanitizePinAttempts,incrementPinAttempt,courierNextTask,COURIER_INCIDENT_CATEGORIES} from './courier-workflow.js';
 import './courier-online.css';
 
@@ -98,7 +101,7 @@ function ActiveCard({order,place,onAction,onIssue,onPinError,onPinSuccess,failed
   {order.status==='Recogido'&&<button type="button" className="dv-rider-next" onClick={()=>onAction(order,'route')}><Route size={19}/> Iniciar recorrido <ArrowRight size={17}/></button>}
   {order.status==='En camino'&&<div className="dv-rider-arrival">
    <button type="button" className="dv-rider-next" onClick={()=>setShowArrival(v=>!v)}><MapPin size={18}/> {showArrival?'Cerrar comprobación GPS':'Confirmar llegada al destino'} <ChevronRight size={17}/></button>
-   {showArrival&&(customerCoords?<CourierGpsArrival order={order} onArrive={()=>{const result=onAction(order,'arrive',{gpsVerified:true});if(result?.ok)setShowArrival(false)}}/>:<div className="dv-rider-gps-warning"><AlertCircle size={17}/> Este pedido no tiene coordenadas verificadas. Para las pruebas podés simular la llegada; con clientes reales se requiere confirmar la dirección y el método de llegada.</div>)}
+   {showArrival&&(customerCoords?<LazyPanelBoundary><React.Suspense fallback={lazyPanelFallback}><CourierGpsArrival order={order} onArrive={()=>{const result=onAction(order,'arrive',{gpsVerified:true});if(result?.ok)setShowArrival(false)}}/></React.Suspense></LazyPanelBoundary>:<div className="dv-rider-gps-warning"><AlertCircle size={17}/> Este pedido no tiene coordenadas verificadas. Para las pruebas podés simular la llegada; con clientes reales se requiere confirmar la dirección y el método de llegada.</div>)}
    {import.meta.env.DEV&&<button type="button" className="dv-rider-demo-sim" onClick={()=>onAction(order,'arrive',{demoSimulation:true})}>Simular llegada · SOLO DEMO LOCAL</button>}
   </div>}
   {order.status==='En ubicación'&&<div className="dv-rider-pin"><div><ShieldCheck size={19}/><strong>Confirmación de entrega</strong></div><p>Pedile al cliente su PIN de seis dígitos. El sistema no te lo muestra.</p>
@@ -108,7 +111,7 @@ function ActiveCard({order,place,onAction,onIssue,onPinError,onPinSuccess,failed
    {failedPinAttempts>=3?<p className="dv-rider-hold">Se bloqueó la verificación en esta sesión de prueba. Reportá una incidencia; Work implementará recuperación segura.</p>:<button type="button" className="dv-rider-next" disabled={pin.length!==6} onClick={()=>{const result=onAction(order,'deliver',{pin});if(result?.ok){setPin('');onPinSuccess(order)}else if(String(result?.reason||'').includes('PIN incorrecto')){onPinError(order)}}}><CheckCheck size={19}/> Verificar PIN y finalizar entrega</button>}
   </div>}
   <div className="dv-rider-secondary-actions"><button type="button" onClick={()=>setShowMap(v=>!v)}><MapPin size={16}/> {showMap?'Cerrar mapa':'Ver mapa y ruta'}</button><button type="button" onClick={issue}><Headphones size={16}/> Reportar problema</button></div>
-  {showMap&&<CourierMap restaurant={restaurantCoords} customer={customerCoords} orderId={order.orderNo||order.id}/>}
+  {showMap&&<LazyPanelBoundary><React.Suspense fallback={lazyPanelFallback}><CourierMap restaurant={restaurantCoords} customer={customerCoords} orderId={order.orderNo||order.id}/></React.Suspense></LazyPanelBoundary>}
   {showIncident&&<IncidentForm order={order} onSave={onIssue} onClose={()=>setShowIncident(false)}/>}
  </article>;
 }
@@ -118,6 +121,9 @@ export default function CourierOnlineDashboard({orders=[],places=[],courierId='d
  const [message,setMessage]=useState(''),[issues,setIssues]=useState(()=>readRiderIssues(courierId));
  const [pinFailures,setPinFailures]=useState(()=>sanitizePinAttempts(read(pinAttemptKey(courierId),{}))),[audioEnabled,setAudioEnabled]=useState(false);
  const [pendingAccept,setPendingAccept]=useState(null);
+ const [offerLimit,setOfferLimit]=useState(15),[historyLimit,setHistoryLimit]=useState(20);
+ useEffect(()=>setOfferLimit(15),[query,courierId]);
+ useEffect(()=>setHistoryLimit(20),[courierId]);
  const audioRef=useRef(null),lastOffers=useRef(null),messageRef=useRef(null),persistedRiderRef=useRef(null);
  const [network,setNetwork]=useState(isOnline);
  useEffect(()=>{setOnline(read(riderKey(courierId),false)===true);setIssues(readRiderIssues(courierId));setTab(courierQueues(orders,courierId).active.length?'active':'offers');setPinFailures(sanitizePinAttempts(read(pinAttemptKey(courierId),{})));setPendingAccept(null);lastOffers.current=null},[courierId]);
@@ -194,15 +200,15 @@ export default function CourierOnlineDashboard({orders=[],places=[],courierId='d
   {tab==='offers'&&<><div className="dv-rider-section-top"><div><span className="dv-rider-eyebrow">NUEVAS OPORTUNIDADES</span><h2>Pedidos disponibles</h2><p>Solo aparecen órdenes que el restaurante ya aceptó y que aún no tienen repartidor.</p></div><label className="dv-rider-search"><Search size={18}/><input aria-label="Buscar ofertas" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Número o restaurante"/></label></div>
    {!online&&<p className="dv-rider-inline-note"><AlertCircle size={16}/> Activá «Disponible para pedidos» para aceptar.</p>}
    {data.slotsRemaining===0&&<p className="dv-rider-inline-note"><Bike size={16}/> Tenés dos entregas en curso. Terminá alguna para aceptar otra.</p>}
-   <div className="dv-rider-offers">{offers.length?offers.map(o=><OfferCard key={o.id} order={o} place={placeOf(o)} canTake={online&&network&&data.slotsRemaining>0} onAccept={x=>setPendingAccept(String(x.id))} onDecline={x=>run(x,'decline')}/>):<div className="dv-rider-empty"><Package size={33}/><h3>No hay ofertas para mostrar</h3><p>Cuando un restaurante acepte un pedido disponible, aparecerá aquí. Probá también limpiar la búsqueda.</p></div>}</div>
+   <div className="dv-rider-offers">{offers.length?offers.slice(0,offerLimit).map(o=><OfferCard key={o.id} order={o} place={placeOf(o)} canTake={online&&network&&data.slotsRemaining>0} onAccept={x=>setPendingAccept(String(x.id))} onDecline={x=>run(x,'decline')}/>):<div className="dv-rider-empty"><Package size={33}/><h3>No hay ofertas para mostrar</h3><p>Cuando un restaurante acepte un pedido disponible, aparecerá aquí. Probá también limpiar la búsqueda.</p></div>}{offers.length>offerLimit&&<button type="button" className="dv-rider-load-more" onClick={()=>setOfferLimit(count=>count+15)}>Mostrar 15 ofertas más · {Math.min(offerLimit,offers.length)} de {offers.length}</button>}</div>
   </>}
   {tab==='active'&&<><div className="dv-rider-section-top"><div><span className="dv-rider-eyebrow">TU JORNADA</span><h2>Mis entregas activas</h2><p>Primero recogé, después salí a ruta y finalizá con el PIN del cliente.</p></div><span className="dv-rider-counter"><Bike size={16}/> {active.length} / {MAX_ACTIVE_DELIVERIES}</span></div>
     <div className="dv-rider-active-list">{active.length?active.map(o=><ActiveCard key={o.id} order={o} place={placeOf(o)} onAction={run} onIssue={recordIssue} onPinError={failedPin} onPinSuccess={pinSuccess} failedPinAttempts={pinFailures[o.id]||0}/>):<div className="dv-rider-empty"><CheckCheck size={35}/><h3>¡Todo al día!</h3><p>No tenés entregas en curso. Cuando aceptés una oferta aparecerá aquí.</p><button type="button" className="dv-rider-primary" onClick={()=>setTab('offers')}>Ver pedidos disponibles <ArrowRight size={17}/></button></div>}</div>
   </>}
   {tab==='history'&&<><div className="dv-rider-section-top"><div><span className="dv-rider-eyebrow">TU ACTIVIDAD</span><h2>Historial de entregas</h2><p>Registro local de tus entregas de demostración. No incluye ingresos, comisiones ni pagos inventados.</p></div></div>
-   <div className="dv-rider-history">{history.length?history.map(o=><article key={o.id}><span className="dv-rider-history-icon"><CheckCheck size={20}/></span><div><strong>{o.orderNo||o.id} · {o.placeName||'Restaurante'}</strong><small>{stamp(o)}</small></div><span className="dv-rider-history-state">{visibleStatus[o.status]||o.status}</span></article>):<div className="dv-rider-empty"><History size={34}/><h3>Sin entregas anteriores</h3><p>Aquí se guardarán las órdenes finalizadas de esta identidad de prueba.</p></div>}</div>
+   <div className="dv-rider-history">{history.length?history.slice(0,historyLimit).map(o=><article key={o.id}><span className="dv-rider-history-icon"><CheckCheck size={20}/></span><div><strong>{o.orderNo||o.id} · {o.placeName||'Restaurante'}</strong><small>{stamp(o)}</small></div><span className="dv-rider-history-state">{visibleStatus[o.status]||o.status}</span></article>):<div className="dv-rider-empty"><History size={34}/><h3>Sin entregas anteriores</h3><p>Aquí se guardarán las órdenes finalizadas de esta identidad de prueba.</p></div>}{history.length>historyLimit&&<button type="button" className="dv-rider-load-more" onClick={()=>setHistoryLimit(count=>count+20)}>Mostrar 20 entregas más · {Math.min(historyLimit,history.length)} de {history.length}</button>}</div>
    {issues.length>0&&<div className="dv-rider-issue-history"><h3><AlertCircle size={17}/> Notas locales de incidencias</h3>{issues.slice(0,5).map(i=><div key={i.id}><strong>Orden {i.orderId} · {i.category||'Otro'}</strong><p>{i.note}</p><small>{i.status}</small></div>)}</div>}
   </>}
-  {pendingAccept!==null&&<CourierAcceptDialog order={chosenOffer||null} place={chosenOffer?placeOf(chosenOffer):null} slots={data.slotsRemaining} canAccept={online&&network&&data.slotsRemaining>0} onClose={()=>setPendingAccept(null)} onConfirm={()=>{if(!chosenOffer){alert('La oferta ya no está disponible.');return}const result=run(chosenOffer,'accept');if(result?.ok)setPendingAccept(null)}}/>}
+  {pendingAccept!==null&&<LazyPanelBoundary><React.Suspense fallback={lazyPanelFallback}><CourierAcceptDialog order={chosenOffer||null} place={chosenOffer?placeOf(chosenOffer):null} slots={data.slotsRemaining} canAccept={online&&network&&data.slotsRemaining>0} onClose={()=>setPendingAccept(null)} onConfirm={()=>{if(!chosenOffer){alert('La oferta ya no está disponible.');return}const result=run(chosenOffer,'accept');if(result?.ok)setPendingAccept(null)}}/></React.Suspense></LazyPanelBoundary>}
  </section>;
 }

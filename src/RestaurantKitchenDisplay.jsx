@@ -1,7 +1,7 @@
 import {stageElapsedMinutes} from './restaurant-order-flow.js';
-import React from 'react';
+import React,{useEffect,useState} from 'react';
 import {AlertTriangle,ArrowRight,ChefHat,CheckCheck,CheckCircle2,Clock3,Monitor,Printer,ShoppingBag,UtensilsCrossed} from 'lucide-react';
-import {elapsedMinutes,kitchenLineExtras,kitchenQueues,matchesRestaurantOrder} from './kitchen-operations.js';
+import {elapsedMinutes,kitchenLineExtras,kitchenQueues,kitchenVisibleBatch,matchesRestaurantOrder} from './kitchen-operations.js';
 import './restaurant-kitchen-display.css';
 
 const stages=[
@@ -32,6 +32,8 @@ export default function RestaurantKitchenDisplay({
  orders=[],restaurantId,restaurantName='Restaurante',now=Date.now(),alertMinutes=20,connected=true,query='',
  onChange=()=>{},onPrint=()=>{},onDetail=()=>{},onGoCashier=()=>{},
 }){
+ const [visibleLimits,setVisibleLimits]=useState({accepted:20,preparing:20,ready:20});
+ useEffect(()=>setVisibleLimits({accepted:20,preparing:20,ready:20}),[restaurantId,query]);
  const q=kitchenQueues(orders,restaurantId,now);
  const active=q.accepted.length+q.preparing.length;
  const delayed=q.accepted.filter(o=>{const m=stageElapsedMinutes(o,'accepted',now);return m!==null&&m>=alertMinutes}).length+q.preparing.filter(o=>{const m=stageElapsedMinutes(o,'preparing',now);return m!==null&&m>=alertMinutes}).length;
@@ -50,9 +52,10 @@ export default function RestaurantKitchenDisplay({
   <div className="dv-kitchen-lanes">
    {stages.map(stage=>{
     const Icon=stage.Icon,items=q[stage.key].filter(order=>matchesRestaurantOrder(order,query));
+    const page=kitchenVisibleBatch(items,visibleLimits[stage.key]);
     return <section key={stage.key} className={'dv-kitchen-lane dv-kitchen-lane-'+stage.key} aria-label={stage.title}>
      <header><div className="dv-kitchen-lane-icon"><Icon size={21}/></div><div><h3>{stage.title}</h3><span>{stage.subtitle}</span></div><strong className="dv-kitchen-count">{items.length}</strong></header>
-     <div className="dv-kitchen-lane-orders">{items.length?items.map(o=><KitchenOrderCard key={o.id} order={o} stage={stage} now={now} alertMinutes={alertMinutes} connected={connected} onChange={onChange} onPrint={onPrint} onDetail={onDetail}/>):<div className="dv-kitchen-empty"><CheckCircle2 size={31}/><p>{query.trim()?'Sin coincidencias en esta etapa.':stage.key==='accepted'?'No hay pedidos esperando comenzar.':stage.key==='preparing'?'No hay platos en preparación.':'No hay órdenes listas por ahora.'}</p></div>}</div>
+     <div className="dv-kitchen-lane-orders">{items.length?page.visible.map(o=><KitchenOrderCard key={o.id} order={o} stage={stage} now={now} alertMinutes={alertMinutes} connected={connected} onChange={onChange} onPrint={onPrint} onDetail={onDetail}/>):<div className="dv-kitchen-empty"><CheckCircle2 size={31}/><p>{query.trim()?'Sin coincidencias en esta etapa.':stage.key==='accepted'?'No hay pedidos esperando comenzar.':stage.key==='preparing'?'No hay platos en preparación.':'No hay órdenes listas por ahora.'}</p></div>}{page.remaining>0&&<button type="button" className="dv-kitchen-load-more" aria-label={'Mostrar 20 pedidos más en '+stage.title} onClick={()=>setVisibleLimits(old=>({...old,[stage.key]:old[stage.key]+20}))}>Mostrar 20 más · {page.shown} de {page.total} visibles</button>}</div>
     </section>;
    })}
   </div>

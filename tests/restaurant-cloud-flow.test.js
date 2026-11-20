@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {kitchenQueues,elapsedMinutes,kitchenTicketHtml,belongsToRestaurant,openKitchenTicket,canMoveRestaurantOrder,matchesRestaurantOrder,scheduledOrderState} from '../src/kitchen-operations.js';
+import {kitchenQueues,elapsedMinutes,kitchenTicketHtml,belongsToRestaurant,openKitchenTicket,canMoveRestaurantOrder,matchesRestaurantOrder,scheduledOrderState,kitchenVisibleBatch} from '../src/kitchen-operations.js';
 
 const order=(id,status,placeId='r1',options={})=>({
  id,orderNo:'#DV-'+id,kind:'food',placeId,status,delivery:'delivery',name:'Cliente',
@@ -131,4 +131,66 @@ test('Pedidos programados: Caja separa los futuros, vencidos y sin fecha válida
  assert.equal(scheduledOrderState(due,now),'due');
  assert.equal(canMoveRestaurantOrder('Programado','Pendiente','cashier'),true);
  assert.equal(canMoveRestaurantOrder('Programado','Aceptado','cashier'),false);
+});
+
+test('Cocina pagina cientos de órdenes sin alterar contadores ni el orden de atención',()=>{
+ const lots=Array.from({length:81},(_,i)=>order('lote-'+String(i).padStart(3,'0'),'Aceptado','r1',{createdAt:new Date(now-i*1000).toISOString()}));
+ const q=kitchenQueues(lots,'r1',now);
+ assert.equal(q.accepted.length,81);
+ const first=kitchenVisibleBatch(q.accepted,20);
+ assert.deepEqual([first.shown,first.total,first.remaining],[20,81,61]);
+ assert.deepEqual(first.visible,q.accepted.slice(0,20));
+ const second=kitchenVisibleBatch(q.accepted,40);
+ assert.deepEqual([second.shown,second.total,second.remaining],[40,81,41]);
+ assert.deepEqual(kitchenVisibleBatch(q.accepted,100).visible,q.accepted);
+ assert.deepEqual(kitchenVisibleBatch(null,20),{visible:[],shown:0,total:0,remaining:0});
+ assert.equal(kitchenVisibleBatch(q.accepted,-5).shown,1);
+ assert.equal(kitchenVisibleBatch(q.accepted,Infinity).shown,20);
+ const ui=readFileSync(new URL('../src/RestaurantKitchenDisplay.jsx',import.meta.url),'utf8');
+ assert.ok(ui.includes('kitchenVisibleBatch(items,visibleLimits[stage.key])'));
+ assert.ok(ui.includes('page.visible.map(o='));
+ assert.ok(ui.includes('page.remaining>0'));
+ assert.ok(ui.includes('setVisibleLimits(old=>({...old,[stage.key]:old[stage.key]+20}))'));
+ assert.ok(ui.includes('useEffect(()=>setVisibleLimits({accepted:20,preparing:20,ready:20}),[restaurantId,query])'));
+});
+
+test('Caja muestra programados en lotes, permite ver más y respeta búsqueda',()=>{
+ const ui=readFileSync(new URL('../src/RestaurantCashierConsole.jsx',import.meta.url),'utf8');
+ assert.ok(ui.includes('useState(10)'));
+ assert.ok(ui.includes('useState(5)'));
+ assert.ok(ui.includes('scheduledDue=q.scheduledDue.filter(order=>matchesRestaurantOrder(order,query))'));
+ assert.ok(ui.includes('scheduledFuture=q.scheduledFuture.filter(order=>matchesRestaurantOrder(order,query))'));
+ assert.ok(ui.includes('scheduledDue.slice(0,scheduledLimit).map(order='));
+ assert.ok(ui.includes('scheduledFuture.slice(0,futureLimit).map(order='));
+ assert.ok(ui.includes('scheduledDue.length>scheduledLimit'));
+ assert.ok(ui.includes('scheduledFuture.length>futureLimit'));
+ assert.ok(ui.includes('setScheduledLimit(limit=>limit+10)'));
+ assert.ok(ui.includes('setFutureLimit(limit=>limit+10)'));
+ assert.ok(ui.includes('setScheduledLimit(10);setFutureLimit(5)'));
+ assert.ok(ui.includes('onActivate(order)'),'activación de programados debe conservarse');
+});
+
+test('Caja identifica cada botón de impresión con el número del pedido',()=>{
+ const cashier=readFileSync(new URL('../src/RestaurantCashierConsole.jsx',import.meta.url),'utf8');
+ assert.ok(cashier.includes('aria-label={"Imprimir comanda de "+number(o)}'));
+ assert.equal(cashier.split('aria-label={"Imprimir comanda de "+number(o)}').length-1,3);
+ assert.ok(cashier.includes('title="Imprimir comanda"'));
+});
+
+test('Comanda de cocina no permite ejecutar scripts ni conservar acceso al panel principal',()=>{
+ const crafted=order('suspicious','Aceptado','r1',{
+  orderNo:'</title><script>alert(1)</script>',
+  notes:'<img src=x onerror=alert(1)>',
+  items:[{id:1,qty:1,name:'<svg/onload=alert(1)>',extras:['<script>x()</script>']}]
+ });
+ const markup=kitchenTicketHtml(crafted,'<script>alert(2)</script>');
+ assert.ok(markup.includes('http-equiv="Content-Security-Policy"'));
+ assert.ok(markup.includes('default-src &#39;none&#39;'));
+ assert.ok(!markup.includes('<script>'));
+ assert.ok(!markup.includes('<svg/onload='));
+ assert.ok(!markup.includes('<img src=x'));
+ const popup={opener:{private:'secret'},document:{write(s){this.html=s},close(){}},focus(){},print(){}};
+ assert.equal(openKitchenTicket(crafted,'Restaurante',()=>popup),true);
+ assert.equal(popup.opener,null);
+ assert.ok(popup.document.html.includes('Content-Security-Policy'));
 });

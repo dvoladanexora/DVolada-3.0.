@@ -23,8 +23,8 @@ test('Guarda hora de apertura y cierre de un día concreto',()=>{
  assert.deepEqual(patch.hours[5],{open:'09:00',close:'22:00'});
  assert.equal(Object.keys(patch.hours).length,2);
 });
-test('Horario de cierre antes de apertura o inválido no se guarda',()=>{
- for(const [open,close] of [['18:00','08:00'],['08:00','08:00'],['24:00','08:00'],['10:75','12:00']]){
+test('Horarios iguales o inválidos no se guardan',()=>{
+ for(const [open,close] of [['08:00','08:00'],['24:00','08:00'],['10:75','12:00']]){
   const value=profile();value.hours[0]={enabled:true,open,close};
   assert.ok(validateBusinessProfile(value).hours);
   assert.throws(()=>buildBusinessPatch(value));
@@ -69,4 +69,32 @@ test('Conservar la disponibilidad al recargar y evitar contraseñas de demo en f
  assert.ok(login.includes('import.meta.env.DEV'));
  assert.ok(!login.includes('restorres'));
  assert.ok(!login.includes("demoPass='1326'"));
+});
+
+test('El editor acepta un turno que cierra al día siguiente sin duplicar jornadas',()=>{
+ const value=profile();
+ value.hours[4]={enabled:true,open:'18:00',close:'01:30'};
+ assert.deepEqual(validateBusinessProfile(value),{});
+ assert.deepEqual(buildBusinessPatch(value).hours,{4:{open:'18:00',close:'01:30'}});
+ assert.equal(fillBusinessHours(buildBusinessPatch(value).hours)[4].enabled,true);
+ const ui=readFileSync(new URL('../src/RestaurantBusinessSettings.jsx',import.meta.url),'utf8');
+ assert.ok(ui.includes('se considera el día siguiente'));
+});
+
+test('Cambio de restaurante cancela fotos antiguas y señala campos inválidos antes de guardar',()=>{
+ const src=readFileSync(new URL('../src/RestaurantBusinessSettings.jsx',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../src/restaurant-business-settings.css',import.meta.url),'utf8');
+ assert.ok(src.includes('photoRequest=useRef(0),formRef=useRef(null)'));
+ assert.ok(src.includes('photoRequest.current++;\n  setPhotoBusy(false);'));
+ assert.ok(src.includes('return ()=>{photoRequest.current++}'));
+ assert.ok(src.includes('const request=++photoRequest.current'));
+ assert.ok(src.includes('if(request===photoRequest.current){edit(\'image\',value)'));
+ assert.ok(src.includes('if(request===photoRequest.current)setErrors('));
+ assert.ok(src.includes('if(request===photoRequest.current)setPhotoBusy(false)'));
+ assert.ok(src.includes('if(photoBusy)return'));
+ assert.ok(src.includes('formRef.current?.querySelector(\'[aria-invalid="true"]\')?.focus()'));
+ for(const key of ['name','type','description','address','phone','image'])
+  assert.ok(src.includes('aria-invalid={Boolean(errors.'+key+')}'),key);
+ assert.ok(src.includes('dv-business-error-summary" role="alert"'));
+ assert.ok(css.includes('.dv-business-settings [aria-invalid=true]'));
 });

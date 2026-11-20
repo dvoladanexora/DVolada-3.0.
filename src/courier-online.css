@@ -167,3 +167,11 @@
 /* Reportes fáciles de llenar en móvil: selección antes de escribir */
 .dv-rider-incident select{width:100%;min-height:47px;border:1px solid var(--rider-line);background:var(--rider-soft);color:var(--rider-ink);font-size:13px;padding:10px 12px;border-radius:12px}
 .dv-rider-incident select:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+/* Fase 2: herramientas diferidas y listas extensas para móviles antiguos. */
+.dv-rider-load-more{display:block;width:100%;min-height:48px;margin-top:12px;padding:12px 16px;border:1px solid var(--rider-line);border-radius:14px;background:var(--rider-card);color:var(--rider-ink);font-weight:800;font-size:13px;cursor:pointer}
+.dv-rider-load-more:hover{border-color:var(--accent)}
+.dv-rider-load-more:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.dv-rider-lazy-status{padding:16px;text-align:center;font-size:13px;font-weight:750;color:var(--rider-muted);background:var(--rider-soft);border-radius:12px}
+.dv-rider-app :is(button,input,textarea,select,a):focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media(max-width:700px){.dv-rider-app .dv-rider-offer-actions button,.dv-rider-app .dv-rider-tabs button,.dv-rider-app .dv-rider-next{min-height:48px}}

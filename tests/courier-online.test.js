@@ -133,7 +133,8 @@ test('Panel visual expone tres vistas, consentimiento GPS, PIN y test de demo ex
  assert.ok(main.includes("page==='delivery-panel'&&INTERNAL_PREVIEW_ENABLED&&previewCourierId"));
  assert.ok(main.includes("onAction={handleCourierAction}"));
  assert.ok(main.includes("orders={courierViewOrders(orders,previewCourierId)}"));
- assert.ok(main.includes('applyCourierAction(current,orderId,action,riderId,options)'));
+ assert.ok(main.includes('applyCourierAction(latest,orderId,action,riderId,options)'));
+ assert.ok(main.includes('mutateDemoOrders(localStorage,current,latest=>applyCourierAction('));
  assert.ok(main.includes('courierOrdersRef.current=result.orders'));
  assert.ok(main.includes("String(riderId)!==String(previewCourierId)"));
  assert.ok(login.includes('import.meta.env.DEV'));
@@ -154,8 +155,9 @@ test('Accesibilidad y controles de tamaño móvil siguen presentes',()=>{
 
 test('El seeder de reparto genera números distintos y limita exceso de pedidos ficticios',()=>{
  const src=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
- assert.ok(src.includes("const count=orders.filter(o=>o.demo"));
- assert.ok(src.includes("if(count>=8)"));
+ assert.ok(src.includes("const active=latest.filter(o=>o.demo"));
+ assert.ok(src.includes("if(active>=8)"));
+ assert.ok(src.includes('mutateDemoOrders(localStorage,courierOrdersRef.current??orders,latest=>'));
  assert.ok(src.includes("orderNo:prefix+'-1'"));
  assert.ok(src.includes("orderNo:prefix+'-2'"));
  assert.ok(src.includes("createdAt,acceptedAt:createdAt,readyAt:createdAt"));
@@ -300,4 +302,59 @@ test('Mapa de entrega no simula destinos ficticios ni pide GPS sin coordenadas',
  assert.ok(src.includes('No mostraremos un mapa genérico'));
  assert.ok(src.includes('disabled={!valid(target)}'));
  assert.ok(!src.includes('lat:14.5,lng:-86.8'));
+});
+
+test('Repartidor carga herramientas bajo demanda y pagina ofertas e historial',()=>{
+ const ui=readFileSync(new URL('../src/CourierOnlineDashboard.jsx',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../src/courier-online.css',import.meta.url),'utf8');
+ for(const piece of ["React.lazy(()=>import('./CourierMap.jsx'))","React.lazy(()=>import('./CourierGpsArrival.jsx'))","React.lazy(()=>import('./CourierAcceptDialog.jsx'))"]){
+  assert.ok(ui.includes(piece),'import no diferido: '+piece);
+ }
+ assert.ok(ui.includes('React.Suspense fallback={lazyPanelFallback}'));
+ assert.ok(ui.includes('offers.slice(0,offerLimit).map(o='));
+ assert.ok(ui.includes('history.slice(0,historyLimit).map(o='));
+ assert.ok(ui.includes('offers.length>offerLimit'));
+ assert.ok(ui.includes('history.length>historyLimit'));
+ assert.ok(ui.includes('setOfferLimit(count=>count+15)'));
+ assert.ok(ui.includes('setHistoryLimit(count=>count+20)'));
+ assert.ok(ui.includes('setOfferLimit(15),[query,courierId]'));
+ assert.ok(ui.includes('setHistoryLimit(20),[courierId]'));
+ assert.ok(css.includes('.dv-rider-load-more'));
+ assert.ok(css.includes('.dv-rider-lazy-status'));
+ assert.ok(css.includes(':focus-visible'));
+});
+
+test('Campos futuros secretos y costos internos no se propagan a ofertas ni entregas',()=>{
+ const orderWithSecrets=order('privado','Listo',{
+  pin:'654321',privateToken:'token-interno',stripeSecret:'test-secret',
+  identity:'0801199000000',supplierCost:1000,internalMargin:38,customerEmail:'email@privado.test',
+  items:[{id:1,name:'Baleada',qty:2,supplierCost:50,supplierSecret:'clave'}]
+ });
+ const assigned=courierPublicOrder({...orderWithSecrets,
+  deliveryCoordinates:{lat:14.5,lng:-89.2,internalSecret:'route-token'},
+  location:{lat:14.5,lng:-89.2,apiKey:'not-for-couriers'}
+ });
+ for(const field of ['pin','privateToken','stripeSecret','identity','supplierCost','internalMargin','customerEmail'])
+  assert.equal(Object.hasOwn(assigned,field),false,'filtración: '+field);
+ assert.equal(assigned.name,orderWithSecrets.name);
+ assert.equal(assigned.address,orderWithSecrets.address);
+ assert.deepEqual(assigned.items,[{id:1,qty:2,name:'Baleada'}]);
+ assert.deepEqual(assigned.deliveryCoordinates,{lat:14.5,lng:-89.2});
+ assert.equal(Object.hasOwn(assigned,'location'),false);
+ assert.equal(Object.hasOwn(assigned.deliveryCoordinates,'internalSecret'),false);
+ const offer=courierViewOrder(orderWithSecrets,riderB);
+ assert.ok(offer);
+ for(const field of ['pin','privateToken','stripeSecret','customerEmail','address','name'])
+  assert.equal(Object.hasOwn(offer,field),false,field);
+ const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(ui.includes('orders={courierViewOrders(orders,previewCourierId)}'));
+});
+test('Carga de mapas desde CDN exige firmas de integridad oficiales verificadas',()=>{
+ const source=readFileSync(new URL('../src/CourierMap.jsx',import.meta.url),'utf8');
+ assert.ok(source.includes('LEAFLET_CSS_INTEGRITY='));
+ assert.ok(source.includes('LEAFLET_JS_INTEGRITY='));
+ assert.ok(source.includes("css.integrity=LEAFLET_CSS_INTEGRITY"));
+ assert.ok(source.includes("script.integrity=LEAFLET_JS_INTEGRITY"));
+ assert.ok(source.includes("css.crossOrigin='anonymous'"));
+ assert.ok(source.includes("script.crossOrigin='anonymous'"));
 });

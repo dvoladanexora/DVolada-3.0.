@@ -16,6 +16,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
+    # workflow_dispatch también debe respetar la rama de publicación aprobada.
+    if: github.ref == 'refs/heads/main' && github.repository == 'dvoladanexora/DVolada-3.0.'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -23,14 +25,30 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
-      - name: Probar API Online antes de publicar
-        run: npm run test:online
+      - name: Exigir dependencias reproducibles antes de publicar
+        run: |
+          test -f package-lock.json || { echo "::error::Falta package-lock.json revisado"; exit 1; }
+          test -f server/package-lock.json || { echo "::error::Falta server/package-lock.json revisado"; exit 1; }
+      - name: Instalar versiones aprobadas sin alterar dependencias
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix server ci --ignore-scripts --no-audit --no-fund
+      - name: Bloquear publicación por dependencias vulnerables
+        run: |
+          npm audit --audit-level=high
+          npm --prefix server audit --omit=dev --audit-level=high
+      - name: Ejecutar TODAS las pruebas antes de publicar
+        run: npm run test:all
+      - name: Validar servidor preliminar
+        run: npm run check:server
       - run: npm run build
+      - name: Evitar publicar páginas internas de QA
+        run: test ! -e dist/device-studio.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
   deploy:
+    if: github.ref == 'refs/heads/main' && github.repository == 'dvoladanexora/DVolada-3.0.'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

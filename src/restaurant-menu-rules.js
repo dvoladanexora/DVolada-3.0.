@@ -5,21 +5,34 @@ export const MENU_CATEGORIES=Object.freeze(['Almuerzos','Desayunos','Baleadas','
 export const MENU_IMAGE_LIMIT=220_000;
 export const MAX_MENU_IMAGE_FILE=5*1024*1024;
 const validImageMime=new Set(['image/jpeg','image/png','image/webp']);
+/** Bloquea direcciones locales en imágenes proporcionadas por terceros.
+ * No se pretende validar DNS aquí: en producción las fotos se deben
+ * almacenar y servir desde un host de medios confiable.
+ */
 export function safeCatalogImage(value){
  const s=String(value||'').trim();
  if(!s)return '';
  if(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/i.test(s)&&s.length<=MENU_IMAGE_LIMIT*1.42)return s;
- try{const url=new URL(s);if(url.protocol==='https:'&&!url.username&&!url.password&&url.href.length<=1500)return url.href}catch{}
- return '';
+ try{
+  const url=new URL(s);
+  if(url.protocol!=='https:'||url.username||url.password||url.href.length>1500)return '';
+  const host=url.hostname.toLowerCase().replace(/\.$/,'');
+  // URL normaliza variantes IPv4 como 127.1, 0x7f000001 y 2130706433.
+  if(!host||!host.includes('.')||/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)
+   ||host.startsWith('[')
+   ||/(?:^|\.)(?:localhost|local|internal|lan|home|intranet|onion|test|invalid)$/.test(host)
+   ||host==='metadata.google.internal')return '';
+  return url.href;
+ }catch{return ''}
 }
-export const cleanMenuExtras=value=>{
+export const cleanMenuExtras=(value,limit=8)=>{
  const vals=Array.isArray(value)?value:String(value||'').split(/[,\n]/);
  const seen=new Set(),result=[];
  for(const raw of vals){
   const v=String(raw||'').trim().replace(/\s+/g,' ').slice(0,45);
   if(!v||seen.has(v.toLocaleLowerCase('es')))continue;
   seen.add(v.toLocaleLowerCase('es'));result.push(v);
-  if(result.length>=8)break;
+  if(result.length>=limit)break;
  }
  return result;
 };
@@ -39,7 +52,7 @@ export function validateMenuDraft(draft,existing=[],editingId=null){
  if(!Number.isInteger(prep)||prep<1||prep>180)errors.prepTime='Tiempo estimado: 1 a 180 minutos.';
  if(String(draft.description||'').length>220)errors.description='Descripción máxima: 220 caracteres.';
  if(String(draft.image||'').trim()&&!safeCatalogImage(draft.image))errors.image='Usá una imagen HTTPS o cargá una foto compatible.';
- if(cleanMenuExtras(draft.extras).length>8)errors.extras='Máximo 8 extras.';
+ if(cleanMenuExtras(draft.extras,9).length>8)errors.extras='Máximo 8 extras. Quitá uno antes de guardar.';
  return errors;
 }
 export function makeMenuProduct(draft,existing=[],editingId=null){
@@ -53,30 +66,49 @@ export function menuSummary(items=[]){
  const all=Array.isArray(items)?items:[];
  return {total:all.length,active:all.filter(x=>x.available!==false&&x.soldOut!==true).length,soldOut:all.filter(x=>x.available===false||x.soldOut===true).length,missingPhoto:all.filter(x=>!safeCatalogImage(x.image)).length};
 }
+export const MAX_MENU_IMAGE_PIXELS=30_000_000;
 export function readPhotoAsThumbnail(file){
- if(!file||!validImageMime.has(file.type)||file.size>MAX_MENU_IMAGE_FILE) return Promise.reject(Error('Elegí una foto JPG, PNG o WebP de máximo 5 MB.'));
- if(typeof document==='undefined'||typeof URL==='undefined'||!URL.createObjectURL)return Promise.reject(Error('Este navegador no permite procesar la foto.'));
+ if(!file||!validImageMime.has(file.type)||!Number.isSafeInteger(file.size)
+  ||file.size<1||file.size>MAX_MENU_IMAGE_FILE)
+  return Promise.reject(Error('Elegí una foto JPG, PNG o WebP de máximo 5 MB.'));
+ if(typeof document==='undefined'||typeof URL==='undefined'||!URL.createObjectURL)
+  return Promise.reject(Error('Este navegador no permite procesar la foto.'));
  return new Promise((resolve,reject)=>{
   const src=URL.createObjectURL(file),img=new Image();
+  let completed=false;
+  const done=(error,value)=>{
+   if(completed)return;
+   completed=true;
+   clearTimeout(timeout);
+   img.onload=null;img.onerror=null;
+   try{URL.revokeObjectURL(src)}catch{}
+   if(error)reject(error);else resolve(value);
+  };
+  // Evita que un archivo de imagen dañado deje colgado el editor.
+  const timeout=setTimeout(()=>done(Error('La fotografía tardó demasiado en procesarse. Probá con otra imagen.')),18_000);
   img.onload=()=>{
-   URL.revokeObjectURL(src);
+   if(completed)return;
    try{
-    const scale=Math.min(1,720/Math.max(img.naturalWidth,img.naturalHeight));
-    let width=Math.max(1,Math.round(img.naturalWidth*scale)),height=Math.max(1,Math.round(img.naturalHeight*scale));
+    const widthOriginal=img.naturalWidth,heightOriginal=img.naturalHeight;
+    if(!Number.isSafeInteger(widthOriginal)||!Number.isSafeInteger(heightOriginal)
+     ||widthOriginal<1||heightOriginal<1||widthOriginal*heightOriginal>MAX_MENU_IMAGE_PIXELS)
+     throw Error('La fotografía supera la resolución permitida. Reducí la imagen antes de cargarla.');
+    const scale=Math.min(1,720/Math.max(widthOriginal,heightOriginal));
+    const width=Math.max(1,Math.round(widthOriginal*scale)),height=Math.max(1,Math.round(heightOriginal*scale));
     const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
     const context=canvas.getContext('2d');if(!context)throw Error('Tu navegador no pudo procesar esta imagen.');
     context.drawImage(img,0,0,width,height);
     let data=canvas.toDataURL('image/jpeg',.70);
     if(data.length>MENU_IMAGE_LIMIT*1.42){
-      canvas.width=Math.max(1,Math.round(width*.70));canvas.height=Math.max(1,Math.round(height*.70));
-      context.drawImage(img,0,0,canvas.width,canvas.height);
-      data=canvas.toDataURL('image/jpeg',.55);
+     canvas.width=Math.max(1,Math.round(width*.70));canvas.height=Math.max(1,Math.round(height*.70));
+     context.drawImage(img,0,0,canvas.width,canvas.height);
+     data=canvas.toDataURL('image/jpeg',.55);
     }
     if(!safeCatalogImage(data))throw Error('Foto demasiado grande. Probá otra imagen más sencilla.');
-    resolve(data);
-   }catch(error){reject(error)}
+    done(null,data);
+   }catch(error){done(error)}
   };
-  img.onerror=()=>{URL.revokeObjectURL(src);reject(Error('No se pudo leer la fotografía.'))};
+  img.onerror=()=>done(Error('No se pudo leer la fotografía.'));
   img.src=src;
  });
 }

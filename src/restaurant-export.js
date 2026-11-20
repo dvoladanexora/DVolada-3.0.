@@ -2,7 +2,7 @@
 export const neutralizeSpreadsheetFormula=value=>{
  const s=String(value??'').replace(/\u0000/g,'');
  // No confiar en prefijos de espacios, tabuladores o nuevas líneas.
- return /^[\s\uFEFF]*[=+@\-\t\r\n]/u.test(s)?"'"+s:s;
+ return /^[\s\uFEFF\u200B-\u200F\u202A-\u202E\u2060\u0001-\u001F]*[=+@\-\t\r\n]/u.test(s)?"'"+s:s;
 };
 export const quoteCsv=value=>'"'+neutralizeSpreadsheetFormula(value).replace(/"/g,'""')+'"';
 export const csvFromRows=rows=>'\uFEFF'+(Array.isArray(rows)?rows:[]).map(row=>(Array.isArray(row)?row:[]).map(quoteCsv).join(',')).join('\r\n');

@@ -29,6 +29,7 @@ test('GET orders includes bearer auth and no-cache',async()=>{
  assert.equal(captured.url,'https://api.example.com/api/v1/restaurant/orders');
  assert.equal(captured.opts.headers.Authorization,'Bearer test-token');
  assert.equal(captured.opts.cache,'no-store');
+ assert.equal(captured.opts.credentials,'omit');
 });
 
 test('conflict 409 does not retry and exposes a review message',async()=>{
@@ -160,7 +161,7 @@ test('CORS permite exclusivamente orígenes exactos HTTPS o localhost para las p
  assert.deepEqual(origins,['https://dvolada.example.com','http://localhost:5173','https://nexora.example.com']);
  const allowed=allowedCorsHeaders('https://dvolada.example.com',origins);
  assert.equal(allowed['Access-Control-Allow-Origin'],'https://dvolada.example.com');
- assert.equal(allowed['Access-Control-Allow-Credentials'],'true');
+ assert.equal(Object.hasOwn(allowed,'Access-Control-Allow-Credentials'),false);
  assert.match(allowed['Access-Control-Allow-Headers'],/Authorization/);
  assert.match(allowed['Access-Control-Allow-Headers'],/Idempotency-Key/);
  assert.equal(allowed.Vary,'Origin');
@@ -214,7 +215,11 @@ test('Caja, Cocina y gerentes no pueden saltarse las transiciones de otro rol',(
   'ningún rol puede inventar una transición no implementada');
  assert.equal(restaurantTransitionPermission('unknown','Pendiente','Aceptado').status,403);
  const server=readFileSync(new URL('../server/src/server.js',import.meta.url),'utf8');
- assert.ok(server.includes('restaurantTransitionPermission(identity.role,current.status,body.status)'));
+ assert.ok(server.includes('restaurantTransitionPermission(currentAccess.role,current.status,body.status)'));
+ assert.ok(server.includes('FOR SHARE OF u,r'));
+ assert.ok(server.includes("if(!currentAccess||!validRestaurantRole(currentAccess.role)"));
+ assert.ok(server.includes("return send(res,403,{error:'Restaurant access revoked or plan inactive'})"));
+ assert.ok(server.indexOf('FOR SHARE OF u,r')<server.indexOf("await client.query('INSERT INTO online_idempotency"));
  assert.ok(server.includes("status=denial.status;response={error:denial.reason}"));
 });
 test('JWT debe estar firmado, expirar y pertenecer a una persona y negocio válidos',()=>{
@@ -299,4 +304,28 @@ test('La API solo acepta cambios de estado con las dos propiedades permitidas',(
   assert.equal(validStatusPatch({...base,status}),true,status);
  assert.equal(validStatusPatch({status:'Listo',expectedVersion:7,extra:true}),false);
  assert.equal(validStatusPatch(Object.assign(Object.create(null),base)),true);
+});
+
+test('La API niega permisos revocados también dentro de la transacción',()=>{
+ const src=readFileSync(new URL('../server/src/server.js',import.meta.url),'utf8');
+ const patch=src.slice(src.indexOf("if(req.method==='PATCH'&&match)"));
+ assert.ok(patch.includes("await client.query('BEGIN')"));
+ assert.ok(patch.includes("u.active=TRUE FOR SHARE OF u,r"));
+ assert.ok(patch.includes("[identity.restaurantId,identity.userId]"));
+ assert.ok(patch.includes("currentAccess.subscription_status!=='active'"));
+ assert.ok(patch.includes("restaurantTransitionPermission(currentAccess.role,current.status,body.status)"));
+ assert.ok(!patch.includes('restaurantTransitionPermission(identity.role,current.status,body.status)'));
+ const txStart=patch.indexOf("await client.query('BEGIN')");
+ const lock=patch.indexOf("FOR SHARE OF u,r");
+ const insert=patch.indexOf("await client.query('INSERT INTO online_idempotency");
+ assert.ok(txStart<lock&&lock<insert,'verificar rol actual ANTES de bloquear y modificar pedido');
+});
+test('No se habilitan cookies en CORS o llamadas autenticadas',()=>{
+ const policy=allowedCorsHeaders('https://www.example.org',['https://www.example.org']);
+ assert.ok(policy);
+ assert.equal(Object.hasOwn(policy,'Access-Control-Allow-Credentials'),false);
+ const app=readFileSync(new URL('../src/OnlineWorkspace.jsx',import.meta.url),'utf8');
+ assert.ok(app.includes("cache:'no-store',credentials:'omit',signal:controller.signal"));
+ const api=readFileSync(new URL('../src/online-api.js',import.meta.url),'utf8');
+ assert.ok(api.includes("cache:'no-store',credentials:'omit'"));
 });

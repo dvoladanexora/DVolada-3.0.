@@ -22,7 +22,11 @@ export default defineConfig(({mode})=>{
     SESSION_PEPPER:bindings.secret(),
     PIN_SECRET:bindings.secret(),
     CORS_ORIGINS:bindings.text(isStaging?'http://localhost:5173':'https://dvolada.example.invalid'),
-    ORDER_CREATION_ENABLED:bindings.text('false')
+    ORDER_CREATION_ENABLED:bindings.text('false'),
+    // Keep Web Push disabled until OneSignal is approved and securely connected.
+    ONESIGNAL_APP_ID:bindings.text('dvolada-not-configured'),
+    ONESIGNAL_REST_API_KEY:bindings.secret(),
+    PUSH_NOTIFICATIONS_ENABLED:bindings.text('false')
    }
   }
  };

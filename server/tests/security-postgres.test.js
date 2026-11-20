@@ -42,7 +42,7 @@ test('Seguridad HTTP real y aislamiento de restaurantes con PostgreSQL', {skip:!
  try{
   pool=new Pool({connectionString:DB,connectionTimeoutMillis:3000,max:8});
   await pool.query('SELECT 1');
-  for(const name of ['001_online_core.sql','002_restaurant_membership.sql','003_idempotency_retention.sql']){
+  for(const name of ['001_online_core.sql','002_restaurant_membership.sql','003_idempotency_retention.sql','004_online_event_integrity.sql']){
    await pool.query(await readFile(new URL('../sql/'+name,import.meta.url),'utf8'));
   }
   const rA=randomUUID(),rB=randomUUID(),cashier=randomUUID(),kitchen=randomUUID(),ownerB=randomUUID(),revoked=randomUUID();
@@ -151,6 +151,19 @@ test('Seguridad HTTP real y aislamiento de restaurantes con PostgreSQL', {skip:!
    assert.equal((await patch(orderA,'Listo',2,tokens.cashier)).status,422);
    assert.equal((await patch(orderA,'Preparando',2,tokens.cashier)).status,403);
    assert.equal((await patch(orderB,'Aceptado',1,tokens.cashier)).status,404);
+  });
+  await t.test('La base impide eventos cruzados y versiones de evento duplicadas',async()=>{
+   // El rechazo ocurre EN PostgreSQL, sin depender de las verificaciones de la API.
+   const insert='INSERT INTO online_order_events(order_id,restaurant_id,actor_id,from_status,to_status,version) VALUES($1,$2,$3,$4,$5,$6)';
+   await assert.rejects(
+    pool.query(insert,[orderA,rB,cashier,'Pendiente','Aceptado',3]),
+    error=>error.code==='23503','evento del negocio equivocado debe fallar FK compuesta'
+   );
+   await assert.rejects(
+    pool.query(insert,[orderA,rA,cashier,'Pendiente','Aceptado',2]),
+    error=>error.code==='23505','no se puede escribir dos veces el mismo evento de versión'
+   );
+   assert.equal((await pool.query('SELECT count(*)::int AS n FROM online_order_events WHERE order_id=$1',[orderA])).rows[0].n,1);
   });
   await t.test('Revocación y cambio de rol afectan tokens ya emitidos',async()=>{
    await pool.query('UPDATE restaurant_users SET active=FALSE WHERE restaurant_id=$1 AND user_id=$2',[rA,cashier]);

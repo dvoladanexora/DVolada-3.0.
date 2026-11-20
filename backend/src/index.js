@@ -4,7 +4,7 @@ import {
 } from './security.js';
 import {
  restaurantOrders,restaurantOrder,changes,restaurantStatus,assignCourier,
- courierOrders,courierStatus,confirmDelivery,customerCreate,customerOrders,
+ courierOrders,courierStatus,courierOffer,confirmDelivery,customerCreate,customerOrders,
  customerOrder,customerCancel
 } from './orders.js';
 import {exchangeFirebase} from './firebase-identity.js';
@@ -111,6 +111,9 @@ async function route(req,env){
  }
  if(method==='GET'&&path==='/api/v1/courier/orders')
   return respond(req,env,200,await courierOrders(env,actor));
+ const courierOfferMatch=/^\/api\/v1\/courier\/orders\/([0-9a-f-]+)\/offer$/i.exec(path);
+ if(method==='POST'&&courierOfferMatch)
+  return respond(req,env,200,await courierOffer(req,env,actor,courierOfferMatch[1]));
  const courierStatusMatch=/^\/api\/v1\/courier\/orders\/([0-9a-f-]+)\/status$/i.exec(path);
  if(method==='PATCH'&&courierStatusMatch)
   return respond(req,env,200,await courierStatus(req,env,actor,courierStatusMatch[1]));

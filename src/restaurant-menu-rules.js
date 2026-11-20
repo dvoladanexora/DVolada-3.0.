@@ -12,14 +12,14 @@ export function safeCatalogImage(value){
  try{const url=new URL(s);if(url.protocol==='https:'&&!url.username&&!url.password&&url.href.length<=1500)return url.href}catch{}
  return '';
 }
-export const cleanMenuExtras=value=>{
+export const cleanMenuExtras=(value,limit=8)=>{
  const vals=Array.isArray(value)?value:String(value||'').split(/[,\n]/);
  const seen=new Set(),result=[];
  for(const raw of vals){
   const v=String(raw||'').trim().replace(/\s+/g,' ').slice(0,45);
   if(!v||seen.has(v.toLocaleLowerCase('es')))continue;
   seen.add(v.toLocaleLowerCase('es'));result.push(v);
-  if(result.length>=8)break;
+  if(result.length>=limit)break;
  }
  return result;
 };
@@ -39,7 +39,7 @@ export function validateMenuDraft(draft,existing=[],editingId=null){
  if(!Number.isInteger(prep)||prep<1||prep>180)errors.prepTime='Tiempo estimado: 1 a 180 minutos.';
  if(String(draft.description||'').length>220)errors.description='Descripción máxima: 220 caracteres.';
  if(String(draft.image||'').trim()&&!safeCatalogImage(draft.image))errors.image='Usá una imagen HTTPS o cargá una foto compatible.';
- if(cleanMenuExtras(draft.extras).length>8)errors.extras='Máximo 8 extras.';
+ if(cleanMenuExtras(draft.extras,9).length>8)errors.extras='Máximo 8 extras. Quitá uno antes de guardar.';
  return errors;
 }
 export function makeMenuProduct(draft,existing=[],editingId=null){

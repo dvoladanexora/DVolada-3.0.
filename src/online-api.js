@@ -20,7 +20,7 @@ export function createOnlineApi({baseUrl,getAccessToken,fetchImpl=fetch}){
   let response;
   try{
    response=await fetchImpl(base+path,{
-    method,signal,cache:'no-store',credentials:'omit',
+    method,signal,cache:'no-store',credentials:'omit',redirect:'error',
     headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{}),...(idempotencyKey?{'Idempotency-Key':idempotencyKey}:{})},
     ...(body?{body:JSON.stringify(body)}:{})
    });

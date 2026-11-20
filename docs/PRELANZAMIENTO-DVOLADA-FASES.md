@@ -72,3 +72,14 @@ Fecha: 2026-11-20. Rama de trabajo: `prelaunch/phase-1-audit-theme`.
 - `node --check server/src/server.js` — sintaxis del prototipo Node, **no** valida backend Cloudflare.
 
 Para cerrar fase 1 validar las comprobaciones en GitHub Actions sobre un PR. Una compilación verde **no implica** que un flujo comercial real esté listo.
+
+## Seguimiento de fase 3 — 20 noviembre 2026
+- [x] Nuevo modo real `VITE_DVOLADA_LIVE_MODE=true`, aislado de demo, compilable para web/PWA en raíz.
+- [x] API cliente/negocio/repartidor/admin, sesiones con Firebase ID token firmado y correo verificado; rol elevado solo por aprovisionamiento del servidor.
+- [x] Gestión de catálogo, suscripciones, afiliados, disponibilidad, aceptación/rechazo del repartidor y pedidos con PIN, versiones y auditoría.
+- [x] Tests CI de Worker/SQLite, controlador de API y compilación de Worker y dos variantes web.
+- [ ] **No comprobado aún:** cuentas Firebase/Cloudflare, D1 remota, URLs reales, acceso en dispositivos y flujos simultáneos con usuarios reales.
+- [ ] **No terminado para lanzamiento comercial:** cobros, tarifas dinámicas y liquidaciones, integraciones de chat/GPS, Local y Plus, otros flujos de negocio. Mantener bloqueo de pedidos en producción.
+- [ ] PR #77 se conserva como borrador; revisar diferencias y autorizar solo después de QA en staging.
+
+Guía de despliegue: `docs/DVOLADA-FASE3-CONECTAR-CLOUD.md`.

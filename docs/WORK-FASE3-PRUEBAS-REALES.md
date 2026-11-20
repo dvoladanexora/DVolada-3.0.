@@ -156,3 +156,16 @@ No dar S10–S14 por aprobados mediante lectura estática solamente. Work debe d
 **S24 — Limpieza e integridad:** ejecutar la limpieza SQL sobre datos ficticios; debe eliminar únicamente claves vencidas y nunca registros de pedidos o eventos ni claves todavía válidas de otros negocios. Probar que el cliente API rechaza 302/307 de manera segura sin seguir redirecciones con token.
 
 Estos escenarios no equivalen a prueba de penetración en producción; no enviar carga deliberada a sitios públicos, otros negocios ni cuentas reales.
+
+
+## S25 — Colores oficiales en Samsung S23 Ultra, S24 Ultra, iPhone y PC
+
+**Preparación:** probar con la misma versión de Dvolada, navegador actualizado y PWA reinstalada o recargada. Registrar navegador, versión Android/iOS, modo de pantalla y si están activos los colores de accesibilidad o el modo oscuro forzado.
+
+**Pasos:** en S23 Ultra y S24 Ultra abrir Dvolada en Chrome y Samsung Internet; repetir instalada como PWA. Alternar **Claro, Oscuro, Automático**, cambiar el modo del sistema mientras la app está abierta, recargar y cerrar/reabrir. Repetir en iPhone Safari/PWA y PC Chrome. Revisar Cliente, Restaurante, Repartidor, formularios, botones, barra superior, menús y notificaciones.
+
+**Esperado:** el naranja oficial **#f26732** se mantiene como acento en todos los dispositivos; Claro usa fondo claro y Oscuro fondo oscuro; Automático reacciona al cambio del sistema sin recarga. Ningún dispositivo puede cambiar el acento mediante un color guardado anteriormente en `dv_brand`. En modo alto contraste se respeta la configuración de accesibilidad.
+
+**Evidencias:** capturas de los tres modos por dispositivo, captura de PWA y resultado del cambio en vivo. Si hay rojo/verde, comprobar en las herramientas del navegador el valor calculado de `--accent`, `data-theme`, hojas CSS efectivas y configuración de Samsung; no asumir que la causa está cerrada hasta verificar el S24 Ultra físico.
+
+**Implementación de código:** `src/brand-theme.js` centraliza el acento y tema, `src/main.jsx` elimina el selector de acento por dispositivo y escucha `prefers-color-scheme`, `src/style.css` alinea controles nativos y `tests/brand-theme.test.js` protege el comportamiento.

@@ -128,3 +128,23 @@ test('más de ocho extras se rechaza claramente en lugar de guardarlos incomplet
  assert.ok(editor.includes('aria-invalid={Boolean(errors.extras)}'));
  assert.ok(editor.includes('role="alert">{errors.extras}'));
 });
+
+test('Las fotos del catálogo no pueden forzar solicitudes a localhost o redes privadas',()=>{
+ const blocked=[
+  'https://localhost/photo.jpg','https://localhost./photo.jpg',
+  'https://foo.localhost/photo.png','https://my-router.local/pic.jpg',
+  'https://company.internal/image.png','https://router.lan/icon.png',
+  'https://127.0.0.1/photo.jpg','https://127.1/photo.jpg',
+  'https://0x7f000001/image.jpg','https://2130706433/image.jpg',
+  'https://192.168.1.1/image.jpg','https://10.0.0.2/photo.jpg',
+  'https://172.16.0.1/icon.png','https://169.254.169.254/latest/meta-data/',
+  'https://[::1]/image.png','https://[fe80::1]/image.png',
+  'https://intranet/image.jpg',
+ ];
+ for(const raw of blocked)assert.equal(safeCatalogImage(raw),'',raw);
+ for(const value of [
+  'https://images.example.com/catalog/baleada.webp',
+  'https://cdn.example.org/a.png?version=3',
+ ])assert.equal(safeCatalogImage(value),value);
+ assert.ok(validateMenuDraft({...basic(),image:'https://127.1/secret'}).image);
+});

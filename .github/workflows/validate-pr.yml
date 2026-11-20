@@ -36,5 +36,9 @@ jobs:
         run: node --check server/src/server.js
       - name: Validar backend Cloudflare con base SQLite y flujos reales
         run: node --experimental-sqlite --test backend/tests/worker.test.js
+      - name: Compilar Worker Cloudflare sin desplegar ni usar credenciales
+        run: |
+          npm install --prefix backend --no-audit --no-fund
+          npm run deploy:dry --prefix backend
       - name: Compilar aplicación
         run: npm run build

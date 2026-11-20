@@ -36,6 +36,17 @@ Fecha: 2026-11-20. Rama de trabajo: `prelaunch/phase-1-audit-theme`.
 
 **Cierre fase 2:** código backend y migraciones preparados, pruebas locales del servicio superadas y documentación de puesta en marcha sin secretos.
 
+### Avance verificado de fase 2 (2026-11-20)
+- [x] Implementación nueva, aislada en `backend/`: Worker, tablas D1, sesiones revocables y permisos por negocio.
+- [x] Flujo técnico para clientes, restaurante y repartidores, idempotencia, auditoría, PIN, dos pedidos por repartidor y totales calculados en servidor.
+- [x] Se agregaron pruebas de integración sobre SQLite ejecutando las migraciones D1, y build `cf deploy --mode staging --dry-run` sin conectar a ninguna cuenta.
+- [x] `ORDER_CREATION_ENABLED` permanece en `false`; archivos de secretos excluidos del repositorio.
+- [ ] Probar en **D1 real** cuando exista la cuenta, y sustituir sesiones de prueba por alta/login verificado antes de usar datos reales.
+- [ ] Integrar los cuatro paneles, tarifario real, cobros, disponibilidad y sincronización — fase 3.
+- [ ] Revisión de seguridad adicional y QA real en dispositivos.
+
+**Importante:** se logró un backend funcional y compilable como cimiento, NO un servicio comercial desplegado. Las pruebas actuales no demuestran funcionamiento de D1 remoto, pasarelas de cobro ni app móvil final.
+
 ## Fase 3 — Integración, pruebas de aceptación y paquete de conexión
 1. Conectar cliente, restaurante, cocina, repartidor y Centro de Control a la API oficial para las operaciones reales, con una única fuente de verdad.
 2. Sustituir los mecanismos de demo por permisos reales. Deshabilitar compra/confirmación reales cuando no haya servidor autenticado, sin inventar estados.

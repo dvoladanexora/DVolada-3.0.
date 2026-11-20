@@ -78,3 +78,7 @@ Consulta API/CLI oficial: https://developers.cloudflare.com/cf/ y https://develo
 No registrar contraseñas, cookies, token bearer, PIN, DNI, teléfonos, direcciones ni medios de pago. No guardar secretos en GitHub, frontend público, tests o `localStorage`. Los archivos `.dev.vars*`, `.env*` y `.cloudflare/` están ignorados en `backend/.gitignore`.
 
 Los nombres de restaurante/datos de las pruebas son ficticios y no forman parte del sistema publicado. Las bases de otros productos de Nexora Systems nunca deben usarse como origen de datos de Dvolada.
+
+## Actualización — Fase 3 (20 noviembre 2026)
+La antigua sección "Antes de conectar Cloudflare, fase 3" describe los pendientes de fase 2. **La rama `prelaunch/phase-3-live-integration` ya incorpora** autenticación con correo Firebase verificado, sesiones D1 revocables, vistas básicas reales de cliente/restaurante/repartidor/admin, respuestas de repartidores (aceptar/rechazar) y alta de restaurantes/productos.
+Revisá `docs/DVOLADA-FASE3-CONECTAR-CLOUD.md` para el estado vigente, los seis scripts de migración y la secuencia segura de conexión. La configuración definitiva de Firebase y Cloudflare, QA real en producción y funciones comerciales completas siguen pendientes.

@@ -1,5 +1,6 @@
 import React,{useEffect,useMemo,useState} from 'react';
-import {ShoppingBag,Search,MapPin,Phone,Store,WifiOff,ShieldCheck} from 'lucide-react';
+import {ShoppingBag,Search,MapPin,Phone,Store,WifiOff,ShieldCheck,Bell,BellOff} from 'lucide-react';
+import {isDvoladaPushConfigured,enableDvoladaPush,disableDvoladaPush} from './onesignal-push.js';
 import {createLiveApi} from './live-api.js';
 import {applyDvoladaTheme} from '../theme-policy.js';
 import './live.css';
@@ -19,6 +20,7 @@ export default function OpenAccessApp(){
  const [name,setName]=useState(''),[phone,setPhone]=useState(''),[address,setAddress]=useState('');
  const [mode,setMode]=useState('delivery'),[message,setMessage]=useState('');
  const [theme,setTheme]=useState('light'),[offline,setOffline]=useState(!navigator.onLine);
+ const [pushStatus,setPushStatus]=useState('off');
  const api=useMemo(()=>{
   if(!API_ORIGIN)return null;
   try{return createLiveApi({baseUrl:API_ORIGIN,getSessionToken:()=>null})}catch{return null}
@@ -42,6 +44,21 @@ export default function OpenAccessApp(){
    .catch(()=>{if(active)setMessage('No se pudo obtener el catálogo del servidor. Probá nuevamente más tarde.')});
   return()=>{active=false};
  },[api]);
+ async function togglePush(){
+  if(pushStatus==='busy')return;
+  const turningOff=pushStatus==='enabled';
+  setPushStatus('busy');
+  try{
+   const result=turningOff?await disableDvoladaPush():await enableDvoladaPush();
+   setPushStatus(result.status==='enabled'?'enabled':'off');
+   const notices={enabled:'Notificaciones activadas. Podés desactivarlas cuando quieras.',
+    disabled:'Notificaciones desactivadas.',blocked:'Tu navegador bloquea las notificaciones; revisá sus permisos.',
+    unsupported:'Este dispositivo o navegador no permite notificaciones web.',
+    'install-ios':'En iPhone, instalá Dvolada en la pantalla de inicio y abrila desde allí para activar las notificaciones.',
+    pending:'La solicitud está pendiente; revisá los permisos del navegador.'};
+   setMessage(notices[result.status]||'La configuración de notificaciones todavía no está lista.');
+  }catch{setPushStatus('off');setMessage('No se pudieron configurar las notificaciones. Probá nuevamente.');}
+ }
  async function openRestaurant(r){
   if(!api||offline)return;
   setMessage('');
@@ -65,6 +82,11 @@ export default function OpenAccessApp(){
    <div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada"/><div>
     <strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
    <div className="dvl-head-actions">
+    {isDvoladaPushConfigured()&&<button className="dvl-action secondary" disabled={offline||pushStatus==='busy'}
+     type="button" onClick={togglePush} aria-label={pushStatus==='enabled'?'Desactivar notificaciones':'Activar notificaciones'}>
+     {pushStatus==='enabled'?<BellOff size={16}/>:<Bell size={16}/>}
+     {pushStatus==='enabled'?'Silenciar':'Notificarme'}
+    </button>}
     <label className="dvl-theme">Tema<select value={theme} onChange={e=>setTheme(e.target.value)} aria-label="Tema">
      <option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>
    </div>

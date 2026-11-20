@@ -5,6 +5,7 @@ import {readJsonBody,validStatusPatch} from '../server/src/request-validation.js
 import {parseAllowedOrigins,allowedCorsHeaders} from '../server/src/cors-policy.js';
 import {validRestaurantRole,restaurantTransitionPermission} from '../server/src/restaurant-permissions.js';
 import {createActorLimiter} from '../server/src/actor-rate-limit.js';
+import {createHealthProbe} from '../server/src/health-probe.js';
 import {readFileSync} from 'node:fs';
 
 test('requires HTTPS and an authenticated token provider',()=>{
@@ -255,4 +256,26 @@ test('Limitador nunca permite configuraciones sin capacidad ni cuotas negativas'
  assert.equal(q('a',10001).allowed,false);
  assert.equal(q('b',10002).allowed,true,'sin crecimiento indefinido del mapa');
  assert.equal(q('a',10003).allowed,true,'una entrada expulsada se reinicia al reaparecer');
+});
+
+test('Health público comparte una sola consulta SQL entre 100 solicitudes simultáneas',async()=>{
+ let at=10000,calls=0,ok=true;
+ const probe=createHealthProbe(async()=>{calls++;if(!ok)throw Error('DB unavailable')},{cacheMs:5000,now:()=>at});
+ assert.deepEqual(await Promise.all(Array.from({length:100},()=>probe())),Array(100).fill(true));
+ assert.equal(calls,1);
+ at=14000;assert.equal(await probe(),true);assert.equal(calls,1);
+ at=15000;ok=false;assert.equal(await probe(),false);assert.equal(calls,2);
+ at=16000;assert.equal(await probe(),false);assert.equal(calls,2);
+ at=20000;ok=true;assert.equal(await probe(),true);assert.equal(calls,3);
+ const server=readFileSync(new URL('../server/src/server.js',import.meta.url),'utf8');
+ assert.ok(server.includes("const healthReady=createHealthProbe(()=>pool.query('SELECT 1'))"));
+ assert.ok(server.includes("const healthy=await healthReady()"));
+ assert.ok(server.includes("healthy?200:503"));
+});
+test('Health rechazará configuraciones inválidas y no ocultará fallos del módulo',async()=>{
+ for(const params of [{cacheMs:0},{cacheMs:500.5}])
+  assert.throws(()=>createHealthProbe(async()=>true,params));
+ assert.throws(()=>createHealthProbe(null));
+ const q=createHealthProbe(()=>Promise.reject(new Error('DB down')));
+ assert.equal(await q(),false);
 });

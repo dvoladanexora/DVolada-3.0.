@@ -1,19 +1,26 @@
-/** Protección de configuración de la API antes de abrirla al público.
- * La URL HTTPS debe corresponder a un proxy TLS real que termine y valide HTTPS.
- * No se debe confiar en esta cadena como prueba de que existe TLS ni un WAF.
+/** Bloquea despliegues que declaren orígenes inseguros.
+ * Una URL HTTPS en variables NO cifra por sí sola el servidor Node:
+ * se exige un proxy de confianza con HTTPS real, WAF y puerto privado.
  */
+export function publicHttpsOrigin(raw){
+ if(typeof raw!=='string'||!raw)return false;
+ let url;
+ try{url=new URL(raw)}catch{return false}
+ const host=url.hostname.toLowerCase().replace(/\.$/,'');
+ return url.protocol==='https:'&&url.origin===raw
+  &&!url.username&&!url.password&&!url.search&&!url.hash
+  &&(url.pathname===''||url.pathname==='/')
+  &&host.includes('.')&&!host.startsWith('[')
+  &&!/^\d+(?:\.\d+){3}$/.test(host)
+  &&!/(?:^|\.)(?:localhost|local|internal|lan|invalid|test|onion)$/.test(host);
+}
 export function validProductionDeployment({nodeEnv='development',publicApiOrigin='',allowedOrigins=[]}={}){
  if(nodeEnv!=='production')return {ok:true};
- let url;
- try{url=new URL(publicApiOrigin)}catch{return {ok:false,reason:'DVOLADA_PUBLIC_API_ORIGIN HTTPS required'}}
- if(url.protocol!=='https:'||url.origin!==publicApiOrigin||url.username||url.password||url.search||url.hash
-  ||url.hostname==='localhost'||url.hostname.endsWith('.localhost')
-  ||!url.hostname.includes('.')||/(?:\.local|\.internal|\.lan|\.invalid|\.test|\.onion)$/.test(url.hostname)
-  ||url.hostname.startsWith('[')||/^\d+(?:\.\d+){3}$/.test(url.hostname))
+ if(!publicHttpsOrigin(publicApiOrigin))
   return {ok:false,reason:'Production API requires a public HTTPS origin'};
  if(!Array.isArray(allowedOrigins)||!allowedOrigins.length)
   return {ok:false,reason:'Production API requires DVOLADA_ALLOWED_ORIGINS'};
- if(allowedOrigins.some(o=>!o.startsWith('https://')))
-  return {ok:false,reason:'Production frontend origins must use HTTPS'};
+ if(allowedOrigins.some(origin=>!publicHttpsOrigin(origin)))
+  return {ok:false,reason:'Production frontend origins must be public HTTPS origins'};
  return {ok:true};
 }

@@ -224,6 +224,24 @@ test('Seguridad HTTP real y aislamiento de restaurantes con PostgreSQL', {skip:!
    const order=(await pool.query('SELECT version,status FROM online_orders WHERE id=$1',[orderD])).rows[0];
    assert.equal(order.version,1);assert.equal(order.status,'Pendiente');
   });
+  await t.test('Límite antes de autenticación impide fuerza bruta y no confía en IP falsificada',async()=>{
+   let blocked=null;
+   for(let i=0;i<210;i++){
+    // Cambiar este encabezado NO debe reiniciar el contador de socket.
+    const response=await fetch(base+'/api/v1/restaurant/orders',{
+     headers:{Authorization:'Bearer fake.signature','X-Forwarded-For':'203.0.113.'+(i%200+1)}
+    });
+    if(response.status===429){blocked=response;break}
+    assert.equal(response.status,401,'sin sesión válida debe responder 401 hasta agotarse el límite');
+   }
+   assert.ok(blocked,'la API debe limitar peticiones sin autenticación');
+   assert.ok(Number(blocked.headers.get('retry-after'))>=1,'429 debe incluir Retry-After');
+   // Aunque cambie a JWT legítimo, el socket que excedió la cuota no
+   // puede saltarse el control de ingreso de solicitudes durante la ventana.
+   const after=await call('/api/v1/restaurant/orders',{token:tokens.cashier});
+   assert.equal(after.status,429);
+   assert.equal(after.body.error,'Request limit reached; retry later');
+  });
  }finally{
   if(child&&child.exitCode===null){
    child.kill();

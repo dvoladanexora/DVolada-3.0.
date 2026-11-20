@@ -76,3 +76,10 @@ Esta revisión adicional se ejecutó **sin tocar main ni el despliegue público*
 - Evaluar privacidad del perfil local del cliente y proceso de eliminación de datos en dispositivos compartidos.
 
 **Criterio:** cero fallos en los tests es evidencia de regresión, **no certificación de seguridad ni autorización para cobrar o publicar pedidos**.
+
+## Resultado verificado de esta ronda (195 pruebas)
+
+- [GitHub Actions #44682423061](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44682423061): **195/195 pruebas automatizadas aprobadas**, cero fallos/omitidas, build Vite exitoso, chequeo de que Device Studio no aparece en `dist`.
+- Auditoría npm del frontend y servidor preliminar en el mismo run: **0 vulnerabilidades conocidas** en el árbol instalado de ese momento.
+- Las correcciones solo están en `audit/online-integral-work-2026-11`, PR #74 **sin fusionar**. No se ha hecho una prueba de penetración ni se ha comprobado la base de datos y la infraestructura de producción.
+- **Bloqueador nuevo:** no están versionados los lockfiles; el workflow de publicación **debe fallar** hasta que se generen/revisen y se puedan instalar con `npm ci`. No deshabilitar la puerta para poder publicar más rápido.

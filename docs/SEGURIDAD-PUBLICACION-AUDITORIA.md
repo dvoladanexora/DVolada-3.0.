@@ -94,3 +94,24 @@ Esta revisión adicional se ejecutó **sin tocar main ni el despliegue público*
 - Se incluyó migración `003_idempotency_retention.sql` y ejemplo de mantenimiento por lotes para limitar la persistencia de claves de idempotencia. **No se ha ejecutado ni probado todavía en PostgreSQL real**.
 
 **Advertencia permanente:** ninguna cantidad de pruebas unitarias o auditorías npm garantiza invulnerabilidad; los pedidos, PIN, pagos y cuentas comerciales siguen pendientes de integración segura y QA con dispositivos distintos.
+
+
+## Pruebas PostgreSQL reales y aislamiento entre negocios
+
+**Novedad verificada:** GitHub Actions levanta una instancia **descartable de PostgreSQL 16** y ejecuta `npm --prefix server run test:db` con la API real en HTTP local. El test se niega a ejecutarse si la base no se llama `dvolada_security_test` o el host no es `localhost`.
+
+La suite cubre:
+- JWT falsos/vencidos y membresía revocada.
+- Lecturas de pedidos de un restaurante inaccesibles desde el otro.
+- Roles de Caja/Cocina controlados por la base, aunque el JWT declare permisos mayores.
+- Doble confirmación de un pedido con la misma clave de idempotencia: un único evento en PostgreSQL.
+- Dos cambios simultáneos sobre una orden: un éxito y un conflicto de versión, sin duplicados.
+- Reutilización de la misma clave de idempotencia en distintos negocios: respuestas y eventos separados.
+- Protección ante campos de precio/restaurante manipulados y solicitudes excesivas.
+- **Migración 004:** clave foránea compuesta entre evento y pedido, e índice único por versión; PostgreSQL rechaza explícitamente eventos cruzados y duplicados.
+- CORS configurado sin credenciales y orígenes públicos HTTPS estrictos en producción.
+- Cuerpos JSON con tamaño declarado excesivo se rechazan antes de consumir el cuerpo, y se cierra la conexión al devolver 413.
+
+**Limitación:** los escenarios se ejecutan con identidades y restaurantes ficticios. El proveedor de identidad comercial, pagos, PIN de entrega y operación real de repartidores aún no existen en esta API; estas pruebas **no los certifican**.
+
+Corte verificado con 216/216 pruebas: https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44689967466

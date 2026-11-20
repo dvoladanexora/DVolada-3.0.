@@ -116,3 +116,16 @@ test('La publicación pública se niega sin lockfiles y ejecuta auditoría y pru
  assert.ok(deploy.includes('npm run check:server'));
  assert.ok(deploy.indexOf('npm run test:all')<deploy.indexOf('npm run build'));
 });
+
+test('Paquete de producción excluye el Device Studio pero conserva QA de desarrollo',()=>{
+ const pkg=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
+ const script=readFileSync(new URL('../scripts/remove-qa-assets.mjs',import.meta.url),'utf8');
+ const validate=readFileSync(new URL('../.github/workflows/validate-pr.yml',import.meta.url),'utf8');
+ const deploy=readFileSync(new URL('../.github/workflows/deploy.yml',import.meta.url),'utf8');
+ assert.ok(pkg.scripts.build.includes('node scripts/remove-qa-assets.mjs'));
+ assert.ok(script.includes("const files=['device-studio.html']"));
+ assert.ok(script.includes('rm(target,{force:true})'));
+ for(const ci of [validate,deploy])assert.ok(ci.includes('test ! -e dist/device-studio.html'));
+ assert.ok(!pkg.scripts.dev.includes('remove-qa-assets'),
+  'La vista de QA puede usarse durante desarrollo, no en producción');
+});

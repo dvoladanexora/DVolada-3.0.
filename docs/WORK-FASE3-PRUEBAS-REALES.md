@@ -145,3 +145,14 @@ No dar S10–S14 por aprobados mediante lectura estática solamente. Work debe d
 **S21 — Cabeceras y abuso:** rechazar JSON mayor de 4 KB, cerrar la conexión tras 413, invalidar cursores alterados y rechazar orígenes externos no autorizados. En producción comprobar WAF, límites distribuidos por IP/cuenta y registros sin datos sensibles.
 
 **Importante:** la suite PostgreSQL sí usa una base real, pero **sigue siendo una API preliminar sin frontend comercial conectado**. No marcar pruebas de pagos, entrega, PIN, notificaciones o fraude como aprobadas sin implementar esos servicios.
+
+
+## S22–S24 — Controles de solicitudes y revocación a mitad de pedido
+
+**S22 — Ataques de solicitudes antes de iniciar sesión:** ejecutar pruebas limitadas solo en el entorno aislado de CI. Con tokens falsos y un encabezado `X-Forwarded-For` distinto por petición, la API debe devolver 429 y `Retry-After` después de alcanzar el límite por socket, sin derribar PostgreSQL. Este límite no acredita un WAF distribuido.
+
+**S23 — Revocación bajo bloqueo:** iniciar una transacción de administrador que bloquee la membresía y la desactive; enviar un cambio de estado con la sesión emitida previamente. Verificar con PostgreSQL `pg_stat_activity` que está esperando el bloqueo; al confirmar la revocación, el estado y eventos no deben cambiar y la API debe devolver 403. La prueba ya está automatizada en `server/tests/security-postgres.test.js`.
+
+**S24 — Limpieza e integridad:** ejecutar la limpieza SQL sobre datos ficticios; debe eliminar únicamente claves vencidas y nunca registros de pedidos o eventos ni claves todavía válidas de otros negocios. Probar que el cliente API rechaza 302/307 de manera segura sin seguir redirecciones con token.
+
+Estos escenarios no equivalen a prueba de penetración en producción; no enviar carga deliberada a sitios públicos, otros negocios ni cuentas reales.

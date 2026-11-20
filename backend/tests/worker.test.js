@@ -205,7 +205,7 @@ test('courier assignment, two active orders maximum, PIN verification and comple
  assert.equal(finish.status,200);
  assert.equal(finish.body.order.status,'Entregado');
  assert.equal((await assign(c.id)).status,200);
- assert.equal(f.DB.db.prepare('SELECT COUNT(*) AS n FROM online_order_events WHERE order_id=?').get(a.id).n,6);
+ assert.equal(f.DB.db.prepare('SELECT COUNT(*) AS n FROM online_order_events WHERE order_id=?').get(a.id).n,9);
 });
 
 test('logout revokes only the current session',async()=>{

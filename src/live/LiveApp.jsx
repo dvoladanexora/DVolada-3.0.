@@ -3,6 +3,7 @@ import {ShoppingBag,Store,Bike,ShieldCheck,LogOut,RefreshCw,WifiOff,LockKeyhole,
 import {firebaseReady,firebaseAuth} from './firebase-client.js';
 import {createLiveApi,LiveApiError} from './live-api.js';
 import './live.css';
+import {applyDvoladaTheme} from '../theme-policy.js';
 
 const apiOrigin=import.meta.env.VITE_DVOLADA_API_URL||'';
 const price=n=>'L '+(Number(n||0)/100).toLocaleString('es-HN',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -53,6 +54,17 @@ export default function LiveApp(){
  const [selectedPin,setSelectedPin]=useState(null),[pinEntry,setPinEntry]=useState('');
  const [adminStats,setAdminStats]=useState(null),[adminRestaurants,setAdminRestaurants]=useState([]);
  const [busy,setBusy]=useState(false),[offline,setOffline]=useState(!navigator.onLine);
+ const [theme,setTheme]=useState(()=>{try{return JSON.parse(localStorage.getItem('dv_theme'))||'light'}catch{return 'light'}});
+ useEffect(()=>{
+  const media=window.matchMedia('(prefers-color-scheme: dark)');
+  const update=()=>applyDvoladaTheme({root:document.documentElement,
+   themeColorMeta:document.querySelector('meta[name="theme-color"]'),
+   theme,internalPreview:false,prefersDark:media.matches,hour:new Date().getHours()});
+  update();
+  media.addEventListener?.('change',update);
+  try{localStorage.setItem('dv_theme',JSON.stringify(theme))}catch{}
+  return()=>media.removeEventListener?.('change',update);
+ },[theme]);
  const configured=firebaseReady&&Boolean(apiOrigin);
  const api=useMemo(()=>{
   if(!configured)return null;
@@ -218,7 +230,7 @@ export default function LiveApp(){
  const canManage=['owner','manager'].includes(selectedBusiness?.staff_role);
  return <div className="dvl-app">
   <header className="dvl-header"><div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada" /><div><strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
-   <div className="dvl-head-actions">{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy} onClick={logout}><LogOut size={15}/> Salir</Action>}</div></header>
+   <div className="dvl-head-actions"><label className="dvl-theme">Tema<select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy} onClick={logout}><LogOut size={15}/> Salir</Action>}</div></header>
   <main className="dvl-main">
   <div className="dvl-intro"><span className="dvl-kicker">NEXORA SYSTEMS · DVOLADA ONLINE</span>
    <h1>{session?roles[scope]||'Dvolada':'Bienvenido a Dvolada'}</h1>

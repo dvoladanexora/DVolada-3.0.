@@ -3,8 +3,10 @@ import {createHash} from 'node:crypto';
 import {Pool} from 'pg';
 import {jwtVerify} from 'jose';
 import {readJsonBody,validStatusPatch} from './request-validation.js';
+import {parseAllowedOrigins,allowedCorsHeaders} from './cors-policy.js';
 
 const port=Number(process.env.PORT||8080);
+const allowedOrigins=parseAllowedOrigins(process.env.DVOLADA_ALLOWED_ORIGINS);
 const databaseUrl=process.env.DATABASE_URL;
 const jwtSecret=process.env.DVOLADA_JWT_SECRET;
 const issuer=process.env.DVOLADA_JWT_ISSUER;
@@ -30,6 +32,16 @@ async function auth(req){
 }
 const server=http.createServer(async(req,res)=>{
  try{
+ const origin=req.headers.origin;
+ if(origin){
+  const cors=allowedCorsHeaders(origin,allowedOrigins);
+  if(!cors)return send(res,403,{error:'Origin not allowed'});
+  for(const [name,value] of Object.entries(cors))res.setHeader(name,value);
+ }
+ if(req.method==='OPTIONS'){
+  if(!origin)return send(res,400,{error:'Origin required'});
+  res.writeHead(204);res.end();return;
+ }
  const url=new URL(req.url,'http://localhost');
  if(req.method==='GET'&&url.pathname==='/health'){
   await pool.query('SELECT 1');return send(res,200,{status:'ok'});

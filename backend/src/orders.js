@@ -229,7 +229,11 @@ export async function customerCreate(req,env,actor){
  requireRole(actor,'customer');
  if(env.ORDER_CREATION_ENABLED!=='true')throw new ApiError(503,'ORDER_CREATION_DISABLED');
  const body=await readJson(req,16384);
- requireKeys(body,['restaurantId','items','deliveryMethod','deliveryAddress']);
+ requireKeys(body,['restaurantId','items','deliveryMethod','deliveryAddress','phone']);
+ const phone=typeof body.phone==='string'?body.phone.replace(/[\s()-]/g,''):'';
+ if(!/^\+504[0-9]{8}$/.test(phone))throw new ApiError(400,'PHONE_REQUIRED');
+ const verified=await env.DB.prepare('SELECT phone_e164,phone_verified_at FROM users WHERE id=?').bind(actor.userId).first();
+ if(!verified||verified.phone_e164!==phone||!verified.phone_verified_at)throw new ApiError(403,'PHONE_NOT_VERIFIED');
  const restaurantId=requireUuid(body.restaurantId,'restaurantId');
  const deliveryMethod=body.deliveryMethod;
  if(!['delivery','pickup'].includes(deliveryMethod))throw new ApiError(400,'INVALID_DELIVERY_METHOD');
@@ -242,7 +246,7 @@ export async function customerCreate(req,env,actor){
  });
  if(new Set(items.map(x=>x.productId)).size!==items.length)throw new ApiError(400,'DUPLICATE_PRODUCT');
  const key=idempotencyKey(req);
- const intent={restaurantId,deliveryMethod,deliveryAddress,items};
+ const intent={restaurantId,deliveryMethod,deliveryAddress,phone,items};
  const hash=await sha256(JSON.stringify(intent));
  const replay=async()=>{
   const prev=await env.DB.prepare(`SELECT c.request_hash,o.* FROM order_create_requests c
@@ -272,8 +276,8 @@ export async function customerCreate(req,env,actor){
  const id=crypto.randomUUID(),orderNumber='DV-'+id.replaceAll('-','').slice(0,12).toUpperCase();
  const stmts=[
   env.DB.prepare(`INSERT INTO online_orders(id,restaurant_id,customer_id,order_number,delivery_method,
-   delivery_address,status,version,subtotal_minor,delivery_fee_minor,total_minor) VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
-   .bind(id,restaurantId,actor.userId,orderNumber,deliveryMethod,deliveryAddress,'Pendiente',1,subtotal,fee,subtotal+fee),
+   delivery_address,status,version,subtotal_minor,delivery_fee_minor,total_minor,customer_phone_e164) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`)
+   .bind(id,restaurantId,actor.userId,orderNumber,deliveryMethod,deliveryAddress,'Pendiente',1,subtotal,fee,subtotal+fee,phone),
   ...resolved.map(p=>env.DB.prepare(`INSERT INTO online_order_items(id,order_id,product_id,name_snapshot,
     unit_price_minor,quantity,line_total_minor) VALUES(?,?,?,?,?,?,?)`)
     .bind(crypto.randomUUID(),id,p.id,p.name,p.price_minor,p.quantity,p.price_minor*p.quantity)),

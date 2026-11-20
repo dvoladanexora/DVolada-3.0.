@@ -253,3 +253,45 @@ test('suspended couriers lose access even with a valid user session',async()=>{
  assert.equal(denied.status,403);
  assert.equal(denied.body.error,'COURIER_INACTIVE');
 });
+
+test('pickup completes in restaurant without a courier or delivery PIN',async()=>{
+ const f=await fixture();
+ const r=await f.create({deliveryMethod:'pickup'});
+ assert.equal(r.status,201);
+ assert.equal(r.body.deliveryPin,null);
+ const id=r.body.order.id;
+ for(const [status,v] of [['Aceptado',1],['Preparando',2],['Listo',3],['Entregado',4]]){
+  const next=await f.status(id,'staffA',status,v);
+  assert.equal(next.status,200,JSON.stringify(next.body));
+ }
+ const finished=await f.call('/api/v1/customer/orders/'+id);
+ assert.equal(finished.body.order.status,'Entregado');
+ assert.equal(finished.body.deliveryPin,null);
+});
+
+test('courier-only delivery prevents restaurant from bypassing a delivery PIN',async()=>{
+ const f=await fixture();
+ const r=await f.create();
+ const id=r.body.order.id;
+ for(const [status,v] of [['Aceptado',1],['Preparando',2],['Listo',3]]){
+  assert.equal((await f.status(id,'staffA',status,v)).status,200);
+ }
+ const bypass=await f.status(id,'staffA','Entregado',4);
+ assert.equal(bypass.status,422);
+ assert.equal(f.DB.db.prepare('SELECT status FROM online_orders WHERE id=?').get(id).status,'Listo');
+});
+
+test('platform admin analytics require an independent platform role',async()=>{
+ const f=await fixture();
+ const blocked=await f.call('/api/v1/admin/overview',{by:'customer'});
+ assert.equal(blocked.status,403);
+ const allowed=await f.call('/api/v1/admin/overview',{by:'platformAdmin'});
+ assert.equal(allowed.status,200,JSON.stringify(allowed.body));
+ assert.equal(allowed.body.restaurants.total,2);
+ const listing=await f.call('/api/v1/admin/restaurants',{by:'platformAdmin'});
+ assert.equal(listing.status,200);
+ assert.equal(listing.body.restaurants.length,2);
+ const couriers=await f.call('/api/v1/restaurant/couriers',{by:'staffA',restaurantId:f.restaurants[0]});
+ assert.equal(couriers.status,200);
+ assert.equal(couriers.body.couriers.length,1);
+});

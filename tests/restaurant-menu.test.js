@@ -113,3 +113,18 @@ test('Menú extenso se carga por bloques y las validaciones llevan al campo inco
  assert.ok(css.includes('.dv-menu-load-more'));
  assert.ok(css.includes('.dv-menu-photo-upload:focus-within'));
 });
+
+test('más de ocho extras se rechaza claramente en lugar de guardarlos incompletos',()=>{
+ const valid='Extra 1, Extra 2, Extra 3, Extra 4, Extra 5, Extra 6, Extra 7, Extra 8';
+ const invalid=valid+', Extra 9';
+ assert.equal(cleanMenuExtras(invalid).length,8,'el listado visual puede limitarse a ocho');
+ assert.equal(cleanMenuExtras(invalid,9).length,9,'la validación debe contar la novena opción');
+ assert.equal(validateMenuDraft({...basic(),extras:valid}).extras,undefined);
+ assert.match(validateMenuDraft({...basic(),extras:invalid}).extras,/Máximo 8 extras/);
+ assert.throws(()=>makeMenuProduct({...basic(),extras:invalid}),/Revisá los datos/);
+ assert.equal(validateMenuDraft({...basic(),extras:valid+', extra 1'}).extras,undefined,
+  'opciones repetidas no deben contar dos veces');
+ const editor=readFileSync(new URL('../src/RestaurantMenuEditor.jsx',import.meta.url),'utf8');
+ assert.ok(editor.includes('aria-invalid={Boolean(errors.extras)}'));
+ assert.ok(editor.includes('role="alert">{errors.extras}'));
+});

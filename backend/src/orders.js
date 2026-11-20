@@ -16,14 +16,14 @@ const courierMoves={
  'En camino':['En ubicación']
 };
 const dataOrder=`SELECT id,restaurant_id,customer_id,courier_id,order_number,delivery_method,
- delivery_address,status,version,subtotal_minor,delivery_fee_minor,total_minor,pin_attempts,
+ delivery_address,status,version,courier_response,subtotal_minor,delivery_fee_minor,total_minor,pin_attempts,
  created_at,updated_at FROM online_orders`;
-const briefOrder=`SELECT id,restaurant_id,courier_id,order_number,delivery_method,status,version,
+const briefOrder=`SELECT id,restaurant_id,courier_id,order_number,delivery_method,status,version,courier_response,
  subtotal_minor,delivery_fee_minor,total_minor,created_at,updated_at FROM online_orders`;
 function orderDto(order,{includeAddress=false}={}){
  if(!order)return null;
  const data={id:order.id,restaurantId:order.restaurant_id,orderNumber:order.order_number,
-   status:order.status,version:order.version,deliveryMethod:order.delivery_method,
+   status:order.status,version:order.version,courierResponse:order.courier_response,deliveryMethod:order.delivery_method,
    courierId:order.courier_id,subtotalMinor:order.subtotal_minor,
    deliveryFeeMinor:order.delivery_fee_minor,totalMinor:order.total_minor,
    createdAt:order.created_at,updatedAt:order.updated_at};
@@ -155,6 +155,36 @@ async function assertCourierActive(env,actor){
  const profile=await env.DB.prepare('SELECT active FROM courier_profiles WHERE user_id=?')
   .bind(actor.userId).first();
  if(!profile||profile.active!==1)throw new ApiError(403,'COURIER_INACTIVE');
+}
+export async function courierOffer(req,env,actor,orderId){
+ await assertCourierActive(env,actor);
+ const body=await readJson(req);
+ requireKeys(body,['action','expectedVersion']);
+ if(!['accept','reject'].includes(body.action))throw new ApiError(400,'INVALID_COURIER_ACTION');
+ const expectedVersion=requireInteger(body.expectedVersion,1,2147483646,'expectedVersion');
+ const id=requireUuid(orderId),key=idempotencyKey(req);
+ const hash=await sha256(JSON.stringify({id,courierId:actor.userId,action:body.action,expectedVersion}));
+ const replay=async()=>{
+  const previous=await env.DB.prepare(`SELECT order_id,action,request_hash,expected_version
+    FROM courier_offer_responses WHERE courier_id=? AND request_key=?`)
+   .bind(actor.userId,key).first();
+  if(!previous)return null;
+  if(previous.request_hash!==hash)throw new ApiError(409,'IDEMPOTENCY_KEY_REUSED');
+  return {order:{id:previous.order_id,version:previous.expected_version+1,
+   courierResponse:previous.action==='accept'?'accepted':'unassigned'},replayed:true};
+ };
+ const previous=await replay();if(previous)return previous;
+ const current=await env.DB.prepare('SELECT courier_response FROM online_orders WHERE id=? AND courier_id=?')
+  .bind(id,actor.userId).first();
+ if(!current)throw new ApiError(404,'ORDER_NOT_FOUND');
+ if(current.courier_response!=='offered')throw new ApiError(409,'OFFER_CHANGED');
+ try{
+  await env.DB.prepare(`INSERT INTO courier_offer_responses(id,order_id,courier_id,request_key,
+    request_hash,expected_version,action) VALUES(?,?,?,?,?,?,?)`)
+   .bind(crypto.randomUUID(),id,actor.userId,key,hash,expectedVersion,body.action).run();
+ }catch(e){const repeated=await replay();if(repeated)return repeated;throw sqlConflict(e)}
+ return {order:{id,version:expectedVersion+1,courierResponse:body.action==='accept'?'accepted':'unassigned'},
+  replayed:false};
 }
 export async function courierOrders(env,actor){
  await assertCourierActive(env,actor);

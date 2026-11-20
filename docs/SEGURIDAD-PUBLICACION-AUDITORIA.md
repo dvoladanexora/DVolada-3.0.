@@ -16,10 +16,11 @@
 | P1 | Sesiones JWT sin política de caducidad fuerte y firmas inválidas podían generar error interno. | **Corregido en servidor preliminar:** JWT con firma HS256, issuer, audience, iat, exp obligatorios, vida hasta 1 h, token limitado en tamaño; errores de validación devuelven 401. |
 | P1 | Rol de usuario podía usarse para acciones de Caja/Cocina no correspondientes. | **Corregido en reglas de API:** cada transición se comprueba por estado y rol real consultado en SQL; acceso denegado por defecto. |
 | P1 | Abuso de solicitudes autenticadas. | **Mitigación local:** límite por empleado de lecturas y escritura, Retry-After y timeouts de solicitudes/SQL; **pendiente WAF y límites distribuidos en Cloudflare**. |
+| P1 | Una avalancha de llamadas a /health podía provocar una consulta SQL por petición. | **Corregido:** caché y deduplicación de sondas de base de datos durante 5 s por instancia; prueba con 100 llamadas simultáneas. No reemplaza WAF. |
 | P1 | El módulo de mapa descargaba JS/CSS del CDN sin comprobar integridad. | **Corregido:** hashes SRI oficiales de Leaflet 1.9.4 y CORS anónimo. Mantener proveedores y versiones auditados. |
 | P1 | Datos futuros de la orden podían filtrarse al repartidor mediante copia de objeto. | **Corregido:** lista blanca explícita, ítems mínimos y coordenadas normalizadas; jamás enviar PIN por API de repartidor. |
 | P1 | Herramientas de generación de comandas admiten cadenas del usuario. | **Mitigación:** entidades HTML escapadas, CSP en documento impreso y window.opener anulado. Seguir probando XSS en UI real. |
-| P1 | Dependencias sin análisis periódico. | **Añadido:** npm audit en CI (altas/críticas), configuración Dependabot para frontend, servidor y acciones. **Pendiente:** lockfiles versionados y comprobar resultados reales de auditoría. |
+| P1 | Vulnerabilidad alta real en sharp 0.34.x/libvips detectada con npm audit. | **Corregido:** sharp actualizado a >=0.35.5. CI volvió a aprobar compilación y npm audit informó **0 vulnerabilidades** en ambos árboles en el corte actual. Dependabot agregado. **Pendiente:** lockfiles versionados y revisiones periódicas. |
 | P1 | Web pública sin CSP HTTP, HSTS, frame-ancestors ni cabeceras definitivas del hosting. | **Pendiente:** aplicar políticas en Cloudflare/hosting definitivo; el CSP preliminar solo cubre los recibos de Cocina. |
 | P1 | No hay prueba transaccional de clientes, repartidores y negocios en dispositivos diferentes. | **Pendiente:** pruebas de autorización horizontal/vertical, reintentos, idempotencia, PIN, límite global de dos entregas, concurrencia y fraude. |
 | P1 | Riesgo de filtración de datos en fotos, chat, historial o GPS. | **Pendiente:** uploads validados en backend, almacenamiento privado, acceso por rol, retención, consentimiento, borrado y política de privacidad. |
@@ -38,3 +39,14 @@
 **Reglas operativas:** no ejecutar ataques activos contra la aplicación pública ni cuentas ajenas. Los ensayos deben ser autorizados, aislados, con datos ficticios y límites de tráfico. La auditoría no certifica seguridad total ni garantiza ausencia de vulnerabilidades futuras.
 
 **Fuentes de referencia:** OWASP Authorization Cheat Sheet (https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html); guía oficial Leaflet 1.9 (https://leafletjs.com/examples-v1/quick-start/).
+
+## Corte final verificado
+
+- **GitHub Actions:** https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44675822648
+- **182/182 pruebas aprobadas**, cero fallos/omitidas y compilación exitosa.
+- **npm audit frontend completo:** 0 vulnerabilidades conocidas en el árbol resuelto en esa ejecución.
+- **npm audit servidor preliminar:** 0 vulnerabilidades conocidas en el árbol resuelto en esa ejecución.
+- **El resultado de npm audit NO demuestra ausencia de fallas de lógica, abuso comercial, configuración incorrecta ni vulnerabilidades de día cero.**
+- **Bloqueadores de publicación de pedidos:** autenticación y membresías reales, API integrada, PIN y pagos seguros, control antifraude, WAF distribuido, lockfiles versionados, HTTPS/CSP/HSTS del dominio y pruebas de seguridad con Work sobre varios dispositivos.
+
+**Estado del PR:** borrador sin fusión ni despliegue. Esta documentación autoriza únicamente la auditoría de código, NO operar clientes reales.

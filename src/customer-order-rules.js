@@ -14,6 +14,22 @@ export const lineSelectedExtras=line=>{
  const name=String(line?.name||'');
  return name.includes(' + ')?name.split(' + ').slice(1).join(' + ').split(', ').filter(Boolean):[];
 };
+/** Busca primero el identificador real, incluido UUID con guiones.
+ * Compatibilidad: pedidos personalizados antiguos sin productId con prefijo numérico.
+ * Nunca tomar el primer segmento de un UUID como identificador de producto.
+ */
+export function resolveCartProduct(line,menu){
+ const items=Array.isArray(menu)?menu:[];
+ const wanted=line?.productId??line?.id;
+ if(wanted===undefined||wanted===null)return null;
+ const exact=items.find(item=>String(item.id)===String(wanted));
+ if(exact)return exact;
+ if(line?.productId===undefined&&typeof line?.id==='string'){
+  const prefix=line.id.split('-')[0];
+  if(/^\\d+$/.test(prefix))return items.find(item=>String(item.id)===prefix)||null;
+ }
+ return null;
+}
 export function validateCartCatalog(cart,places,{scheduleMode='now'}={}){
  if(!Array.isArray(cart)||!cart.length)return 'Tu carrito está vacío';
  const restaurants=Array.isArray(places)?places:[];
@@ -22,7 +38,7 @@ export function validateCartCatalog(cart,places,{scheduleMode='now'}={}){
   if(!place)return 'Uno de los restaurantes ya no está disponible. Revisá el carrito.';
   const blocked=restaurantOrderBlockReason(place,{scheduleMode});
   if(blocked)return blocked;
-  const item=(Array.isArray(place.items)?place.items:[]).find(i=>String(i.id)===String(line?.productId??String(line?.id).split('-')[0]));
+  const item=resolveCartProduct(line,place.items);
   if(!item)return 'El producto '+String(line?.name||'')+' ya no aparece en el menú. Quitalo del carrito y volvé a agregarlo.';
   if(item.available===false||item.soldOut===true)return 'El producto '+item.name+' está agotado.';
   const qty=Number(line.qty);

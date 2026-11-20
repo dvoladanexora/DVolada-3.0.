@@ -21,6 +21,14 @@ export function validStatusPatch(body){
 
 /** Máximo de bytes reales, no de caracteres Unicode; sin parser de JSON en streaming. */
 export async function readJsonBody(req,limitBytes=4096){
+ // Cortar la solicitud ANTES de leerla si declara un tamaño excesivo.
+ // Para Transfer-Encoding: chunked se mantiene también el límite real.
+ const declared=req.headers?.['content-length'];
+ if(declared!==undefined){
+  if(typeof declared!=='string'||!/^(0|[1-9]\d*)$/.test(declared)
+   ||!Number.isSafeInteger(Number(declared))||Number(declared)>limitBytes)
+   throw problem('Request too large',413);
+ }
  const chunks=[];let bytes=0;
  for await(const chunk of req){
   const data=Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk);

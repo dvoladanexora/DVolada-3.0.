@@ -3,7 +3,7 @@
 **No desplegado ni conectado al frontend.** API de prueba con Node.js + PostgreSQL, separada del plan Local. La web estática de GitHub Pages no ejecuta este servidor.
 
 ## Preparación
-1. Crear una base PostgreSQL de pruebas y aplicar **en orden** `sql/001_online_core.sql`, `sql/002_restaurant_membership.sql` y `sql/003_idempotency_retention.sql`. Sin la segunda migración la API no puede autenticar empleados.
+1. Crear una base PostgreSQL de pruebas y aplicar **en orden** `sql/001_online_core.sql`, `sql/002_restaurant_membership.sql`, `sql/003_idempotency_retention.sql` y `sql/004_online_event_integrity.sql`. Sin la segunda migración la API no puede autenticar empleados.
 2. En `server/`, ejecutar `npm install`.
 3. Configurar `DATABASE_URL`, `DVOLADA_JWT_SECRET` (mínimo 32 bytes aleatorios), `DVOLADA_JWT_ISSUER`, `DVOLADA_JWT_AUDIENCE`, `DVOLADA_ALLOWED_ORIGINS` (orígenes HTTPS del frontend separados por comas) y `PORT`. No guardar secretos en Git ni en variables `VITE_*`.
 4. Ejecutar `npm run check` y `npm start`.
@@ -49,3 +49,12 @@
 - `sql/maintenance_idempotency_cleanup.sql` elimina como máximo 1,000 claves expiradas por ejecución usando `FOR UPDATE SKIP LOCKED`. Debe ejecutarse en una tarea autorizada y monitorizada, nunca desde una solicitud HTTP.
 - No elimina pedidos ni eventos; probar la migración y el mantenimiento en PostgreSQL antes de automatizarlos.
 - El CI con `npm ci` y auditoría no sustituye pruebas de carga, control de acceso multiusuario ni respaldo/restauración.
+
+
+## Pruebas de base de datos y aislamiento entre negocios
+
+La rama de auditoría incorpora `npm --prefix server run test:db`: en GitHub Actions inicia **PostgreSQL 16 descartable**, aplica las migraciones y comprueba HTTP real con JWT firmados de prueba. La base está restringida por código a `dvolada_security_test` en `localhost`. Cubre accesos revocados, CORS, aislamiento entre restaurantes, concurrencia, idempotencia, roles y prevención de modificaciones a precios/restaurante.
+
+La migración `004_online_event_integrity.sql` también obliga a que cada evento pertenezca **al mismo restaurante que su pedido** y bloquea versiones de eventos duplicadas mediante índices/clave foránea. Los ensayos intentan insertar explícitamente ambos tipos de datos corruptos y verifican que PostgreSQL los rechace.
+
+**No ejecutar estas pruebas en producción** ni cambiar la condición de la base descartable para apuntarlas a cuentas reales. No confundir estos tests de servidor preliminar con una auditoría de la app comercial integrada.

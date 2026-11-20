@@ -279,3 +279,24 @@ test('Health rechazará configuraciones inválidas y no ocultará fallos del mó
  const q=createHealthProbe(()=>Promise.reject(new Error('DB down')));
  assert.equal(await q(),false);
 });
+
+test('La API solo acepta cambios de estado con las dos propiedades permitidas',()=>{
+ const base={status:'Listo',expectedVersion:7};
+ assert.equal(validStatusPatch(base),true);
+ for(const unexpected of [
+  {restaurantId:'otro'},{price:0},{pin:'123456'},{courierId:'r1'},
+  {permissions:['admin']},{__override:'x'},{statusBeforeCancellation:'Listo'},
+  {'__proto__':'something'}
+ ]){
+  const extra=Object.assign(Object.create(null),base,unexpected);
+  if(Object.keys(extra).length===2)continue;
+  assert.equal(validStatusPatch(extra),false,JSON.stringify(unexpected));
+ }
+ for(const status of ['Aprobado','Entregado','Listo ', 'Cancelación solicitada',
+  'RECHAZADO','constructor','toString','__proto__',''])
+  assert.equal(validStatusPatch({...base,status}),false,status);
+ for(const status of ['Aceptado','Rechazado','Preparando','Listo','Cancelado'])
+  assert.equal(validStatusPatch({...base,status}),true,status);
+ assert.equal(validStatusPatch({status:'Listo',expectedVersion:7,extra:true}),false);
+ assert.equal(validStatusPatch(Object.assign(Object.create(null),base)),true);
+});

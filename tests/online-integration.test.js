@@ -617,7 +617,8 @@ test('Checkout bloquea una segunda confirmación sin cerrar ni volver a abrir la
  const checkout=app.slice(app.indexOf('function placeOrder(){'),app.indexOf('function sendMandado(){'));
  assert.ok(checkout.includes('if(checkoutCommittedRef.current)'));
  assert.ok(checkout.indexOf('checkoutCommittedRef.current=true')<checkout.indexOf('setCart([])'));
- assert.ok(app.includes('function openCustomerCheckout(){checkoutCommittedRef.current=false;'));
+ assert.ok(app.includes('function openCustomerCheckout(){if(!DEMO_ORDER_WRITES_ENABLED)'));
+ assert.ok(app.includes('checkoutCommittedRef.current=false;'));
 });
 
 test('Disminuir una cantidad no borra silenciosamente otros productos dañados',()=>{
@@ -798,4 +799,21 @@ test('Estrés de 120 pedidos mantiene el aislamiento de tres negocios y el cupo 
  assert.equal(courierQueues(saved(),r).history.length,1);
  assert.equal(saved().length,120);
  assert.equal(saved().filter(x=>x.placeId===2&&x.status!=='Pendiente').length,0);
+});
+
+test('Un build público sin backend no permite pedidos locales que aparenten ser reales',()=>{
+ const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ const flags=readFileSync(new URL('../src/release-flags.js',import.meta.url),'utf8');
+ assert.ok(flags.includes('export const DEMO_ORDER_WRITES_ENABLED=INTERNAL_PREVIEW_ENABLED;'));
+ assert.ok(flags.includes("import.meta.env.DEV&&import.meta.env.VITE_DVOLADA_INTERNAL_PREVIEW==='true'"),
+  'no se debe habilitar la demostración con una bandera en build de producción');
+ const opening=app.slice(app.indexOf('function openCustomerCheckout(){'),app.indexOf('function saveAddress(){'));
+ const checkout=app.slice(app.indexOf('function placeOrder(){'),app.indexOf('function sendMandado(){'));
+ const grocery=app.slice(app.indexOf('function sendMandado(){'),app.indexOf('function rateOrder(){'));
+ assert.ok(opening.startsWith('function openCustomerCheckout(){if(!DEMO_ORDER_WRITES_ENABLED)'));
+ assert.ok(checkout.startsWith('function placeOrder(){if(!DEMO_ORDER_WRITES_ENABLED)'));
+ assert.ok(grocery.startsWith('function sendMandado(){if(!DEMO_ORDER_WRITES_ENABLED)'));
+ assert.ok(opening.includes('todavía no están habilitados'));
+ assert.ok(checkout.includes('No se puede confirmar un pedido real'));
+ assert.ok(app.includes('DEMO_ORDER_WRITES_ENABLED,isPubliclyHidden'));
 });

@@ -210,6 +210,7 @@ test('Seguridad HTTP real y aislamiento de restaurantes con PostgreSQL', {skip:!
     json:{status:'Aceptado',expectedVersion:1,description:'X'.repeat(6000)}
    });
    assert.equal(oversized.status,413);
+   assert.equal(oversized.headers.get('connection'),'close','la conexión rechazada no debe reutilizarse');
    const invalidCursor=await call('/api/v1/restaurant/orders/changes?since=1%20OR%201%3D1');
    assert.equal(invalidCursor.status,400);
    assert.equal((await pool.query('SELECT count(*)::int AS n FROM online_order_events WHERE order_id=$1',[orderD])).rows[0].n,0);

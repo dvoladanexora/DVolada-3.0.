@@ -1376,3 +1376,10 @@ body:has(.modal-backdrop) .mobile-nav.dv-compact-nav{visibility:hidden!important
 .dv-load-failure button{min-height:48px;padding:10px 17px;background:var(--accent,#ef681e);color:white;border-radius:12px;font-weight:800;cursor:pointer}
 .dv-load-failure button:focus-visible{outline:3px solid var(--accent,#ef681e);outline-offset:3px}
 @media(max-width:760px){.dv-load-failure{margin:14px 12px;padding:18px}}
+
+/* Dvolada: colores de controles nativos coherentes con el tema seleccionado.
+   En alto contraste/forced-colors respetar la paleta de accesibilidad del SO. */
+:root,[data-theme="light"]{color-scheme:light;accent-color:var(--accent)}
+[data-theme="dark"]{color-scheme:dark;accent-color:var(--accent)}
+input[type="checkbox"],input[type="radio"],input[type="range"],progress{accent-color:var(--accent)}
+@media(forced-colors:active){:root,[data-theme="light"],[data-theme="dark"]{forced-color-adjust:auto}}

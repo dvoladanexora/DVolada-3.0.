@@ -358,3 +358,24 @@ test('La pertenencia y el rol se comprueban con SQL parametrizado, no desde el t
  assert.equal(verifiedRestaurantRole({role:'owner',plan:'ONLINE',subscription_status:'inactive'}),null);
  await assert.rejects(activeRestaurantRole(null,'rest','u'),/Invalid membership lookup/);
 });
+
+test('El JSON excesivo se rechaza por Content-Length antes de consumir el cuerpo',async()=>{
+ let consumed=false;
+ const huge={
+  headers:{'content-length':'99999999'},
+  async *[Symbol.asyncIterator](){consumed=true;yield Buffer.from('{}')}
+ };
+ await assert.rejects(readJsonBody(huge),e=>e.code===413);
+ assert.equal(consumed,false,'rechazar el tamaño declarado sin leer datos');
+ for(const bad of ['-1','4e4','0x1000','100000000000000000000000']){
+  const req={
+   headers:{'content-length':bad},
+   async *[Symbol.asyncIterator](){consumed=true;yield Buffer.from('{}')}
+  };
+  await assert.rejects(readJsonBody(req),e=>e.code===413);
+ }
+ const good={headers:{'content-length':'2'},async *[Symbol.asyncIterator](){yield Buffer.from('{}')}};
+ assert.deepEqual(await readJsonBody(good),{});
+ const streamed={headers:{},async *[Symbol.asyncIterator](){yield Buffer.alloc(4097,65)}};
+ await assert.rejects(readJsonBody(streamed),e=>e.code===413);
+});

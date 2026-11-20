@@ -24,6 +24,11 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-audit --no-fund
+      - name: Bloquear publicación por dependencias vulnerables
+        run: |
+          npm audit --audit-level=high
+          npm --prefix server install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm --prefix server audit --omit=dev --audit-level=high
       - name: Ejecutar TODAS las pruebas antes de publicar
         run: npm run test:all
       - name: Validar servidor preliminar

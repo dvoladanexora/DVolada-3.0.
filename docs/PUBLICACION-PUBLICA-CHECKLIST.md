@@ -47,6 +47,13 @@ El servidor Node/PostgreSQL `server/` tiene comprobaciones preliminares de ident
 
 ## Puerta obligatoria añadida en la auditoría de seguridad
 
-**Estado actual: BLOQUEADO PARA PUBLICACIÓN COMERCIAL.** Antes de fusionar y desplegar, generar y revisar `package-lock.json` y `server/package-lock.json`. El workflow de Pages ahora utiliza `npm ci` y rechaza automáticamente los despliegues que no tengan esos archivos o que fallen las pruebas/auditorías.
+**Estado actual: BLOQUEADO PARA PUBLICACIÓN COMERCIAL.** Los archivos `package-lock.json` y `server/package-lock.json` ya fueron generados, validados y versionados **solo en la rama de auditoría**. Antes de fusionar, deben pasar revisión final de cambios y dependencias. El workflow de Pages ahora utiliza `npm ci` y rechaza automáticamente los despliegues que no tengan esos archivos o que fallen las pruebas/auditorías.
 
 La rama de auditoría incluye defensas adicionales: rechazo de operaciones de menú con imágenes locales/internas, PIN demo con Web Crypto, CSV de Local/Plus sin fórmulas ejecutables, impresión sin JavaScript, archivos internos de QA excluidos del build y API que se niega a iniciar públicamente sin HTTPS y CORS permitido. **Eso no reemplaza la API comercial, el WAF ni pruebas de penetración.** Ver `docs/SEGURIDAD-PUBLICACION-AUDITORIA.md`.
+
+## Corte de seguridad complementario — dependencias y privacidad
+Se verificó en la rama de auditoría el uso de `npm ci` para frontend y servidor con los lockfiles versionados. La autorización por restaurante ahora tiene una única función probada con respuestas SQL simuladas, y las transacciones bloquean permisos activos antes de modificar el pedido. El servidor y el navegador evitan enviar cookies cross-origin en llamadas a la API Bearer.
+
+Los despliegues manuales quedan restringidos a `main`. El perfil de Cliente incorpora borrado voluntario de sus datos locales en este dispositivo con confirmación. Se preparó la retención de claves de idempotencia del servidor, sujeta a pruebas en PostgreSQL.
+
+**No habilitar pedidos reales:** sigue faltando servidor comercial integrado, pruebas de cuenta/rol en varios dispositivos, protección del PIN y pago, WAF, privacidad legal y pruebas de penetración.

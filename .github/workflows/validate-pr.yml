@@ -28,5 +28,9 @@ jobs:
         run: npm run test:preview
       - name: Pruebas de compartir, instalación y sonido
         run: npm run test:share
+      - name: Probar colores oficiales y modo claro/oscuro
+        run: npm run test:theme
+      - name: Validar sintaxis del servidor legado aislado
+        run: node --check server/src/server.js
       - name: Compilar aplicación
         run: npm run build

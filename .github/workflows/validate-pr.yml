@@ -22,12 +22,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Instalar dependencias
-        run: npm install --no-audit --no-fund
+      - name: Instalar dependencias con versiones reproducibles
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix server ci --ignore-scripts --no-audit --no-fund
       - name: Revisar vulnerabilidades críticas y altas de dependencias públicas
         run: |
           npm audit --audit-level=high
-          npm --prefix server install --package-lock-only --ignore-scripts --no-audit --no-fund
           npm --prefix server audit --omit=dev --audit-level=high
       - name: Pruebas de API Online
         run: npm run test:online

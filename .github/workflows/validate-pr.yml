@@ -32,5 +32,7 @@ jobs:
         run: npm run test:theme
       - name: Validar sintaxis del servidor legado aislado
         run: node --check server/src/server.js
+      - name: Validar backend Cloudflare con base SQLite y flujos reales
+        run: node --experimental-sqlite --test backend/tests/worker.test.js
       - name: Compilar aplicación
         run: npm run build

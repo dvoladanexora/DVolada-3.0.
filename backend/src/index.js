@@ -7,6 +7,7 @@ import {
  courierOrders,courierStatus,confirmDelivery,customerCreate,customerOrders,
  customerOrder,customerCancel
 } from './orders.js';
+import {exchangeFirebase} from './firebase-identity.js';
 
 async function route(req,env){
  assertConfiguration(env);
@@ -36,6 +37,8 @@ async function route(req,env){
     FROM products WHERE restaurant_id=? AND available=1 ORDER BY name,id LIMIT 150`).bind(id).all();
   return respond(req,env,200,{restaurant:rest,products:results});
  }
+ if(method==='POST'&&path==='/api/v1/auth/exchange')
+  return respond(req,env,200,await exchangeFirebase(req,env));
  const actor=await identity(req,env);
  if(['POST','PATCH'].includes(method))await mutationRateLimit(env,actor);
  if(method==='GET'&&path==='/api/v1/auth/me'){
@@ -50,6 +53,26 @@ async function route(req,env){
    .bind(Math.floor(Date.now()/1000),actor.sessionId).run();
   return respond(req,env,204);
  }
+ if(method==='GET'&&path==='/api/v1/admin/overview'){
+  if(actor.role!=='platform_admin')throw new ApiError(403,'ROLE_FORBIDDEN');
+  const [restaurants,orders,couriers]=await Promise.all([
+   env.DB.prepare(`SELECT COUNT(*) AS total,SUM(CASE WHEN online_state='open' THEN 1 ELSE 0 END) AS open
+      FROM restaurants WHERE plan IN ('ONLINE','PLUS')`).first(),
+   env.DB.prepare(`SELECT COUNT(*) AS total,
+     SUM(CASE WHEN status IN ('Pendiente','Aceptado','Preparando','Listo') THEN 1 ELSE 0 END) AS active,
+     SUM(CASE WHEN status='Entregado' THEN 1 ELSE 0 END) AS delivered FROM online_orders`).first(),
+   env.DB.prepare('SELECT COUNT(*) AS active FROM courier_profiles WHERE active=1').first()
+  ]);
+  return respond(req,env,200,{restaurants:{total:restaurants.total,open:restaurants.open??0},
+   orders:{total:orders.total,active:orders.active??0,delivered:orders.delivered??0},couriers:{active:couriers.active}});
+ }
+ if(method==='GET'&&path==='/api/v1/admin/restaurants'){
+  if(actor.role!=='platform_admin')throw new ApiError(403,'ROLE_FORBIDDEN');
+  const {results=[]}=await env.DB.prepare(`SELECT r.id,r.name,r.plan,r.subscription_status,r.online_state,
+   COUNT(o.id) AS order_count FROM restaurants r LEFT JOIN online_orders o ON o.restaurant_id=r.id
+   GROUP BY r.id ORDER BY r.name,r.id LIMIT 150`).all();
+  return respond(req,env,200,{restaurants:results});
+ }
  if(path.startsWith('/api/v1/restaurant/')){
   const access=await restaurantAccess(req,env,actor);
   requireStaff(access.staff_role,['owner','manager','kitchen','cashier']);
@@ -60,6 +83,17 @@ async function route(req,env){
    return respond(req,env,200,await restaurantOrders(req,env,access,url));
   if(method==='GET'&&path==='/api/v1/restaurant/orders/changes')
    return respond(req,env,200,await changes(env,access,url));
+  if(method==='GET'&&path==='/api/v1/restaurant/couriers'){
+   requireStaff(access.staff_role,['owner','manager']);
+   const {results=[]}=await env.DB.prepare(`SELECT c.user_id AS id,u.display_name AS name,
+    COUNT(o.id) AS active_orders,c.max_active_orders AS max_orders
+    FROM courier_profiles c JOIN users u ON u.id=c.user_id
+    LEFT JOIN online_orders o ON o.courier_id=c.user_id
+      AND o.status NOT IN ('Entregado','Cancelado','Rechazado')
+    WHERE c.active=1 AND u.status='active'
+    GROUP BY c.user_id HAVING COUNT(o.id)<c.max_active_orders ORDER BY u.display_name LIMIT 60`).all();
+   return respond(req,env,200,{couriers:results});
+  }
   if(method==='GET'&&path==='/api/v1/restaurant/products'){
    const {results=[]}=await env.DB.prepare(`SELECT id,name,price_minor,available
      FROM products WHERE restaurant_id=? ORDER BY name,id LIMIT 150`).bind(access.restaurantId).all();

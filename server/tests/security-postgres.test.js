@@ -266,6 +266,30 @@ test('Seguridad HTTP real y aislamiento de restaurantes con PostgreSQL', {skip:!
    const order=(await pool.query('SELECT version,status FROM online_orders WHERE id=$1',[orderD])).rows[0];
    assert.equal(order.version,1);assert.equal(order.status,'Pendiente');
   });
+  await t.test('Limpieza SQL elimina solo claves expiradas y conserva eventos y pedidos',async()=>{
+   const existing=await pool.query(
+    'SELECT restaurant_id,expires_at FROM online_idempotency WHERE idempotency_key=$1',
+    [sharedIdempotencyKey]
+   );
+   assert.equal(existing.rows.length,2);
+   assert.ok(existing.rows.every(row=>new Date(row.expires_at).getTime()>Date.now()),
+    'la vigencia inicial debe ser futura');
+   const orderCount=(await pool.query('SELECT count(*)::int AS n FROM online_orders')).rows[0].n;
+   const eventCount=(await pool.query('SELECT count(*)::int AS n FROM online_order_events')).rows[0].n;
+   await pool.query(
+    "UPDATE online_idempotency SET expires_at=now()-interval '1 minute' WHERE restaurant_id=$1 AND idempotency_key=$2",
+    [rA,sharedIdempotencyKey]
+   );
+   const cleanup=await readFile(new URL('../sql/maintenance_idempotency_cleanup.sql',import.meta.url),'utf8');
+   const deleted=await pool.query(cleanup);
+   assert.equal(deleted.rowCount,1);
+   const remaining=await pool.query('SELECT restaurant_id FROM online_idempotency WHERE idempotency_key=$1',
+    [sharedIdempotencyKey]);
+   assert.deepEqual(remaining.rows.map(row=>row.restaurant_id),[rB],
+    'no eliminar claves válidas de un restaurante diferente');
+   assert.equal((await pool.query('SELECT count(*)::int AS n FROM online_orders')).rows[0].n,orderCount);
+   assert.equal((await pool.query('SELECT count(*)::int AS n FROM online_order_events')).rows[0].n,eventCount);
+  });
   await t.test('Límite antes de autenticación impide fuerza bruta y no confía en IP falsificada',async()=>{
    let blocked=null;
    for(let i=0;i<210;i++){

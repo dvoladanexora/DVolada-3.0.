@@ -176,3 +176,21 @@ test('Caja identifica cada botón de impresión con el número del pedido',()=>{
  assert.equal(cashier.split('aria-label={"Imprimir comanda de "+number(o)}').length-1,3);
  assert.ok(cashier.includes('title="Imprimir comanda"'));
 });
+
+test('Comanda de cocina no permite ejecutar scripts ni conservar acceso al panel principal',()=>{
+ const crafted=order('suspicious','Aceptado','r1',{
+  orderNo:'</title><script>alert(1)</script>',
+  notes:'<img src=x onerror=alert(1)>',
+  items:[{id:1,qty:1,name:'<svg/onload=alert(1)>',extras:['<script>x()</script>']}]
+ });
+ const markup=kitchenTicketHtml(crafted,'<script>alert(2)</script>');
+ assert.ok(markup.includes('http-equiv="Content-Security-Policy"'));
+ assert.ok(markup.includes('default-src &#39;none&#39;'));
+ assert.ok(!markup.includes('<script>'));
+ assert.ok(!markup.includes('<svg/onload='));
+ assert.ok(!markup.includes('<img src=x'));
+ const popup={opener:{private:'secret'},document:{write(s){this.html=s},close(){}},focus(){},print(){}};
+ assert.equal(openKitchenTicket(crafted,'Restaurante',()=>popup),true);
+ assert.equal(popup.opener,null);
+ assert.ok(popup.document.html.includes('Content-Security-Policy'));
+});

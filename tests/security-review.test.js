@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {generateDemoPin} from '../src/demo-pin.js';
 import {CUSTOMER_STORAGE_KEYS,clearLocalCustomerData} from '../src/customer-privacy.js';
-import {validProductionDeployment} from '../server/src/deployment-guard.js';
+import {validProductionDeployment,publicHttpsOrigin} from '../server/src/deployment-guard.js';
 import {neutralizeSpreadsheetFormula,csvFromRows} from '../src/restaurant-export.js';
 
 test('PIN de prueba usa números criptográficos de seis dígitos sin sesgo de módulo',()=>{
@@ -180,4 +180,24 @@ test('Publicación manual solo puede desplegar la rama main de este repositorio'
  assert.equal(deploy.split(expected).length-1,2,'build y deploy requieren main y repo exacto');
  assert.ok(deploy.includes('npm ci --no-audit --no-fund'));
  assert.ok(deploy.includes('npm --prefix server ci --ignore-scripts'));
+});
+
+test('En producción CORS rechaza orígenes de redes locales o manipulados',()=>{
+ const base={nodeEnv:'production',publicApiOrigin:'https://api.dvolada.example.com'};
+ const blocked=[
+  'https://localhost','https://127.0.0.1:444',
+  'https://192.168.1.1','https://10.0.0.3','https://[::1]',
+  'https://office.internal','https://router.local','https://private.lan',
+  'https://frontend.example.test','https://intranet',
+  'https://user:pass@dvolada.example.com',
+  'http://dvolada.example.com','https://dvolada.example.com/path',
+  'https://dvolada.example.com?secret=1','https://dvolada.example.com/#fragment'
+ ];
+ for(const origin of blocked){
+  assert.equal(publicHttpsOrigin(origin),false,origin);
+  assert.equal(validProductionDeployment({...base,allowedOrigins:[origin]}).ok,false,origin);
+ }
+ assert.equal(publicHttpsOrigin('https://dvolada.example.com'),true);
+ assert.equal(validProductionDeployment({...base,allowedOrigins:['https://dvolada.example.com']}).ok,true);
+ assert.equal(validProductionDeployment({...base,allowedOrigins:['https://dvolada.example.com','https://localhost']}).ok,false);
 });

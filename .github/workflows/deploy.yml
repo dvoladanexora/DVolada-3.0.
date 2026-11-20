@@ -40,6 +40,8 @@ jobs:
       - name: Validar servidor preliminar
         run: npm run check:server
       - run: npm run build
+      - name: Evitar publicar páginas internas de QA
+        run: test ! -e dist/device-studio.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

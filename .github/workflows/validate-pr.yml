@@ -34,6 +34,8 @@ jobs:
         run: npm run test:theme
       - name: Validar cliente API real sin datos locales
         run: npm run test:live
+      - name: Probar acceso público y teléfono obligatorio
+        run: npm run test:access
       - name: Validar sintaxis del servidor legado aislado
         run: node --check server/src/server.js
       - name: Validar sintaxis de Firebase verificado

@@ -22,7 +22,7 @@ export function allowedCorsHeaders(origin,allowlist){
  if(typeof origin!=='string'||!Array.isArray(allowlist)||!allowlist.includes(origin))return null;
  return {
   'Access-Control-Allow-Origin':origin,
-  'Access-Control-Allow-Credentials':'true',
+  // Auth usa bearer tokens, no cookies cross-origin; no habilitar credentials.
   'Access-Control-Allow-Methods':'GET, PATCH, OPTIONS',
   'Access-Control-Allow-Headers':'Authorization, Content-Type, Idempotency-Key',
   'Access-Control-Max-Age':'600',

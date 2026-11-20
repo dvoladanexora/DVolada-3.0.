@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createOnlineApi,OnlineApiError,conflictMessage} from '../src/online-api.js';
+import {readJsonBody,validStatusPatch} from '../server/src/request-validation.js';
+import {readFileSync} from 'node:fs';
 
 test('requires HTTPS and an authenticated token provider',()=>{
  assert.throws(()=>createOnlineApi({baseUrl:'http://example.com',getAccessToken:()=> 'x'}),/HTTPS/);
@@ -124,4 +126,27 @@ test('aborted API requests keep their abort signal instead of being reported as 
  const stop=Object.assign(Error('Request aborted'),{name:'AbortError'});
  const api=createOnlineApi({baseUrl:'https://api.example.com',getAccessToken:()=> 'x',fetchImpl:async()=>{throw stop}});
  await assert.rejects(api.listOrders(ctrl.signal),e=>e===stop);
+});
+
+test('server request guard rejects null, arrays, invalid versions and malformed status',()=>{
+ for(const invalid of [null,[],false,'ok',0,{}, {status:'Listo',expectedVersion:0},
+  {status:'Listo',expectedVersion:1.5}, {status:'',expectedVersion:1},
+  {status:'x'.repeat(41),expectedVersion:1}]){
+  assert.equal(validStatusPatch(invalid),false);
+ }
+ assert.equal(validStatusPatch({status:'Listo',expectedVersion:2}),true);
+});
+test('preliminary server reads bounded UTF-8 JSON and rejects non-object payloads',async()=>{
+ const body=chunks=>({async *[Symbol.asyncIterator](){for(const v of chunks)yield Buffer.from(v)}});
+ assert.deepEqual(await readJsonBody(body(['{"status":"Listo",','"expectedVersion":2}'])),
+  {status:'Listo',expectedVersion:2});
+ for(const input of ['null','[]','false','42','"hello"','{broken']){
+  await assert.rejects(readJsonBody(body([input])),e=>e.code===400);
+ }
+ await assert.rejects(readJsonBody(body(['{"note":"','😀'.repeat(1020),'"}'])),e=>e.code===413);
+ await assert.rejects(readJsonBody(body(['x'.repeat(2048),'x'.repeat(2050)])),e=>e.code===413);
+ const server=readFileSync(new URL('../server/src/server.js',import.meta.url),'utf8');
+ assert.ok(server.includes('const body=await readJsonBody(req)'));
+ assert.ok(server.includes('if(!validStatusPatch(body))'));
+ assert.ok(server.includes('return send(res,415'));
 });

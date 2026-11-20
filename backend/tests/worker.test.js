@@ -240,9 +240,9 @@ test('database guards reject closed restaurants and products from another tenant
  assert.equal(blocked.status,409);
  assert.throws(()=>f.DB.db.prepare(`INSERT INTO online_orders
   (id,restaurant_id,customer_id,order_number,delivery_method,delivery_address,
-   status,version,subtotal_minor,delivery_fee_minor,total_minor)
-   VALUES(?,?,?,?,?,?,?,1,100,0,100)`).run(randomUUID(),f.restaurants[0],
-  f.tokens.customer.id,randomUUID(),'pickup','','Pendiente'),/RESTAURANT_CLOSED/);
+   status,version,subtotal_minor,delivery_fee_minor,total_minor,customer_phone_e164)
+   VALUES(?,?,?,?,?,?,?,1,100,0,100,?)`).run(randomUUID(),f.restaurants[0],
+  f.tokens.customer.id,randomUUID(),'pickup','','Pendiente','+50498765432'),/RESTAURANT_CLOSED/);
  f.DB.db.prepare("UPDATE restaurants SET online_state='open' WHERE id=?").run(f.restaurants[0]);
  const valid=await f.create();
  assert.equal(valid.status,201);

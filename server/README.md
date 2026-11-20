@@ -33,3 +33,13 @@
 - La matriz inicial limita **Caja** a Pendiente → Aceptado/Rechazado; **Cocina** a Aceptado → Preparando → Listo; propietarios/gerentes a las transiciones implementadas. Repartidores, cancelaciones reales y PIN de entrega todavía no están autorizados por esta API.
 - El servicio de mapas carga Leaflet con firmas SRI verificadas en la página oficial; el GPS y rutas externas requerirán consentimiento y una política de privacidad antes de la comercialización.
 - Generar y versionar lockfiles de dependencias (frontend y servidor) antes del despliegue, activar controles de vulnerabilidades y CI de auditoría. El flujo CI actual usa `npm install` porque todavía no hay lockfile reproducible.
+
+
+## Protección de arranque en producción
+
+- Por defecto la API escucha únicamente en `127.0.0.1:8080` (o `PORT`), **nunca en todas las interfaces**. Para el entorno definitivo, solo después de configurar un proxy HTTPS de confianza, se podrá definir `DVOLADA_BIND_HOST=0.0.0.0` si la arquitectura lo requiere.
+- Al usar `NODE_ENV=production` **o al enlazar a una interfaz distinta de loopback**, se obliga a configurar `DVOLADA_PUBLIC_API_ORIGIN` como origen HTTPS público **exacto** (por ejemplo, `https://api.dvolada.example.com`) y `DVOLADA_ALLOWED_ORIGINS` como lista no vacía de orígenes HTTPS del frontend. La API rechaza el arranque sin ambos.
+- Esta verificación es **defensa adicional**: una variable de entorno HTTPS no cifra el puerto HTTP de Node por sí sola. Un proxy seguro debe garantizar TLS, autenticación y reglas de borde; impedir que el puerto HTTP quede accesible directamente desde Internet.
+- Las pruebas de seguridad de la revisión están en `npm run test:security`; GitHub Actions también ejecuta `npm audit` para impedir publicar dependencias con alertas de severidad alta o crítica.
+- El endpoint `GET /health` consolida consultas y usa una caché corta por instancia; no registrar JWT, PIN, direcciones ni mensajes SQL en logs. Los errores 500 incluyen un `requestId` correlacionable con el registro del servidor.
+- **No apto todavía para uso comercial:** quedan por integrar el proveedor de identidad, la base multiusuario de pedidos, sincronización, seguridad del PIN y del pago, WAF, backup/restauración y pruebas reales de autorización.

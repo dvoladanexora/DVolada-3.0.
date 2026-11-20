@@ -21,7 +21,6 @@ export default defineConfig(({mode})=>{
     DB:bindings.d1({name:isStaging?'dvolada-staging':'dvolada-prod'}),
     SESSION_PEPPER:bindings.secret(),
     PIN_SECRET:bindings.secret(),
-    FIREBASE_PROJECT_ID:bindings.text('dvolada-not-configured'),
     CORS_ORIGINS:bindings.text(isStaging?'http://localhost:5173':'https://dvolada.example.invalid'),
     ORDER_CREATION_ENABLED:bindings.text('false')
    }

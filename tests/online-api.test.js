@@ -31,6 +31,7 @@ test('GET orders includes bearer auth and no-cache',async()=>{
  assert.equal(captured.opts.headers.Authorization,'Bearer test-token');
  assert.equal(captured.opts.cache,'no-store');
  assert.equal(captured.opts.credentials,'omit');
+ assert.equal(captured.opts.redirect,'error','nunca seguir 302/307 con Authorization');
 });
 
 test('conflict 409 does not retry and exposes a review message',async()=>{
@@ -325,9 +326,9 @@ test('No se habilitan cookies en CORS o llamadas autenticadas',()=>{
  assert.ok(policy);
  assert.equal(Object.hasOwn(policy,'Access-Control-Allow-Credentials'),false);
  const app=readFileSync(new URL('../src/OnlineWorkspace.jsx',import.meta.url),'utf8');
- assert.ok(app.includes("cache:'no-store',credentials:'omit',signal:controller.signal"));
+ assert.ok(app.includes("cache:'no-store',credentials:'omit',redirect:'error',signal:controller.signal"));
  const api=readFileSync(new URL('../src/online-api.js',import.meta.url),'utf8');
- assert.ok(api.includes("cache:'no-store',credentials:'omit'"));
+ assert.ok(api.includes("cache:'no-store',credentials:'omit',redirect:'error'"));
 });
 
 test('La pertenencia y el rol se comprueban con SQL parametrizado, no desde el token',async()=>{

@@ -7,7 +7,8 @@ const CLOSED=['Entregado','Cancelado','Rechazado'];
 const staffMoves={
  Pendiente:['Aceptado','Rechazado'],
  Aceptado:['Preparando','Cancelado'],
- Preparando:['Listo','Cancelado']
+ Preparando:['Listo','Cancelado'],
+ Listo:['Entregado']
 };
 const courierMoves={
  Listo:['Recogido'],
@@ -106,13 +107,17 @@ export async function restaurantStatus(req,env,actor,access,orderId){
  requireKeys(body,['status','expectedVersion']);
  const status=requireText(body.status,1,32,'status');
  const key=idempotencyKey(req);
- const current=await env.DB.prepare('SELECT status FROM online_orders WHERE id=? AND restaurant_id=?')
+ const current=await env.DB.prepare('SELECT status,delivery_method FROM online_orders WHERE id=? AND restaurant_id=?')
   .bind(requireUuid(orderId),access.restaurantId).first();
  if(!current)throw new ApiError(404,'ORDER_NOT_FOUND');
  // A prior success must replay even after the order advances. transition() checks the key first.
  const prior=await env.DB.prepare('SELECT request_key FROM order_actions WHERE actor_id=? AND request_key=?')
   .bind(actor.userId,key).first();
- if(!prior)assertStatusMove(current.status,status,staffMoves);
+ if(!prior){
+  if(current.status==='Listo'&&status==='Entregado'&&current.delivery_method!=='pickup')
+   throw new ApiError(422,'COURIER_DELIVERY_REQUIRED');
+  assertStatusMove(current.status,status,staffMoves);
+ }
  return transition(env,actor,{orderId,restaurantId:access.restaurantId,expectedVersion:body.expectedVersion,status,key});
 }
 export async function assignCourier(req,env,actor,access,orderId){

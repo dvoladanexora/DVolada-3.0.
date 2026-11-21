@@ -33,7 +33,7 @@ test('los pedidos y push de producción están cerrados por defecto',()=>{
  assert.match(config,/ONESIGNAL_REST_API_KEY:bindings\.secret\(\)/);
  assert.match(config,/SESSION_PEPPER:bindings\.secret\(\)/);
  assert.match(config,/PIN_SECRET:bindings\.secret\(\)/);
- assert.ok(!config.includes('dvolada-staging\' : \'dvolada-staging'));
+ assert.ok(config.includes("name:isStaging?'dvolada-staging':'dvolada-prod'"),'QA/production databases must remain separate');
 });
 
 test('React QA y la demo pública continúan en vistas separadas',()=>{

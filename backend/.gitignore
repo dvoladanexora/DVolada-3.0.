@@ -1,0 +1,11 @@
+node_modules/
+.cloudflare/
+.wrangler/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+dist/
+*.sqlite
+*.sqlite3
+*.db

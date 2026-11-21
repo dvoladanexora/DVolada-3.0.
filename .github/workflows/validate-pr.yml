@@ -1,5 +1,7 @@
 name: Validar cambios Dvolada
 on:
+  push:
+    branches: [prelaunch/phase-2-worker-d1, prelaunch/phase-3-live-integration]
   pull_request:
     branches: [main]
     paths-ignore:
@@ -28,5 +30,30 @@ jobs:
         run: npm run test:preview
       - name: Pruebas de compartir, instalación y sonido
         run: npm run test:share
-      - name: Compilar aplicación
+      - name: Probar colores oficiales y modo claro/oscuro
+        run: npm run test:theme
+      - name: Validar cliente API real sin datos locales
+        run: npm run test:live
+      - name: Probar acceso público y teléfono obligatorio
+        run: npm run test:access
+      - name: Probar notificaciones web y despacho seguro
+        run: npm run test:push
+      - name: Probar PWA de staging de Cloudflare Pages
+        run: npm run test:staging
+      - name: Validar sintaxis del servidor legado aislado
+        run: node --check server/src/server.js
+      - name: Validar sintaxis de Firebase verificado
+        run: node --check backend/src/firebase-identity.js
+      - name: Validar backend Cloudflare con base SQLite y flujos reales
+        run: node --experimental-sqlite --test backend/tests/worker.test.js
+      - name: Compilar Worker Cloudflare sin desplegar ni usar credenciales
+        run: |
+          npm install --prefix backend --no-audit --no-fund
+          npm run deploy:dry --prefix backend
+      - name: Compilar interfaz real Cloudflare en modo seguro de previsualización
+        env:
+          VITE_DVOLADA_LIVE_MODE: 'true'
+          VITE_DVOLADA_API_URL: https://api.example.invalid
+        run: npm run build
+      - name: Compilar la demostración pública de GitHub Pages
         run: npm run build

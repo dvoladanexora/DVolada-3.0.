@@ -1,0 +1,20 @@
+{
+  "name": "dvolada-online-cloudflare",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-sqlite --test tests/worker.test.js",
+    "check": "node --check src/index.js && node --check src/orders.js && node --check src/security.js",
+    "dev": "cf dev --mode staging",
+    "build:staging": "cf build --mode staging",
+    "deploy:dry": "cf deploy --mode staging --dry-run",
+    "deploy:staging": "cf deploy --mode staging",
+    "deploy:production": "cf deploy --mode production"
+  },
+  "devDependencies": {
+    "cf": "1.0.0-rc.2",
+    "vite": "^7.1.0",
+    "@cloudflare/vite-plugin": "^2.0.0-rc.0"
+  }
+}

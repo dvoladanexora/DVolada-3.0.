@@ -42,3 +42,15 @@ test('PWA serves manifest, CSS and read-only catalog frontend',async()=>{
  assert.equal(css.status,200);
  assert.match(css.headers.get('Content-Type'),/text\/css/);
 });
+
+test('OneSignal SDK loads before click; prompt is triggered directly by the user',async()=>{
+ const js=await (await fetchPage('/app.js')).text();
+ assert.match(js,/await initOneSignal\(data\.appId\)/);
+ assert.match(js,/push\.addEventListener\('click'/);
+ assert.match(js,/oneSignal\.Notifications\.requestPermission\(\)/);
+ const init=js.indexOf('await initOneSignal(data.appId)');
+ const click=js.indexOf("push.addEventListener('click'");
+ assert.ok(init>=0&&click>init);
+ assert.match(js,/Notification\.permission==='denied'/);
+ assert.match(js,/status\.textContent='Solicitando permiso a Chrome/);
+});

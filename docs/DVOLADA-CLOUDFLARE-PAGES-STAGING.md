@@ -59,3 +59,12 @@ Cuando el App ID esté disponible, almacenarlo como variable de texto `ONESIGNAL
 - No activar `ORDER_CREATION_ENABLED` ni `PUSH_NOTIFICATIONS_ENABLED` hasta terminar pruebas end-to-end.
 
 No se fusionó a main. No se realizó ningún cobro ni se conectó OneSignal todavía.
+
+## Actualización OneSignal (21 noviembre 2026)
+
+- El usuario terminó la configuración Web en OneSignal y proporcionó el **App ID público** en una captura: `c6c10e83-b166-400f-a2ab-669697fd4121`.
+- Se guardó el identificador como variable **no secreta** `ONESIGNAL_APP_ID` dentro de las variables de producción del proyecto Pages **de pruebas** `dvolada-web-staging`.
+- Se creó nuevo despliegue Direct Upload `cd0908a9-175b-4c2c-9647-219c2ec1298a` y Cloudflare confirmó `deploy: success`.
+- Cloudflare Browser Rendering abrió `https://dvolada-web-staging.pages.dev/` y verificó que `#push-status` muestra «Activá notificaciones cuando quieras. En iPhone, primero instalá Dvolada.» y que el botón `#subscribe` **no** está deshabilitado.
+- **Pendiente**: prueba de permiso y suscripción en un Samsung real, confirmar primer dispositivo suscrito en OneSignal y probar envío manual limitado de notificación a ese único dispositivo.
+- No se guardó ni solicitó ninguna REST API Key por chat. Las notificaciones transaccionales por pedido continúan sin conexión y apagadas; `ORDER_CREATION_ENABLED=false`.

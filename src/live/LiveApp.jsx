@@ -1,11 +1,10 @@
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {ShoppingBag,Store,Bike,ShieldCheck,LogOut,RefreshCw,WifiOff,LockKeyhole,ArrowRight,Mail,Package,CheckCircle2} from 'lucide-react';
-import {firebaseReady,firebaseAuth} from './firebase-client.js';
+import {ShoppingBag,Store,Bike,ShieldCheck,LogOut,RefreshCw,WifiOff,LockKeyhole,ArrowRight,Package,CheckCircle2} from 'lucide-react';
 import {createLiveApi,LiveApiError} from './live-api.js';
 import './live.css';
 import {applyDvoladaTheme} from '../theme-policy.js';
 
-const apiOrigin=import.meta.env.VITE_DVOLADA_API_URL||'';
+const apiOrigin=import.meta.env.VITE_DVOLADA_API_URL||window.location.origin;
 const price=n=>'L '+(Number(n||0)/100).toLocaleString('es-HN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const orderLabel={Pendiente:'Pendiente',Aceptado:'Aceptado',Preparando:'Preparando',Listo:'Listo',
  Recogido:'Recogido','En camino':'En camino','En ubicación':'En ubicación',
@@ -43,11 +42,11 @@ function OrderCard({order,children}){
 }
 export default function LiveApp(){
  const sessionRef=useRef(null),checkoutKey=useRef(null),alive=useRef(true);
- const [session,setSession]=useState(null),[firebaseUser,setFirebaseUser]=useState(null);
- const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[register,setRegister]=useState(false);
- const [status,setStatus]=useState('Iniciando conexión segura...'),[error,setError]=useState('');
+ const [session,setSession]=useState(null),[accessCode,setAccessCode]=useState('');
+ const [status,setStatus]=useState(''),[error,setError]=useState('');
  const [scope,setScope]=useState('customer'),[restaurants,setRestaurants]=useState([]),[products,setProducts]=useState([]);
  const [shoppingRestaurant,setShoppingRestaurant]=useState(''),[cart,setCart]=useState([]);
+ const [phone,setPhone]=useState('');
  const [deliveryAddress,setDeliveryAddress]=useState(''),[deliveryMethod,setDeliveryMethod]=useState('delivery');
  const [orders,setOrders]=useState([]),[selectedRestaurantId,setSelectedRestaurantId]=useState('');
  const [couriers,setCouriers]=useState([]),[courierChoice,setCourierChoice]=useState({});
@@ -70,7 +69,7 @@ export default function LiveApp(){
   try{localStorage.setItem('dv_theme',JSON.stringify(theme))}catch{}
   return()=>media.removeEventListener?.('change',update);
  },[theme]);
- const configured=firebaseReady&&Boolean(apiOrigin);
+ const configured=Boolean(apiOrigin);
  const api=useMemo(()=>{
   if(!configured)return null;
   try{return createLiveApi({baseUrl:apiOrigin,getSessionToken:()=>sessionRef.current?.sessionToken})}
@@ -94,37 +93,7 @@ export default function LiveApp(){
    if(alive.current){setAdminStats(overview);setAdminRestaurants(managed.restaurants||[])}
   }
  },[api,scope,selectedRestaurantId]);
- const reconnect=useCallback(async(user)=>{
-  if(!api||!user)return;
-  if(!user.emailVerified){setSession(null);sessionRef.current=null;setStatus('Verificá tu correo para activar el acceso.');return}
-  setStatus('Validando identidad y permisos...');
-  try{
-   const {getIdToken}=await firebaseAuth();
-   const idToken=await getIdToken(user,true);
-   const issued=await api.exchange(idToken,(/Android|iPhone|iPad/i.test(navigator.userAgent)?'Móvil':'Navegador')+' Dvolada');
-   if(!alive.current)return;
-   sessionRef.current=issued;
-   const me=await api.me();
-   if(!alive.current)return;
-   setSession(me);setStatus('');
-   const first=me.restaurants?.[0]?.restaurant_id||'';
-   setSelectedRestaurantId(first);
-   setScope(me.user?.role==='platform_admin'?'admin':me.user?.role==='courier'?'courier':'customer');
-  }catch(e){sessionRef.current=null;setSession(null);if(alive.current){setStatus('');setError(errorLabel(e))}}
- },[api]);
- useEffect(()=>{
-  alive.current=true;let unsubscribe=()=>{};
-  if(!configured||!api){setStatus('Falta configurar la API y Firebase de Dvolada. Los pedidos reales permanecen cerrados.');return()=>{alive.current=false}};
-  firebaseAuth().then(({auth,onAuthStateChanged})=>{
-   if(!alive.current)return;
-   unsubscribe=onAuthStateChanged(auth,u=>{
-    setFirebaseUser(u);
-    if(u)reconnect(u);
-    else{sessionRef.current=null;setSession(null);setStatus('Iniciá sesión o creá una cuenta verificada.')}
-   },e=>{setError(errorLabel(e));setStatus('')});
-  }).catch(e=>{setError(errorLabel(e));setStatus('')});
-  return()=>{alive.current=false;unsubscribe()};
- },[configured,api,reconnect]);
+ useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
  useEffect(()=>{
   const on=()=>setOffline(false),off=()=>setOffline(true);
   window.addEventListener('online',on);window.addEventListener('offline',off);
@@ -151,40 +120,31 @@ export default function LiveApp(){
   catch(e){setError(errorLabel(e));if(e instanceof LiveApiError&&e.status===409){load(scope,selectedRestaurantId).catch(()=>{})}}
   finally{if(alive.current)setBusy(false)}
  }
- async function signIn(){
-  setError('');setBusy(true);
+ async function signIn(event){
+  event.preventDefault();
+  const token=accessCode.trim();
+  if(!/^[A-Za-z0-9_-]{43}$/.test(token)||busy||offline)return;
+  setBusy(true);
+  setError('');
   try{
-   const {auth,signInWithEmailAndPassword,createUserWithEmailAndPassword,sendEmailVerification}=await firebaseAuth();
-   if(register){const cred=await createUserWithEmailAndPassword(auth,email.trim(),password);await sendEmailVerification(cred.user);
-    setStatus('Te enviamos un enlace para verificar el correo.')}
-   else await signInWithEmailAndPassword(auth,email.trim(),password);
-   setPassword('');
-  }catch(e){setError(e?.code?.startsWith?.('auth/')?'No se pudo autenticar. Revisá los datos o recuperá tu contraseña.':errorLabel(e))}
-  finally{setBusy(false)}
- }
- async function resetPassword(){
-  if(!email.trim())return setError('Escribí tu correo para recuperar el acceso.');
-  return run(async()=>{
-   const {auth,sendPasswordResetEmail}=await firebaseAuth();
-   await sendPasswordResetEmail(auth,email.trim());
-   setStatus('Si la cuenta está registrada, recibirás instrucciones por correo.');
-  },{refresh:false})
- }
- async function verification(){
-  return run(async()=>{
-   const {auth,reload,sendEmailVerification}=await firebaseAuth();
-   if(!auth.currentUser)throw Error('Sesión no disponible.');
-   await reload(auth.currentUser);
-   if(auth.currentUser.emailVerified)return reconnect(auth.currentUser);
-   await sendEmailVerification(auth.currentUser);
-   setStatus('Correo todavía no verificado. Te reenviamos el enlace.');
-  },{refresh:false})
+   sessionRef.current={sessionToken:token};
+   const me=await api.me();
+   const first=me.restaurants?.[0]?.restaurant_id||'';
+   setSelectedRestaurantId(first);
+   setScope(me.user.role==='platform_admin'?'admin':me.user.role==='courier'?'courier':first?'restaurant':'customer');
+   setSession(me);
+  }catch(error){
+   sessionRef.current=null;
+   setError(errorLabel(error));
+  }finally{
+   setAccessCode('');
+   setBusy(false);
+  }
  }
  async function logout(){
   setBusy(true);
   try{if(sessionRef.current)await api.logout().catch(()=>{});
-   const {auth,signOut}=await firebaseAuth();await signOut(auth);
-   sessionRef.current=null;setSession(null);setOrders([]);setCart([]);setScope('customer');setSelectedPin(null);
+   sessionRef.current=null;setSession(null);setOrders([]);setCart([]);setScope('customer');setSelectedPin(null);setPhone('');setDeliveryAddress('');setStatus('');
   }finally{setBusy(false)}
  }
  async function viewProducts(restaurantId){
@@ -210,12 +170,13 @@ export default function LiveApp(){
  async function checkout(){
   if(!shoppingRestaurant||!cart.length||!session)return;
   if(deliveryMethod==='delivery'&&deliveryAddress.trim().length<8)return setError('Ingresá una dirección completa.');
+  if(!/^[0-9]{8}$/.test(phone))return setError('Ingresá los ocho dígitos del teléfono.');
   const key=checkoutKey.current||newKey();checkoutKey.current=key;
-  const intent={restaurantId:shoppingRestaurant,deliveryMethod,deliveryAddress,
+  const intent={restaurantId:shoppingRestaurant,deliveryMethod,deliveryAddress,phone:'+504'+phone,
    items:cart.map(({productId,quantity})=>({productId,quantity}))};
-  const result=await run(()=>api.createOrder(intent,key));
+  const result=await run(()=>api.createOrder(intent,key),{refresh:false});
   if(result){checkoutKey.current=null;setCart([]);setProducts([]);setShoppingRestaurant('');setSelectedPin({id:result.order.id,pin:result.deliveryPin});
-   setStatus('Pedido confirmado por el servidor.')}
+   setStatus('Pedido de prueba confirmado.');load().catch(e=>setError(errorLabel(e)))}
  }
  async function showCustomerOrder(order){
   return run(async()=>{
@@ -226,7 +187,7 @@ export default function LiveApp(){
  async function action(fn){const result=await run(fn);if(result)setStatus('Cambio confirmado en el servidor.');return result}
  const userRole=session?.user?.role;
  const availableScopes=[
-  ...(userRole==='customer'?['customer']:[]),
+  ...(userRole==='customer'&&!session?.restaurants?.length?['customer']:[]),
   ...(session?.restaurants?.length?['restaurant']:[]),
   ...(userRole==='courier'?['courier']:[]),
   ...(userRole==='platform_admin'?['admin']:[])
@@ -243,30 +204,20 @@ export default function LiveApp(){
    <div className="dvl-head-actions"><label className="dvl-theme">Tema<select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy} onClick={logout}><LogOut size={15}/> Salir</Action>}</div></header>
   <main className="dvl-main">
   <div className="dvl-intro"><span className="dvl-kicker">NEXORA SYSTEMS · DVOLADA ONLINE</span>
-   <h1>{session?roles[scope]||'Dvolada':'Bienvenido a Dvolada'}</h1>
+   <h1>{session?(scope==='restaurant'&&selectedBusiness?.staff_role==='kitchen'?'Cocina':roles[scope]):'Dvolada · Entorno de pruebas'}</h1>
    <p>{session?'Todas las acciones oficiales se comprueban y guardan en el servidor.':'Accedé para hacer y seguir pedidos con seguridad.'}</p></div>
   {offline&&<div className="dvl-offline" role="alert"><WifiOff size={19}/> Sin conexión. Los pedidos se muestran como potencialmente desactualizados; las acciones están bloqueadas.</div>}
   <WaitOrError message={status}/>
   <WaitOrError message={error} warning/>
   {session&&<div className="dvl-id-note"><span>ID de vinculación: <code>{formattedUserId}</code></span><Action kind="text"
    onClick={()=>navigator.clipboard?.writeText(formattedUserId).catch(()=>{})}>Copiar</Action></div>}
-  {!configured&&<section className="dvl-panel"><ShieldCheck/><h2>Integración pendiente</h2>
-   <p>Esta versión espera la cuenta exclusiva de Cloudflare y el proyecto Firebase de Dvolada.
-   No muestra pedidos ni datos privados de demostración.</p></section>}
-  {configured&&!session&&<section className="dvl-panel dvl-login">
-   {firebaseUser&&!firebaseUser.emailVerified?<><Mail size={31}/><h2>Verificá tu correo</h2>
-    <p>Abrí el mensaje de verificación, confirmá el enlace y regresá aquí.</p>
-    <Action disabled={busy||offline} onClick={verification}>Ya confirmé / reenviar enlace</Action>
-    <Action kind="secondary" disabled={busy} onClick={logout}>Cambiar de cuenta</Action></>:
-   <><h2>{register?'Creá tu cuenta':'Ingresá a Dvolada'}</h2>
-    <label>Correo electrónico<input autoComplete="username" type="email" value={email} onChange={e=>setEmail(e.target.value)} /></label>
-    <label>Contraseña<input autoComplete={register?'new-password':'current-password'} type="password" value={password} onChange={e=>setPassword(e.target.value)}/></label>
-    <Action disabled={busy||offline||!email.includes('@')||password.length<6} onClick={signIn}>{register?'Registrarme':'Iniciar sesión'} <ArrowRight size={17}/></Action>
-    <div className="dvl-inline">
-     <Action kind="text" onClick={()=>setRegister(x=>!x)}>{register?'Ya tengo cuenta':'Crear cuenta'}</Action>
-     <Action kind="text" onClick={resetPassword}>Recuperar contraseña</Action>
-    </div></>}
-  </section>}
+  {!session&&<form className="dvl-panel dvl-login" onSubmit={signIn}>
+   <h2>Ingresá con tu acceso de pruebas</h2>
+   <label>Código de acceso<input type="password" autoComplete="off" value={accessCode}
+    onChange={e=>setAccessCode(e.target.value)} required /></label>
+   <button type="submit" className="dvl-action" disabled={busy||offline||accessCode.trim().length!==43}>Iniciar sesión</button>
+   <a href="/">Explorar catálogo sin iniciar sesión</a>
+  </form>}
   {session&&<>
    <nav className="dvl-roles" aria-label="Paneles autorizados">{availableScopes.map(s=><button key={s} className={scope===s?'active':''}
     onClick={()=>{setScope(s);setError('');setSelectedPin(null)}}>{s==='customer'?<ShoppingBag size={17}/>:s==='restaurant'?<Store size={17}/>:s==='courier'?<Bike size={17}/>:<ShieldCheck size={17}/>} {roles[s]}</button>)}
@@ -289,12 +240,14 @@ export default function LiveApp(){
       <div className="dvl-row"><strong>Productos</strong><strong>{price(subtotal)}</strong></div>
       <div className="dvl-row"><strong>Envío estimado</strong><strong>{price(fee)}</strong></div>
       <div className="dvl-row dvl-total"><strong>Total preliminar</strong><strong>{price(subtotal+fee)}</strong></div>
+      <label>Teléfono de Honduras (+504)<input inputMode="numeric" autoComplete="tel-national" value={phone}
+       onChange={e=>{setPhone(e.target.value.replace(/\D/g,'').slice(0,8));checkoutKey.current=null}} /></label>
       <label>Modalidad<select value={deliveryMethod} onChange={e=>{setDeliveryMethod(e.target.value);checkoutKey.current=null}}>
        <option value="delivery">Entrega a domicilio</option><option value="pickup">Recoger en restaurante</option></select></label>
       {deliveryMethod==='delivery'&&<label>Dirección completa<textarea rows={3} value={deliveryAddress}
        onChange={e=>{setDeliveryAddress(e.target.value);checkoutKey.current=null}} placeholder="Barrio, calle, casa y referencia"/></label>}
       <p className="dvl-muted">El servidor verificará precios y disponibilidad. Los cobros por tarjeta todavía no están habilitados.</p>
-      <Action disabled={busy||offline||!cart.length} onClick={checkout}><LockKeyhole size={16}/> Confirmar pedido</Action>
+      <Action disabled={busy||offline||!cart.length} onClick={checkout}><LockKeyhole size={16}/> Confirmar pedido de prueba</Action>
       </>}
     </section>
     <section className="dvl-panel dvl-span"><h2>Mis pedidos</h2>
@@ -365,7 +318,7 @@ export default function LiveApp(){
        onClick={()=>action(()=>api.courierStatus(o,courierTransitions[o.status],newKey()))}>{courierTransitions[o.status]}</Action>}
       {o.status==='En ubicación'&&<><label>PIN del cliente<input inputMode="numeric" type="password"
        maxLength={6} placeholder="6 dígitos" value={selectedPin?.id===o.id?pinEntry:''}
-       onFocus={()=>{setSelectedPin({id:o.id});setPinEntry('')}}
+       onFocus={()=>{if(selectedPin?.id!==o.id){setSelectedPin({id:o.id});setPinEntry('')}}}
        onChange={e=>setPinEntry(e.target.value.replace(/\D/g,'').slice(0,6))}/></label>
        <Action disabled={busy||offline||pinEntry.length!==6||selectedPin?.id!==o.id}
         onClick={()=>action(async()=>{const r=await api.courierDeliver(o,pinEntry,newKey());setPinEntry('');return r})}>Confirmar entrega</Action></>}

@@ -57,3 +57,8 @@ jobs:
         run: npm run build
       - name: Compilar la demostración pública de GitHub Pages
         run: npm run build
+      - name: Empaquetar la aplicación de QA con sus paneles habilitados
+        env:
+          VITE_DVOLADA_LIVE_MODE: 'true'
+          VITE_DVOLADA_STAGING_PANELS: 'true'
+        run: npm run build && node scripts/package-qa-worker.mjs

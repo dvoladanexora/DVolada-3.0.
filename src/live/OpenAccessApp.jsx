@@ -11,7 +11,8 @@ import './live.css';
  */
 const money=n=>'L '+(Number(n||0)/100).toLocaleString('es-HN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const phoneDigits=value=>value.replace(/\D/g,'').replace(/^504/,'').slice(0,8);
-const API_ORIGIN=import.meta.env.VITE_DVOLADA_API_URL||'';
+const stagingPanels=import.meta.env.VITE_DVOLADA_STAGING_PANELS==='true';
+const API_ORIGIN=import.meta.env.VITE_DVOLADA_API_URL||(stagingPanels?window.location.origin:'');
 
 export default function OpenAccessApp(){
  const [restaurants,setRestaurants]=useState([]);
@@ -83,6 +84,7 @@ export default function OpenAccessApp(){
    <div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada"/><div>
     <strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
    <div className="dvl-head-actions">
+    {stagingPanels&&<a className="dvl-action secondary" href="/pruebas">Paneles de pruebas</a>}
     {isDvoladaPushConfigured()&&<button className="dvl-action secondary" disabled={offline||pushStatus==='busy'}
      type="button" onClick={togglePush} aria-label={pushStatus==='enabled'?'Desactivar notificaciones':'Activar notificaciones'}>
      {pushStatus==='enabled'?<BellOff size={16}/>:<Bell size={16}/>}

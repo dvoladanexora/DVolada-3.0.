@@ -54,3 +54,16 @@ test('OneSignal SDK loads before click; prompt is triggered directly by the user
  assert.match(js,/Notification\.permission==='denied'/);
  assert.match(js,/status\.textContent='Solicitando permiso a Chrome/);
 });
+
+test('CSP permits OneSignal JSONP bootstrap without widening to arbitrary scripts',async()=>{
+ const res=await fetchPage('/');
+ const csp=res.headers.get('Content-Security-Policy');
+ assert.ok(csp,'Missing CSP');
+ const scriptSrc=csp.split(';').map(x=>x.trim()).find(x=>x.startsWith('script-src '));
+ assert.ok(scriptSrc,'Missing script-src');
+ assert.match(scriptSrc,/https:\/\/cdn\.onesignal\.com/);
+ assert.match(scriptSrc,/https:\/\/api\.onesignal\.com/);
+ assert.doesNotMatch(scriptSrc,/\s\*|https:\/\/\*\.onesignal\.com/);
+ assert.match(csp,/frame-ancestors 'none'/);
+ assert.match(csp,/worker-src 'self'/);
+});

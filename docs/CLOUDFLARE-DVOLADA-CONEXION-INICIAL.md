@@ -11,22 +11,22 @@
 - Subdominio de cuenta: `dvoladanexora.workers.dev`; acceso workers.dev habilitado para el Worker de staging.
 - URL de API prevista: `https://dvolada-api-staging.dvoladanexora.workers.dev`. **No se ha confirmado aún la resolución pública DNS ni el resultado HTTPS del endpoint /health desde un cliente externo**; probar después de propagación.
 - No existe una D1 de producción. No se activó ninguna integración de pagos o pedidos reales.
-- El Worker de staging usa `ORDER_CREATION_ENABLED=false` y CORS limitado a `http://localhost:5173`.
+- El Worker de staging usa `ORDER_CREATION_ENABLED=false` y CORS permitido solo para `http://localhost:5173` y `https://dvolada-web-staging.pages.dev` (configuración realizada 21 noviembre 2026).
 
 ## Política de acceso acordada
 
 - Visitar Dvolada y explorar catálogo **no requiere cuenta ni teléfono**.
 - Al intentar confirmar un pedido se exige nombre, teléfono hondureño válido y dirección para envíos. Se bloqueará cualquier pedido si el teléfono no está **verificado por el servidor**.
 - Firebase se retiró de la **ruta activa** de Worker y compilación web pública. No se necesita un proyecto Firebase para navegar. Quedan archivos históricos de fase 3 con Firebase, no invocados por el modo real abierto; se limpiarán cuando se complete la autenticación propia.
-- **Pendiente**: integrar proveedor de SMS/OTP y crear una sesión de usuario o invitado en Workers+D1. Sin servicio de envío de códigos, el servidor permanece cerrado a pedidos reales. Nunca mostrar códigos OTP ficticios como verificados.
+- **Cambio de política 21 noviembre 2026**: por costo, no se implementará SMS/OTP pagado por ahora. Debe diseñarse sesión segura de cliente o invitado sin OTP, controles antiabuso y una migración posterior que reemplace de forma explícita la regla D1 `0007_customer_phones.sql`. Mientras tanto, pedidos reales siguen bloqueados. Nunca afirmar que un teléfono no verificado está verificado.
 - Centro de Control, restaurante y repartidor requieren el sistema de identidad propio; todavía no accesibles mediante la interfaz pública abierta. Sus APIs se mantienen protegidas.
 
 ## Pendiente antes de pruebas reales
 
 1. Comprobar `/health` y catálogo con HTTPS en el dominio Worker después de la propagación DNS.
-2. Elegir e integrar proveedor de SMS/WhatsApp OTP para Honduras con controles antiabuso y consentimiento.
+2. Diseñar controles antifraude y sesiones de pedido sin SMS/WhatsApp OTP pagados, conservando teléfono obligatorio al comprar.
 3. Completar login y sesiones sin Firebase para invitados, clientes, repartidores y negocios; incluir recuperación y revocación.
-4. Añadir cliente PWA en host estático de **staging** separado; configurar CORS solo para origen HTTPS verificado.
+4. `dvolada-web-staging.pages.dev` ya aloja una **vista preliminar** PWA read-only por Direct Upload, con CORS de staging; faltan pruebas de HTTPS externas y publicar el bundle React completo cuando sea viable.
 5. Pruebas de dispositivos, estados, concurrencia, pago, tarifas, fotos, chat, GPS y presupuesto antes de lanzar.
 6. Aprobar explícitamente producción, crear D1 prod aislada, configurar dominios, hacer backup/rollback y recién entonces valorar habilitar creación de pedidos.
 

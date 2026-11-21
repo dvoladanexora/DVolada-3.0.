@@ -77,7 +77,7 @@ export default function OpenAccessApp(){
  }
  const visible=restaurants.filter(r=>r.name.toLowerCase().includes(search.trim().toLowerCase()));
  const subtotal=cart.reduce((sum,p)=>sum+p.price*p.qty,0);
- const fee=mode==='delivery'?(selected?.delivery_fee_minor||0):0;
+ const fee=mode==='delivery'?(restaurants.find(r=>r.id===cartRestaurantId)?.delivery_fee_minor||0):0;
  const validPhone=/^[0-9]{8}$/.test(phone);
  const canAttempt=!!(cart.length&&name.trim().length>=2&&validPhone&&(mode==='pickup'||address.trim().length>=8));
  return <div className="dvl-app">

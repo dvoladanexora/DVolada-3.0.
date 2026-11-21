@@ -1,11 +1,6 @@
 name: Publicar D Volada 3.0
+# No publicar al fusionar PR: el lanzamiento requiere autorización manual.
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - '.github/ISSUE_TEMPLATE/**'
   workflow_dispatch:
 permissions:
   contents: read
@@ -16,6 +11,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
+    if: github.ref == 'refs/heads/main' && github.repository == 'dvoladanexora/DVolada-3.0.'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -28,11 +24,18 @@ jobs:
         run: npm run test:online
       - name: Comprobar temas oficiales antes de publicar
         run: npm run test:theme
+      - name: Validar las pruebas de módulos antes de publicar
+        run: npm run test:all
+      - name: Verificar que el servidor legado continúa compilable y aislado
+        run: |
+          npm --prefix server ci --ignore-scripts --no-audit --no-fund
+          npm --prefix server run check
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
   deploy:
+    if: github.ref == 'refs/heads/main' && github.repository == 'dvoladanexora/DVolada-3.0.'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

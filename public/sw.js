@@ -12,8 +12,9 @@ const STATIC_PUBLIC=new Set(['manifest-live.webmanifest','logo.png','dvolada-log
 const shellPath=pathname=>pathname===ROOT||pathname===ROOT+'index.html';
 const privatePath=pathname=>/\/(?:api|auth|admin|session)(?:\/|$)/i.test(pathname);
 self.addEventListener('install',event=>{
+ const files=[...SHELL,...LIVE_ASSETS.map(path=>ROOT+path)];
  event.waitUntil(caches.open(CACHE).then(cache=>
-  Promise.all([...SHELL,...LIVE_ASSETS.map(path=>ROOT+path)].map(path=>cache.add(path).catch(()=>null)))
+  LIVE_ASSETS.length?cache.addAll(files):Promise.all(files.map(path=>cache.add(path).catch(()=>null)))
  ));
  // La nueva versión permanece en espera hasta que el usuario acepte actualizar.
 });
@@ -30,6 +31,14 @@ self.addEventListener('fetch',event=>{
  if(req.method!=='GET')return;
  const url=new URL(req.url);
  if(url.origin!==self.location.origin||!url.pathname.startsWith(ROOT)||privatePath(url.pathname)||url.pathname.endsWith('/version.json'))return;
+ if(LIVE_ASSETS.length&&req.mode==='navigate'&&installedRoutes.includes(url.pathname)){
+  event.respondWith(fetch(req).catch(async()=>await caches.open(CACHE).then(cache=>cache.match(ROOT+'index.html'))||Response.error()));
+  return;
+ }
+ if(LIVE_ASSETS.length&&LIVE_ASSETS.some(path=>ROOT+path===url.pathname)){
+  event.respondWith(caches.open(CACHE).then(cache=>cache.match(url.pathname)).then(cached=>cached||fetch(req)));
+  return;
+ }
  if(req.mode==='navigate'){
   event.respondWith(
    fetch(req).then(response=>{

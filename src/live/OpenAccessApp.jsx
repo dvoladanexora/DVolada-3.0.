@@ -6,8 +6,8 @@ import {applyDvoladaTheme} from '../theme-policy.js';
 import './live.css';
 
 /**
- * Public access while Dvolada's own phone verification is being integrated.
- * Never invent a real authenticated session or send unverified orders.
+ * Public catalogue preview. Checkout stays disabled until an authenticated
+ * staging flow is connected and tested with fictional orders.
  */
 const money=n=>'L '+(Number(n||0)/100).toLocaleString('es-HN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const phoneDigits=value=>value.replace(/\D/g,'').replace(/^504/,'').slice(0,8);
@@ -17,6 +17,7 @@ export default function OpenAccessApp(){
  const [restaurants,setRestaurants]=useState([]);
  const [selected,setSelected]=useState(null),[products,setProducts]=useState([]);
  const [search,setSearch]=useState(''),[cart,setCart]=useState([]);
+ const [cartRestaurantId,setCartRestaurantId]=useState(null);
  const [name,setName]=useState(''),[phone,setPhone]=useState(''),[address,setAddress]=useState('');
  const [mode,setMode]=useState('delivery'),[message,setMessage]=useState('');
  const [theme,setTheme]=useState('light'),[offline,setOffline]=useState(!navigator.onLine);
@@ -62,7 +63,7 @@ export default function OpenAccessApp(){
  async function openRestaurant(r){
   if(!api||offline)return;
   setMessage('');
-  try{const response=await api.products(r.id);setSelected(r);setProducts(response.products||[]);setCart([])}
+  try{const response=await api.products(r.id);if(cartRestaurantId!==r.id)setCart([]);setCartRestaurantId(r.id);setSelected(r);setProducts(response.products||[])}
   catch{setMessage('No se pudo cargar el menú. No se creó ningún pedido.')}
  }
  function adjust(item,delta){
@@ -99,7 +100,7 @@ export default function OpenAccessApp(){
    <div className="dvl-columns">
     <section className="dvl-panel">
      <h2><Store size={20}/> {selected?selected.name:'Restaurantes afiliados'}</h2>
-     {selected&&<button className="dvl-action secondary" onClick={()=>{setSelected(null);setCart([]);setProducts([])}}>Volver a restaurantes</button>}
+     {selected&&<button className="dvl-action secondary" onClick={()=>{setSelected(null);setProducts([])}}>Volver a restaurantes</button>}
      {!selected&&<><label>Buscar restaurante<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="¿Qué se te antoja?"/></label>
       <div className="dvl-stack" style={{marginTop:18}}>{visible.map(r=><div className="dvl-row" key={r.id}><div>
        <strong>{r.name}</strong><small>{r.online_state==='open'?'Aceptando pedidos':'En pausa'}</small></div>
@@ -127,9 +128,9 @@ export default function OpenAccessApp(){
        <option value="delivery">A domicilio</option><option value="pickup">Retirar en restaurante</option></select></label>
       {mode==='delivery'&&<label><MapPin size={16}/> Dirección<input value={address} onChange={e=>setAddress(e.target.value)}
        placeholder="Barrio, calle, casa y referencia"/></label>}
-      <div className="dvl-notice"><ShieldCheck size={18}/> La verificación por SMS estará disponible al conectar el servicio de mensajes. Hasta entonces, no aceptamos pedidos reales.</div>
-      <button className="dvl-action" disabled={!canAttempt||offline} onClick={()=>setMessage('Los datos están completos, pero no se envió el pedido: falta habilitar verificación SMS y confirmar el lanzamiento.')}>
-       <Phone size={17}/> Verificar teléfono antes de comprar
+      <div className="dvl-notice"><ShieldCheck size={18}/> Tu teléfono es obligatorio para el pedido. En esta vista preliminar no se envían pedidos ni se verifica el número por SMS.</div>
+      <button className="dvl-action" disabled={!canAttempt||offline} onClick={()=>setMessage('Los datos están completos, pero no se envió ningún pedido. La compra seguirá desactivada hasta probar la integración completa en staging.')}>
+       <Phone size={17}/> Revisar datos del pedido
       </button>
      </>}
     </section>

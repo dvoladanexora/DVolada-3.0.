@@ -14,7 +14,7 @@ test('guest checkout collects customer phone but does not claim to send orders',
  const ui=file('src/live/OpenAccessApp.jsx');
  assert.match(ui,/\+504/);
  assert.match(ui,/phoneDigits/);
- assert.match(ui,/verificación por SMS/i);
+ assert.match(ui,/ni se verifica el número por SMS/i);
  assert.doesNotMatch(ui,/api\.createOrder\(/);
  assert.match(ui,/Pedidos reales desactivados/);
 });

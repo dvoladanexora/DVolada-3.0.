@@ -272,6 +272,9 @@ function RestaurantGrid({places,onOpen,reviews,favorites=[],onFavorite=()=>{},wi
 function Empty({icon:Icon,title,desc,action,actionText}){return <div className="empty"><Icon size={38}/><h2>{title}</h2><p>{desc}</p><button className="primary" onClick={action}>{actionText} <ArrowRight size={17}/></button></div>}
 const IS_LIVE_BUILD=import.meta.env.VITE_DVOLADA_LIVE_MODE==='true';
 const showStagingPanels=IS_LIVE_BUILD&&import.meta.env.VITE_DVOLADA_STAGING_PANELS==='true'&&['/pruebas','/pruebas/'].includes(window.location.pathname);
-createRoot(document.getElementById('root')).render(<>{showStagingPanels?<LiveApp/>:(IS_LIVE_BUILD?<OpenAccessApp/>:<LazyPanelBoundary><App/></LazyPanelBoundary>)}<LazyPanelBoundary><PwaUpdatePrompt live={IS_LIVE_BUILD}/></LazyPanelBoundary></>);
+const demoView=<LazyPanelBoundary><App/></LazyPanelBoundary>;
+const chosenView=showStagingPanels?<LiveApp/>:(IS_LIVE_BUILD?<OpenAccessApp/>:demoView);
+const updateView=IS_LIVE_BUILD?<PwaUpdatePrompt live/>:<LazyPanelBoundary><PwaUpdatePrompt/></LazyPanelBoundary>;
+createRoot(document.getElementById('root')).render(<>{chosenView}{updateView}</>);
 if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register(import.meta.env.BASE_URL+'sw.js',{scope:import.meta.env.BASE_URL}).catch(err=>console.warn('PWA service worker:',err))})}
 

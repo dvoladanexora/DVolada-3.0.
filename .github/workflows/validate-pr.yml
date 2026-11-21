@@ -38,6 +38,8 @@ jobs:
         run: npm run test:access
       - name: Probar notificaciones web y despacho seguro
         run: npm run test:push
+      - name: Probar PWA de staging de Cloudflare Pages
+        run: npm run test:staging
       - name: Validar sintaxis del servidor legado aislado
         run: node --check server/src/server.js
       - name: Validar sintaxis de Firebase verificado

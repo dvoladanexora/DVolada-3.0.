@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
-    "build": "node scripts/generate-icons.mjs && vite build && node scripts/version-service-worker.mjs",
+    "dev": "vite --host 127.0.0.1",
+    "build": "node scripts/generate-icons.mjs && vite build && node scripts/version-service-worker.mjs && node scripts/remove-qa-assets.mjs",
     "test:online": "node --test tests/online-api.test.js",
     "test:preview": "node --test tests/preview-ui.test.js",
     "test:share": "node --test tests/share-sound.test.js",
@@ -13,7 +13,17 @@
     "test:live": "node --test tests/live-api.test.js",
     "test:access": "node --test tests/open-access.test.js",
     "test:push": "node --test tests/push-ui.test.js",
-    "test:staging": "node --test tests/staging-site.test.js tests/pwa-qa.test.js"
+    "test:staging": "node --test tests/staging-site.test.js tests/pwa-qa.test.js",
+    "test:restaurant": "node --test tests/restaurant-cloud-flow.test.js",
+    "test:menu": "node --test tests/restaurant-menu.test.js",
+    "test:business": "node --test tests/restaurant-business.test.js",
+    "test:hardening": "node --test tests/restaurant-hardening.test.js",
+    "test:courier": "node --test tests/courier-online.test.js",
+    "test:integration": "node --test tests/online-integration.test.js",
+    "test:security": "node --test tests/security-review.test.js",
+    "test:all": "node --test tests/*.test.js",
+    "check:server": "node --check server/src/server.js",
+    "dev:network": "vite --host 0.0.0.0"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -23,6 +33,6 @@
   "devDependencies": {
     "esbuild": "^0.25.12",
     "vite": "^6.0.5",
-    "sharp": "^0.34.4"
+    "sharp": "^0.35.5"
   }
 }

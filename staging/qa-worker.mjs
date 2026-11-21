@@ -1,5 +1,6 @@
 import api from '../backend/src/index.js';
 import { qaPushAppId } from '../backend/src/qa-push-identity.js';
+import { drainQaOrderPush, qaOrderPushConfigured } from '../backend/src/qa-order-push.js';
 import { assets } from './.qa-assets.mjs';
 
 const headers = {
@@ -10,10 +11,19 @@ const headers = {
 };
 
 export default {
-  async fetch(request, env) {
+  async scheduled(_event, env) { await drainQaOrderPush(env); },
+  async fetch(request, env, ctx) {
     const { hostname, pathname } = new URL(request.url);
     if (env.DVOLADA_QA_HOST !== hostname) return new Response(null, { status: 404 });
-    if (pathname === '/health' || pathname.startsWith('/api/v1/')) return api.fetch(request, env);
+    if (pathname === '/health' || pathname.startsWith('/api/v1/')) {
+      const response = await api.fetch(request, env);
+      if (response.ok && ['POST','PATCH'].includes(request.method) &&
+          /^\/api\/v1\/(customer|restaurant|courier)\/orders(?:\/|$)/.test(pathname) &&
+          qaOrderPushConfigured(env)) {
+        ctx.waitUntil(drainQaOrderPush(env));
+      }
+      return response;
+    }
     if (!['GET', 'HEAD'].includes(request.method)) return new Response(null, { status: 405 });
     if (pathname === '/push-config') {
       const appId = qaPushAppId(request, env);

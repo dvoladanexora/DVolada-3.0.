@@ -4,10 +4,11 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import {generateKeyPairSync,randomBytes,randomUUID,verify} from 'node:crypto';
 import worker from '../src/index.js';
+import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -513,4 +514,63 @@ test('QA push identities are signed only for the authenticated account and exact
  }
  f.env.QA_ONESIGNAL_IDENTITY_VERIFIED='false';
  assert.equal((await issue(f.tokens.customer.token)).status,503);
+});
+
+test('QA outbox targets only the current order parties and deduplicates sends across drains',async()=>{
+ const f=await fixture();
+ const p=await f.create();
+ assert.equal(p.status,201);
+ const id=p.body.order.id;
+ assert.equal((await f.status(id,'staffA','Aceptado',1)).status,200);
+ const offer=await f.call('/api/v1/restaurant/orders/'+id+'/assign',{
+  by:'staffA',restaurantId:f.restaurants[0],method:'PATCH',key:randomUUID(),
+  body:{courierId:f.tokens.courier.id,expectedVersion:2}
+ });
+ assert.equal(offer.status,200);
+ const jobs=f.DB.db.prepare('SELECT * FROM order_push_outbox ORDER BY event_id').all();
+ assert.deepEqual(jobs.map(x=>x.audience),['restaurant','customer','courier']);
+ assert.deepEqual((await Promise.all(jobs.map(j=>qaPushAudience(f.DB,j)))).map(x=>x.externalIds),[
+  ['dvolada-qa:'+f.tokens.staffA.id],['dvolada-qa:'+f.tokens.customer.id],['dvolada-qa:'+f.tokens.courier.id],
+ ]);
+ const {privateKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+ const sent=[];
+ const fetcher=async(_url,options)=>{
+  const request=JSON.parse(options.body);
+  assert.equal(request.included_segments,undefined);
+  assert.equal(request.include_subscription_ids,undefined);
+  assert.equal(request.data.orderId,undefined);
+  assert.doesNotMatch(request.contents.es,/DV-/);
+  sent.push(request);
+  return Response.json({id:'provider-test'});
+ };
+ await drainQaOrderPush(f.env,fetcher);
+ assert.equal(sent.length,0);
+ Object.assign(f.env,{
+  QA_ORDER_PUSH_ENABLED:'true', QA_ONESIGNAL_REST_API_KEY:'mock-only', QA_ONESIGNAL_APP_ID:randomUUID(),
+  QA_ONESIGNAL_ORIGIN:'https://dvolada-qa.dvoladanexora.workers.dev', QA_ONESIGNAL_IDENTITY_VERIFIED:'true',
+  QA_ONESIGNAL_SIGNING_KEY:privateKey.export({format:'pem',type:'pkcs8'}),
+ });
+ await Promise.all([drainQaOrderPush(f.env,fetcher),drainQaOrderPush(f.env,fetcher)]);
+ await drainQaOrderPush(f.env,fetcher);
+ assert.equal(sent.length,3);
+ assert.equal(new Set(sent.map(x=>x.idempotency_key)).size,3);
+ assert.deepEqual(new Set(sent.flatMap(x=>x.include_aliases.external_id)),new Set([
+  'dvolada-qa:'+f.tokens.staffA.id,'dvolada-qa:'+f.tokens.customer.id,'dvolada-qa:'+f.tokens.courier.id,
+ ]));
+ assert.equal(f.DB.db.prepare("SELECT count(*) n FROM order_push_outbox WHERE outcome='sent'").get().n,3);
+});
+
+test('a rejected or replaced assignment never reaches the former courier',async()=>{
+ const f=await fixture();
+ const p=await f.create(),id=p.body.order.id;
+ assert.equal((await f.status(id,'staffA','Aceptado',1)).status,200);
+ assert.equal((await f.call('/api/v1/restaurant/orders/'+id+'/assign',{
+  by:'staffA',restaurantId:f.restaurants[0],method:'PATCH',key:randomUUID(),
+  body:{courierId:f.tokens.courier.id,expectedVersion:2}
+ })).status,200);
+ const job=f.DB.db.prepare("SELECT * FROM order_push_outbox WHERE audience='courier'").get();
+ assert.equal((await f.call('/api/v1/courier/orders/'+id+'/offer',{
+  by:'courier',method:'POST',key:randomUUID(),body:{action:'reject',expectedVersion:3}
+ })).status,200);
+ assert.equal(await qaPushAudience(f.DB,job),null);
 });

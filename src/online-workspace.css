@@ -69,3 +69,44 @@
 
 /* Official Cloud wordmark: preserve full proportions in desktop and mobile navigation */
 .ow-sidebar-brand img{width:clamp(100px,13vw,175px);height:auto;max-height:72px;object-fit:contain;object-position:left center}.ow-sidebar-brand .ow-brand-accessible{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:800px){.ow-sidebar-brand img{width:112px;max-height:48px}}@media(max-width:420px){.ow-sidebar-brand img{width:94px;max-height:42px}}
+
+
+/* Navegación principal de dos espacios: Caja / Recepción y Cocina */
+.ow-mode-switch{position:relative;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:18px 0 20px;padding:7px;border-radius:20px;border:1px solid var(--ow-line,var(--line));background:color-mix(in srgb,var(--ow-card,var(--surface)) 91%,var(--ow-bg,var(--soft)) 9%);max-width:760px}
+.ow-mode-switch button{display:flex;align-items:center;justify-content:center;gap:10px;min-height:54px;padding:11px 14px;border:1px solid transparent;border-radius:15px;background:transparent;color:var(--ow-sub,var(--muted));font-size:15px;font-weight:850;cursor:pointer;transition:background .16s ease,color .16s ease,box-shadow .16s ease}
+.ow-mode-switch button.selected{background:var(--ow-card,var(--surface));color:var(--ow-ink,var(--ink));border-color:color-mix(in srgb,var(--accent) 26%,var(--ow-line,var(--line)));box-shadow:0 5px 16px #0000000a}
+.ow-mode-switch button.selected svg{color:var(--accent)}
+.ow-mode-switch button small{border-radius:99px;background:var(--ow-bg,var(--soft));padding:5px 7px;color:var(--ow-sub,var(--muted));font-size:10px;white-space:nowrap}
+.ow-mode-switch button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.ow-kitchen-view{min-width:0}
+.ow-kitchen-view .ow-kitchen-tools{display:flex;gap:13px;align-items:center;justify-content:flex-end;margin:0 0 15px;flex-wrap:wrap}
+.ow-kitchen-view .ow-kitchen-tools select{background:var(--ow-card,var(--surface));border:1px solid var(--ow-line,var(--line));color:var(--ow-ink,var(--ink));border-radius:12px;padding:9px 11px}
+.ow-kitchen-view .ow-kitchen-tools>span{font-size:12px;color:var(--ow-sub,var(--muted))}
+.ow-kitchen-full .ow-mode-switch{margin-top:0}
+.ow-kitchen-full .ow-kitchen-view .ow-kitchen-tools{padding:5px 2px}
+@media(max-width:720px){.ow-mode-switch{max-width:none;gap:5px;padding:5px;margin:10px 0 17px}.ow-mode-switch button{font-size:12px;gap:6px;min-height:50px;padding:9px 5px}.ow-mode-switch button small{display:none}.ow-mode-switch button svg{width:18px}.ow-kitchen-view .ow-kitchen-tools{justify-content:flex-start}}
+@media(prefers-reduced-motion:reduce){.ow-mode-switch button{transition:none}}
+
+
+/* Fullscreen real cuando lo permite el navegador; fallback a CSS en iOS antiguo. */
+.ow-shell.ow-redesign:fullscreen{width:100vw;height:100vh;max-width:none;overflow-y:auto;background:var(--ow-bg,var(--bg));padding:10px 20px 30px}
+.ow-shell.ow-redesign:fullscreen .ow-workarea{max-width:none}
+.ow-shell.ow-redesign:fullscreen .ow-kitchen-lanes{max-width:none}
+@media(max-width:720px){.ow-shell.ow-redesign:fullscreen{padding:8px 10px 24px}}
+
+
+/* Controles operativos visibles, sin afectar el modo oscuro o el layout móvil. */
+.ow-topactions button[aria-label="Activar sonido de pedidos"],.ow-topactions button[aria-label="Probar sonido de pedido"]{border:1px solid color-mix(in srgb,var(--accent) 25%,var(--ow-line,var(--line)));background:color-mix(in srgb,var(--accent) 8%,var(--ow-card,var(--surface)));color:var(--ow-ink,var(--ink));border-radius:13px}
+.ow-topactions button[aria-label="Activar sonido de pedidos"]:focus-visible,.ow-topactions button[aria-label="Probar sonido de pedido"]:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+
+@supports not (background:color-mix(in srgb,#fff,#000)){
+ .ow-mode-switch,.ow-topactions button[aria-label="Activar sonido de pedidos"],.ow-topactions button[aria-label="Probar sonido de pedido"]{background:var(--ow-card,var(--surface));border-color:var(--ow-line,var(--line))}
+ .ow-mode-switch button.selected{background:var(--ow-bg,var(--soft))}
+}
+/* Registro local de relevos: diseño útil y legible en turnos largos */
+.ow-shift-history{display:grid;gap:9px;margin-top:20px;border-top:1px solid var(--ow-line,var(--line));padding-top:16px}
+.ow-shift-history h3{font-size:15px;letter-spacing:-.02em;margin:0 0 4px}
+.ow-shift-history article{padding:12px 14px;border-radius:12px;border:1px solid var(--ow-line,var(--line));background:var(--ow-card,var(--surface))}
+.ow-shift-history article strong{display:block;font-size:11px;color:var(--ow-sub,var(--muted));margin-bottom:5px}
+.ow-shift-history article p{font-size:12px;line-height:1.55;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}

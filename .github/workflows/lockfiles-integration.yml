@@ -1,0 +1,55 @@
+name: Congelar dependencias - candidata Dvolada
+on:
+  push:
+    branches: [integration/dvolada-main-candidate-20261121]
+    paths:
+      - 'package.json'
+      - 'server/package.json'
+      - '.github/workflows/lockfiles-integration.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: lockfiles-dvolada-integration
+  cancel-in-progress: false
+jobs:
+  lock:
+    if: github.repository == 'dvoladanexora/DVolada-3.0.' && github.ref == 'refs/heads/integration/dvolada-main-candidate-20261121'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: integration/dvolada-main-candidate-20261121
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Actualizar solo las dependencias declaradas sin scripts de instalación
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm --prefix server install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Confirmar reproducibilidad del frontend y servidor
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix server ci --ignore-scripts --no-audit --no-fund
+      - name: Preservar pruebas esenciales de React QA y D1
+        run: |
+          npm run test:live
+          npm run test:access
+          npm run test:push
+          node --experimental-sqlite --test backend/tests/worker.test.js
+      - name: Guardar lockfiles SOLO en rama de integración
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- package-lock.json server/package-lock.json
+          if git diff --cached --quiet; then
+            echo 'Dependencias ya congeladas'; exit 0
+          fi
+          git commit -m 'build(integration): regenerate reproducible npm lockfiles'
+          git push origin HEAD:refs/heads/integration/dvolada-main-candidate-20261121
+      - name: Comprobar vulnerabilidades sin ocultar problemas
+        run: |
+          npm audit --audit-level=high
+          npm --prefix server audit --omit=dev --audit-level=high

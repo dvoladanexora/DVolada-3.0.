@@ -36,3 +36,14 @@ test('menús públicos no exponen secciones experimentales',()=>{
  assert.ok(app.includes("if(isPubliclyHidden(p))p='home'"));
  assert.ok(app.includes("page==='admin'&&INTERNAL_PREVIEW_ENABLED"));
 });
+
+test('Navegación principal accesible con teclado y pestañas móviles identificadas',()=>{
+ const app=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
+ assert.ok(app.includes('className="dv-skip-link" href="#dv-main-content"'));
+ assert.ok(app.includes('<main id="dv-main-content" tabIndex={-1}>'));
+ assert.ok(app.includes('aria-label="Navegación principal móvil"'));
+ assert.ok(app.includes("aria-current={page===id?'page':undefined}"));
+ assert.ok(css.includes('.dv-skip-link:focus-visible'));
+ assert.ok(css.includes('.dv32 :is(button,a,input,select,textarea,[role=slider]):focus-visible'));
+});

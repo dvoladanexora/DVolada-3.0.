@@ -80,6 +80,23 @@ export default function LiveApp(){
   catch{return null}
  },[configured]);
 
+ const endLocalSession=useCallback(()=>{
+  sessionRef.current=null;checkoutKey.current=null;
+  setSession(null);setScope('customer');setSelectedRestaurantId('');
+  setOrders([]);setOrderDetail(null);setManageProducts([]);setRestaurantCapabilities(null);
+  setCouriers([]);setCourierChoice({});setAdminStats(null);setAdminRestaurants([]);
+  setCart([]);setCartRestaurantId('');setShoppingRestaurant('');setProducts([]);
+  setSelectedPin(null);setPinEntry('');setPhone('');setDeliveryAddress('');
+  setPushEnabled(false);setRefreshWarning('');setStatus('');
+ },[]);
+ const handleSessionError=useCallback(error=>{
+  if(!(error instanceof LiveApiError)||error.status!==401)return false;
+  endLocalSession();
+  setError('La sesión venció. Iniciá sesión nuevamente.');
+  if(pushConfig?.enabled)disableQaPush(pushConfig).catch(()=>{});
+  return true;
+ },[endLocalSession,pushConfig]);
+
  const panelRef=useRef(null),latestRead=useRef(0);
  if(panelRef.current?.scope!==scope||panelRef.current?.restaurantId!==selectedRestaurantId){
   panelRef.current={scope,restaurantId:selectedRestaurantId};
@@ -123,10 +140,11 @@ export default function LiveApp(){
  useEffect(()=>{
   if(!session||!api||offline||busy)return;
   let live=true;
-  load(scope,selectedRestaurantId).catch(e=>{if(live)setError(errorLabel(e))});
-  const timer=setInterval(()=>{if(live)load(scope,selectedRestaurantId).catch(()=>{})},15000);
+  const onReadError=error=>{if(live&&!handleSessionError(error))setError(errorLabel(error))};
+  load(scope,selectedRestaurantId).catch(onReadError);
+  const timer=setInterval(()=>{if(live)load(scope,selectedRestaurantId).catch(onReadError)},15000);
   return()=>{live=false;clearInterval(timer)};
- },[session,api,scope,selectedRestaurantId,load,busy,offline]);
+ },[session,api,scope,selectedRestaurantId,load,busy,offline,handleSessionError]);
 
  async function run(fn,{refresh=true}={}){
   if(busy||offline)return;
@@ -135,11 +153,11 @@ export default function LiveApp(){
    const result=await fn();
    if(refresh){
     try{await load(scope,selectedRestaurantId)}
-    catch{setRefreshWarning('El cambio se guardó. Tocá Actualizar para volver a cargar los datos.')}
+    catch(error){if(!handleSessionError(error))setRefreshWarning('El cambio se guardó. Tocá Actualizar para volver a cargar los datos.')}
    }
    return result;
   }
-  catch(e){setError(errorLabel(e));if(e instanceof LiveApiError&&e.status===409){load(scope,selectedRestaurantId).catch(()=>{})}}
+  catch(e){if(!handleSessionError(e)){setError(errorLabel(e));if(e instanceof LiveApiError&&e.status===409){load(scope,selectedRestaurantId).catch(()=>{})}}}
   finally{if(alive.current)setBusy(false)}
  }
  async function signIn(event){
@@ -193,9 +211,8 @@ export default function LiveApp(){
     setPushEnabled(false);
    }
    if(sessionRef.current)await api.logout().catch(()=>{});
-   sessionRef.current=null;setSession(null);setOrders([]);setCart([]);setCartRestaurantId('');setShoppingRestaurant('');setProducts([]);
-   checkoutKey.current=null;setScope('customer');setSelectedPin(null);setPhone('');setDeliveryAddress('');setRefreshWarning('');
-   setStatus(pushFailure?'Sesión cerrada. Revisá el permiso de notificaciones de este sitio en el navegador.':'');
+   endLocalSession();
+   if(pushFailure)setStatus('Sesión cerrada. Revisá el permiso de notificaciones de este sitio en el navegador.');
   }catch(e){setError(errorLabel(e))}
   finally{setBusy(false)}
  }

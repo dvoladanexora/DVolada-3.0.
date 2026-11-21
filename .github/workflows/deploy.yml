@@ -1,11 +1,6 @@
 name: Publicar D Volada 3.0
+# No publicar al fusionar PR: el lanzamiento requiere autorización manual.
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - '.github/ISSUE_TEMPLATE/**'
   workflow_dispatch:
 permissions:
   contents: read
@@ -16,6 +11,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
+    if: github.ref == 'refs/heads/main' && github.repository == 'dvoladanexora/DVolada-3.0.'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -23,16 +19,34 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
+      - name: Exigir lockfiles reproducibles antes de publicar
+        run: |
+          test -f package-lock.json
+          test -f server/package-lock.json
+      - name: Instalar versiones revisadas
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix server ci --ignore-scripts --no-audit --no-fund
+      - name: Rechazar vulnerabilidades altas conocidas
+        run: |
+          npm audit --audit-level=high
+          npm --prefix server audit --omit=dev --audit-level=high
       - name: Probar API Online antes de publicar
         run: npm run test:online
       - name: Comprobar temas oficiales antes de publicar
         run: npm run test:theme
+      - name: Validar las pruebas de módulos antes de publicar
+        run: npm run test:all
+      - name: Verificar el servidor legado aislado
+        run: npm run check:server
       - run: npm run build
+      - name: Impedir que se publique el Device Studio interno
+        run: test ! -e dist/device-studio.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
   deploy:
+    if: github.ref == 'refs/heads/main' && github.repository == 'dvoladanexora/DVolada-3.0.'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

@@ -1,0 +1,51 @@
+/* Ficha de restaurante Dvolada Cloud · Liquid Glass editorial */
+.dv-business-settings{border-radius:24px;border:1px solid var(--ow-line,var(--line));background:color-mix(in srgb,var(--ow-card,var(--surface)) 94%,transparent);color:var(--ow-ink,var(--ink));padding:clamp(18px,3vw,29px);margin-bottom:18px;box-shadow:0 9px 32px #00000009}
+.dv-business-settings>header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:23px}
+.dv-business-eyebrow{font-size:10px;letter-spacing:.12em;font-weight:850;color:var(--accent);display:inline-flex;align-items:center;gap:7px}
+.dv-business-settings h2{font-size:clamp(22px,3vw,30px);line-height:1.14;letter-spacing:-.04em;margin:9px 0}
+.dv-business-settings p{font-size:12px;line-height:1.55;margin:0;color:var(--ow-sub,var(--muted))}
+.dv-business-local-badge{flex-shrink:0;display:inline-flex;align-items:center;gap:7px;padding:8px 11px;background:color-mix(in srgb,var(--accent) 9%,var(--ow-card,var(--surface)));color:var(--ow-ink,var(--ink));border:1px solid color-mix(in srgb,var(--accent) 27%,var(--ow-line,var(--line)));border-radius:99px;font-size:11px;font-weight:800}
+.dv-business-form-grid{display:grid;grid-template-columns:minmax(190px,.56fr) minmax(0,1.45fr);gap:24px}
+.dv-business-photo-area{display:grid;align-content:start;gap:10px}
+.dv-business-photo-preview{aspect-ratio:4/3;min-height:195px;display:grid;place-content:center;justify-items:center;gap:9px;border-radius:17px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 12%,var(--ow-bg,var(--soft))),var(--ow-bg,var(--soft)));border:1px dashed var(--ow-line,var(--line));color:var(--ow-sub,var(--muted));overflow:hidden}
+.dv-business-photo-preview img{width:100%;height:100%;object-fit:cover;display:block}
+.dv-business-photo-preview small{font-size:12px;font-weight:700}
+.dv-business-photo-button{display:flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:11px;border-radius:13px;border:1px solid var(--ow-line,var(--line));background:var(--ow-bg,var(--soft));font-size:12px;font-weight:800;cursor:pointer}
+.dv-business-photo-button input{position:absolute;width:1px;height:1px;opacity:0}
+.dv-business-caption{font-size:11px;line-height:1.5;color:var(--ow-sub,var(--muted))}
+.dv-business-clear-photo{justify-self:start;font-size:12px;font-weight:750;text-decoration:underline;color:#c25b3b}
+.dv-business-fields{display:grid;gap:12px}
+.dv-business-fields>label,.dv-business-field-pair label{display:grid;gap:6px;font-size:12px;font-weight:800;color:var(--ow-ink,var(--ink))}
+.dv-business-fields label>span{color:var(--accent)}
+.dv-business-fields input,.dv-business-fields textarea{width:100%;box-sizing:border-box;padding:11px 13px;background:var(--ow-bg,var(--soft));border:1px solid var(--ow-line,var(--line));color:var(--ow-ink,var(--ink));border-radius:12px;font-size:13px;font-weight:500}
+.dv-business-fields textarea{min-height:75px;resize:vertical}
+.dv-business-field-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dv-business-field-pair label>svg{color:var(--accent)}
+.dv-business-error{font-size:11px;color:#cd503f!important;font-weight:750;line-height:1.4}
+.dv-business-hours{margin-top:24px;border-top:1px solid var(--ow-line,var(--line));padding-top:21px}
+.dv-business-hours-head h3{font-size:20px;letter-spacing:-.02em;margin:8px 0}
+.dv-business-days{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:16px}
+.dv-business-day{display:grid;grid-template-columns:minmax(75px,1fr) minmax(0,1fr) minmax(0,1fr);align-items:center;gap:8px;padding:10px;border:1px solid var(--ow-line,var(--line));border-radius:13px;background:var(--ow-bg,var(--soft));min-width:0}
+.dv-business-day.active{border-color:color-mix(in srgb,var(--accent) 45%,var(--ow-line,var(--line)));background:color-mix(in srgb,var(--accent) 6%,var(--ow-card,var(--surface)))}
+.dv-business-day label{font-size:10px;font-weight:800;display:grid;gap:4px;min-width:0;color:var(--ow-sub,var(--muted))}
+.dv-business-day-toggle{display:flex!important;align-items:center;gap:6px;color:var(--ow-ink,var(--ink))!important}
+.dv-business-day-toggle input{width:17px;height:17px;accent-color:var(--accent)}
+.dv-business-day label input[type=time]{display:block;box-sizing:border-box;min-height:37px;min-width:0;max-width:100%;width:100%;padding:7px 6px;border:1px solid var(--ow-line,var(--line));background:var(--ow-card,var(--surface));color:var(--ow-ink,var(--ink));border-radius:8px;font-size:11px}
+.dv-business-day label input:disabled{opacity:.45}
+.dv-business-footer{border-top:1px solid var(--ow-line,var(--line));padding-top:20px;margin-top:25px;display:flex;align-items:center;justify-content:space-between;gap:15px}
+.dv-business-footer>div{display:flex;align-items:flex-start;gap:10px;max-width:500px}
+.dv-business-footer>div svg{flex-shrink:0;color:var(--accent)}
+.dv-business-footer span{font-size:11px;color:var(--ow-sub,var(--muted));line-height:1.5}
+.dv-business-footer button{min-height:46px;padding:12px 16px;border-radius:13px;display:inline-flex;justify-content:center;align-items:center;gap:9px;background:var(--accent);color:#fff;font-weight:850;font-size:12px;white-space:nowrap;border:1px solid var(--accent)}
+.dv-business-footer button:disabled{opacity:.5}
+.dv-business-notice{margin-top:13px!important;padding:12px 14px;border-radius:12px;background:var(--ow-bg,var(--soft));font-size:12px!important;color:var(--ow-ink,var(--ink))!important}
+.dv-business-settings input:focus-visible,.dv-business-settings textarea:focus-visible,.dv-business-settings button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:1150px){.dv-business-days{grid-template-columns:1fr}}
+@media(max-width:800px){.dv-business-form-grid{grid-template-columns:1fr}.dv-business-photo-preview{max-width:350px}.dv-business-photo-button{max-width:350px}}
+@media(max-width:580px){.dv-business-settings>header{flex-wrap:wrap}.dv-business-form-grid{gap:18px}.dv-business-field-pair{grid-template-columns:1fr}.dv-business-footer{align-items:stretch;flex-direction:column}.dv-business-footer button{width:100%}.dv-business-day{grid-template-columns:minmax(70px,.8fr) repeat(2,minmax(0,1fr));gap:6px}}
+@supports not (color:color-mix(in srgb,#fff,#000)){.dv-business-settings,.dv-business-day.active,.dv-business-photo-preview,.dv-business-local-badge{background:var(--ow-card,var(--surface))}}
+
+/* Accesibilidad: resumen de campos inválidos y foco visible. */
+.dv-business-error-summary{margin:0 0 14px;padding:12px 16px;border:1px solid #c65d42;border-radius:12px;background:var(--ow-bg,#fffaf6);color:var(--ow-ink,#2b3336);font-weight:750;font-size:13px;line-height:1.5}
+.dv-business-settings [aria-invalid=true]{border-color:#c65d42!important;box-shadow:0 0 0 1px #c65d4244}
+.dv-business-settings [aria-invalid=true]:focus-visible{outline:3px solid #c65d42;outline-offset:2px}

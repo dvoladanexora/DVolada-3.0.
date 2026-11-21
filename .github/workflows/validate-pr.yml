@@ -22,8 +22,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Instalar dependencias
-        run: npm install --no-audit --no-fund
+      - name: Instalar dependencias con versiones congeladas
+        run: npm ci --no-audit --no-fund
+      - name: Rechazar vulnerabilidades altas conocidas
+        run: |
+          npm audit --audit-level=high
+          npm --prefix server audit --omit=dev --audit-level=high
       - name: Pruebas de API Online
         run: npm run test:online
       - name: Pruebas de bienvenida, feed y publicidad
@@ -59,6 +63,8 @@ jobs:
         run: npm run build
       - name: Compilar la demostración pública de GitHub Pages
         run: npm run build
+      - name: Verificar que no se publique Device Studio
+        run: test ! -e dist/device-studio.html
       - name: Empaquetar la aplicación de QA con sus paneles habilitados
         env:
           VITE_DVOLADA_LIVE_MODE: 'true'
@@ -106,8 +112,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Instalar frontend
-        run: npm install --no-audit --no-fund
+      - name: Instalar frontend de forma reproducible
+        run: npm ci --no-audit --no-fund
       - name: Probar acceso, OneSignal, PWA y cliente API
         run: |
           npm run test:live

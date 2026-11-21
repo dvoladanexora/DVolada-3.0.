@@ -8,7 +8,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -573,4 +573,76 @@ test('a rejected or replaced assignment never reaches the former courier',async(
   by:'courier',method:'POST',key:randomUUID(),body:{action:'reject',expectedVersion:3}
  })).status,200);
  assert.equal(await qaPushAudience(f.DB,job),null);
+});
+
+test('checkout recovery is scoped to the customer and resolves the same confirmed order',async()=>{
+ const f=await fixture();
+ const key=randomUUID();
+ const lookup=(by='customer')=>f.call('/api/v1/customer/orders/checkout',{key,by});
+ assert.equal((await lookup()).status,404);
+ const created=await f.create({key});
+ assert.equal(created.status,201);
+ assert.equal((await lookup('customer2')).status,404);
+ const recovered=await lookup();
+ assert.equal(recovered.body.order.id,created.body.order.id);
+ assert.equal(recovered.body.order.items[0].product_id,f.productIds[0]);
+ assert.equal((await f.create({key})).body.order.id,created.body.order.id);
+ assert.equal(f.DB.db.prepare('SELECT COUNT(*) AS count FROM online_orders').get().count,1);
+});
+
+test('stale displayed totals are rejected and a fee change during commit rolls back checkout',async()=>{
+ const f=await fixture();
+ const body={restaurantId:f.restaurants[0],items:[{productId:f.productIds[0],quantity:1}],
+  deliveryMethod:'delivery',deliveryAddress:'Dirección ficticia QA',phone:'+50400000000',expectedTotalMinor:10549};
+ const checkout=key=>f.call('/api/v1/customer/orders',{method:'POST',key,body});
+ assert.equal((await checkout(randomUUID())).body.error,'CHECKOUT_TOTAL_CHANGED');
+ body.expectedTotalMinor=10550;
+ const batch=f.DB.batch;
+ f.DB.batch=async statements=>{
+  f.DB.db.prepare('UPDATE restaurants SET delivery_fee_minor=600 WHERE id=?').run(f.restaurants[0]);
+  return batch(statements);
+ };
+ const rejected=await checkout(randomUUID());
+ assert.equal(rejected.status,409);
+ assert.equal(rejected.body.error,'CHECKOUT_TOTAL_CHANGED');
+ assert.equal(f.DB.db.prepare('SELECT COUNT(*) AS count FROM online_orders').get().count,0);
+});
+
+test('global catalog excludes unavailable products and inactive businesses',async()=>{
+ const f=await fixture();
+ const search=term=>f.call('/api/v1/catalog/search?q='+encodeURIComponent(term));
+ assert.deepEqual((await search('bale')).body.products.map(product=>product.id),[f.productIds[0]]);
+ f.DB.db.prepare('UPDATE products SET available=0 WHERE id=?').run(f.productIds[0]);
+ assert.deepEqual((await search('bale')).body.products,[]);
+ f.DB.db.prepare("UPDATE restaurants SET subscription_status='inactive' WHERE id=?").run(f.restaurants[1]);
+ assert.deepEqual((await search('sopa')).body.products,[]);
+ assert.equal((await search('s')).status,400);
+});
+
+test('kitchen preparation is permitted while cancellations and platform audit are restricted',async()=>{
+ const f=await fixture();
+ await f.user('kitchen','customer',[f.restaurants[0],'kitchen']);
+ const {body:{order}}=await f.create();
+ assert.equal((await f.status(order.id,'kitchen','Aceptado',1)).status,403);
+ assert.equal((await f.status(order.id,'staffA','Aceptado',1)).status,200);
+ assert.equal((await f.status(order.id,'kitchen','Cancelado',2)).status,403);
+ assert.equal((await f.status(order.id,'kitchen','Preparando',2)).status,200);
+ assert.equal((await f.call('/api/v1/admin/audit',{by:'kitchen'})).status,403);
+ assert.equal((await f.call('/api/v1/admin/audit',{by:'platformAdmin'})).status,200);
+});
+
+test('changing a delivery fee preserves a concurrently updated subscription',async()=>{
+ const f=await fixture();
+ const id=f.restaurants[0],batch=f.DB.batch;
+ f.DB.batch=async statements=>{
+  f.DB.db.prepare("UPDATE restaurants SET subscription_status='inactive' WHERE id=?").run(id);
+  return batch(statements);
+ };
+ const response=await f.call('/api/v1/admin/restaurants/'+id,{
+  by:'platformAdmin',method:'PATCH',body:{deliveryFeeMinor:950},
+ });
+ assert.equal(response.status,200);
+ assert.equal(response.body.restaurant.delivery_fee_minor,950);
+ assert.equal(response.body.restaurant.subscription_status,'inactive');
+ assert.equal(response.body.restaurant.online_state,'closed');
 });

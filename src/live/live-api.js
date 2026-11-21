@@ -35,6 +35,7 @@ export function createLiveApi({baseUrl,getSessionToken,fetchImpl=fetch}){
   health:()=>request('/health',{auth:false}),
   restaurants:()=>request('/api/v1/catalog/restaurants',{auth:false}),
   products:id=>request('/api/v1/catalog/restaurants/'+s(id)+'/products',{auth:false}),
+  searchProducts:(term,signal)=>request('/api/v1/catalog/search?q='+s(term),{auth:false,signal}),
   exchange:(idToken,deviceLabel)=>request('/api/v1/auth/exchange',{auth:false,method:'POST',body:{idToken,deviceLabel}}),
   me:()=>request('/api/v1/auth/me'),
   pushIdentity:()=>request('/api/v1/push/identity',{method:'POST'}),
@@ -42,6 +43,7 @@ export function createLiveApi({baseUrl,getSessionToken,fetchImpl=fetch}){
   customerOrders:()=>request('/api/v1/customer/orders'),
   customerOrder:id=>request('/api/v1/customer/orders/'+s(id)),
   createOrder:(body,key)=>request('/api/v1/customer/orders',{method:'POST',body,key}),
+  checkoutStatus:key=>request('/api/v1/customer/orders/checkout',{key}),
   cancelOrder:(order,key)=>request('/api/v1/customer/orders/'+s(order.id)+'/cancel',{method:'POST',
    body:{expectedVersion:order.version},key}),
   restaurantOrders:(restaurantId,cursor)=>request('/api/v1/restaurant/orders'+
@@ -68,6 +70,7 @@ export function createLiveApi({baseUrl,getSessionToken,fetchImpl=fetch}){
    {method:'PATCH',key,body:{status,expectedVersion:order.version}}),
   courierDeliver:(order,pin,key)=>request('/api/v1/courier/orders/'+s(order.id)+'/deliver',
    {method:'POST',key,body:{expectedVersion:order.version,pin}}),
+  adminAudit:()=>request('/api/v1/admin/audit'),
   adminOverview:()=>request('/api/v1/admin/overview'),
   adminRestaurants:()=>request('/api/v1/admin/restaurants'),
   adminCreateRestaurant:body=>request('/api/v1/admin/restaurants',{method:'POST',body}),

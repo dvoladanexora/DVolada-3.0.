@@ -67,3 +67,18 @@
 .dvl-price-input{width:110px;min-width:85px;padding:8px;border:1px solid var(--line,#ddd);background:var(--bg,#fff);color:var(--ink,#222);border-radius:9px}
 .dvl-manage-menu .dvl-inline{flex-wrap:wrap;justify-content:flex-end}
 @media(max-width:780px){.dvl-manage-menu .dvl-row{align-items:flex-start;gap:10px}.dvl-manage-menu .dvl-inline{justify-content:flex-start}}
+
+.dvl-catalog-search{margin-bottom:12px}
+.dvl-search-results{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.dvl-cart-confirm{border:1px solid var(--line,#ddd);border-radius:12px;padding:12px;margin-bottom:14px}
+.dvl-cart-confirm .dvl-inline{flex-wrap:wrap}.dvl-cart-confirm p{margin-top:0}
+.dvl-cart-link{display:inline-flex;align-items:center;min-height:44px;margin-bottom:10px;color:inherit;text-decoration:underline}
+#carrito{scroll-margin-top:88px}
+.dvl-app .dvl-action,.dvl-app .dvl-roles>button{min-height:44px}
+.dvl-print-sheet{display:none}
+@media print {
+ body:has(>.dvl-print-sheet)>:not(.dvl-print-sheet){display:none!important}
+ body:has(>.dvl-print-sheet){background:white!important;color:black!important}
+ .dvl-print-sheet{display:block;padding:8mm;font:12pt system-ui,sans-serif;color:black;background:white}
+ .dvl-print-sheet li{margin:2mm 0;break-inside:avoid}
+}

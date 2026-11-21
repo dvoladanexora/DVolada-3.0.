@@ -5,7 +5,7 @@ import {
 import {
  restaurantOrders,restaurantOrder,changes,restaurantStatus,assignCourier,
  courierOrders,courierStatus,courierOffer,confirmDelivery,customerCreate,customerOrders,
- customerOrder,customerCancel
+ customerOrder,customerCancel,customerCheckoutStatus
 } from './orders.js';
 import { issueQaPushIdentity } from './qa-push-identity.js';
 import {createRestaurant,updateRestaurant,assignMember,enrollCourier,createProduct,
@@ -28,10 +28,21 @@ async function route(req,env){
     AND online_state IN ('open','paused') ORDER BY name,id LIMIT 100`).all();
   return respond(req,env,200,{restaurants:results});
  }
+ if(method==='GET'&&path==='/api/v1/catalog/search'){
+  const term=(url.searchParams.get('q')||'').trim();
+  if(term.length<2||term.length>60)throw new ApiError(400,'INVALID_SEARCH');
+  const {results=[]}=await env.DB.prepare(`SELECT p.id,p.name,p.price_minor,r.id AS restaurant_id,
+   r.name AS restaurant_name,r.online_state
+   FROM products p JOIN restaurants r ON r.id=p.restaurant_id
+   WHERE p.available=1 AND r.plan IN ('ONLINE','PLUS') AND r.subscription_status='active'
+   AND r.online_state IN ('open','paused') AND instr(lower(p.name),lower(?))>0
+   ORDER BY p.name,p.id LIMIT 25`).bind(term).all();
+  return respond(req,env,200,{products:results});
+ }
  const catalog=/^\/api\/v1\/catalog\/restaurants\/([0-9a-f-]+)\/products$/i.exec(path);
  if(method==='GET'&&catalog){
   const id=requireUuid(catalog[1]);
-  const rest=await env.DB.prepare(`SELECT id,name,online_state FROM restaurants WHERE id=?
+  const rest=await env.DB.prepare(`SELECT id,name,online_state,delivery_fee_minor FROM restaurants WHERE id=?
     AND plan IN ('ONLINE','PLUS') AND subscription_status='active'
     AND online_state IN ('open','paused')`).bind(id).first();
   if(!rest)throw new ApiError(404,'RESTAURANT_NOT_FOUND');
@@ -71,10 +82,17 @@ async function route(req,env){
  }
  if(method==='GET'&&path==='/api/v1/admin/restaurants'){
   if(actor.role!=='platform_admin')throw new ApiError(403,'ROLE_FORBIDDEN');
-  const {results=[]}=await env.DB.prepare(`SELECT r.id,r.name,r.plan,r.subscription_status,r.online_state,
+  const {results=[]}=await env.DB.prepare(`SELECT r.id,r.name,r.plan,r.subscription_status,r.online_state,r.delivery_fee_minor,
    COUNT(o.id) AS order_count FROM restaurants r LEFT JOIN online_orders o ON o.restaurant_id=r.id
    GROUP BY r.id ORDER BY r.name,r.id LIMIT 150`).all();
   return respond(req,env,200,{restaurants:results});
+ }
+ if(method==='GET'&&path==='/api/v1/admin/audit'){
+  if(actor.role!=='platform_admin')throw new ApiError(403,'ROLE_FORBIDDEN');
+  const {results=[]}=await env.DB.prepare(`SELECT a.id,a.action,a.created_at,u.display_name AS actor_name,r.name AS restaurant_name
+   FROM platform_audit a JOIN users u ON u.id=a.actor_id LEFT JOIN restaurants r ON r.id=a.restaurant_id
+   ORDER BY a.id DESC LIMIT 30`).all();
+  return respond(req,env,200,{events:results});
  }
  if(method==='POST'&&path==='/api/v1/admin/restaurants')
   return respond(req,env,201,await createRestaurant(req,env,actor));
@@ -142,6 +160,8 @@ async function route(req,env){
   return respond(req,env,200,await confirmDelivery(req,env,actor,deliver[1]));
  if(method==='GET'&&path==='/api/v1/customer/orders')
   return respond(req,env,200,await customerOrders(env,actor));
+ if(method==='GET'&&path==='/api/v1/customer/orders/checkout')
+  return respond(req,env,200,await customerCheckoutStatus(req,env,actor));
  if(method==='POST'&&path==='/api/v1/customer/orders')
   return respond(req,env,201,await customerCreate(req,env,actor));
  const customerDetail=/^\/api\/v1\/customer\/orders\/([0-9a-f-]+)$/i.exec(path);

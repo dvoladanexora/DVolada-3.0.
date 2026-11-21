@@ -11,13 +11,19 @@ const headers = {
 };
 
 export default {
-  async scheduled(_event, env) { await drainQaOrderPush(env); },
+  async scheduled(_event, env) {
+    if (env.QA_PUSH_ALLOWED === 'true') await drainQaOrderPush(env);
+  },
   async fetch(request, env, ctx) {
     const { hostname, pathname } = new URL(request.url);
     if (env.DVOLADA_QA_HOST !== hostname) return new Response(null, { status: 404 });
     if (pathname === '/health' || pathname.startsWith('/api/v1/')) {
+      if (pathname === '/api/v1/push/identity' && env.QA_PUSH_ALLOWED !== 'true')
+        return new Response(JSON.stringify({ error: 'PUSH_SETUP_PENDING' }), {
+          status: 503, headers: { ...headers, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        });
       const response = await api.fetch(request, env);
-      if (response.ok && ['POST','PATCH'].includes(request.method) &&
+      if (env.QA_PUSH_ALLOWED === 'true' && response.ok && ['POST','PATCH'].includes(request.method) &&
           /^\/api\/v1\/(customer|restaurant|courier)\/orders(?:\/|$)/.test(pathname) &&
           qaOrderPushConfigured(env)) {
         ctx.waitUntil(drainQaOrderPush(env));
@@ -26,7 +32,7 @@ export default {
     }
     if (!['GET', 'HEAD'].includes(request.method)) return new Response(null, { status: 405 });
     if (pathname === '/push-config') {
-      const appId = qaPushAppId(request, env);
+      const appId = env.QA_PUSH_ALLOWED === 'true' ? qaPushAppId(request, env) : null;
       return new Response(request.method === 'HEAD' ? null : JSON.stringify({ enabled: Boolean(appId), appId }), {
         headers: { ...headers, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
       });

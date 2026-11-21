@@ -28,15 +28,17 @@ export async function updateRestaurant(req,env,actor,restaurantId){
  requireRole(actor,'platform_admin');
  const id=requireUuid(restaurantId),body=await readJson(req);requireKeys(body,['name','plan','subscriptionStatus','deliveryFeeMinor']);
  if(!Object.keys(body).length)throw new ApiError(400,'INVALID_BODY');
- const before=await getRest(env,id);
- const name=body.name===undefined?before.name:requireText(body.name,2,160,'name');
- const plan=body.plan===undefined?before.plan:pick(body.plan,plans,'plan');
- const subscription=body.subscriptionStatus===undefined?before.subscription_status:
+ await getRest(env,id);
+ const name=body.name===undefined?null:requireText(body.name,2,160,'name');
+ const plan=body.plan===undefined?null:pick(body.plan,plans,'plan');
+ const subscription=body.subscriptionStatus===undefined?null:
   pick(body.subscriptionStatus,['active','inactive'],'subscriptionStatus');
- const fee=body.deliveryFeeMinor===undefined?before.delivery_fee_minor:countMinor(body.deliveryFeeMinor);
+ const fee=body.deliveryFeeMinor===undefined?null:countMinor(body.deliveryFeeMinor);
  await env.DB.batch([
-  env.DB.prepare(`UPDATE restaurants SET name=?,plan=?,subscription_status=?,delivery_fee_minor=?,
-   online_state=CASE WHEN ?='inactive' OR ?='LOCAL' THEN 'closed' ELSE online_state END WHERE id=?`)
+  env.DB.prepare(`UPDATE restaurants SET name=COALESCE(?,name),plan=COALESCE(?,plan),
+   subscription_status=COALESCE(?,subscription_status),delivery_fee_minor=COALESCE(?,delivery_fee_minor),
+   online_state=CASE WHEN COALESCE(?,subscription_status)='inactive' OR COALESCE(?,plan)='LOCAL'
+    THEN 'closed' ELSE online_state END WHERE id=?`)
    .bind(name,plan,subscription,fee,subscription,plan,id),
   env.DB.prepare(`INSERT INTO platform_audit(actor_id,restaurant_id,action)
    VALUES(?,?,'restaurant_updated')`).bind(actor.userId,id)
@@ -101,17 +103,20 @@ export async function updateProduct(req,env,actor,access,productId){
  if(!current)throw new ApiError(404,'PRODUCT_NOT_FOUND');
  const body=await readJson(req);requireKeys(body,['name','priceMinor','available']);
  if(!Object.keys(body).length)throw new ApiError(400,'INVALID_BODY');
- const name=body.name===undefined?current.name:requireText(body.name,2,150,'name');
- const price=body.priceMinor===undefined?current.price_minor:countMinor(body.priceMinor);
+ const name=body.name===undefined?null:requireText(body.name,2,150,'name');
+ const price=body.priceMinor===undefined?null:countMinor(body.priceMinor);
  if(body.available!==undefined&&typeof body.available!=='boolean')throw new ApiError(400,'INVALID_INPUT');
- const available=body.available===undefined?current.available:body.available?1:0;
+ const available=body.available===undefined?null:body.available?1:0;
  await env.DB.batch([
-  env.DB.prepare('UPDATE products SET name=?,price_minor=?,available=? WHERE id=? AND restaurant_id=?')
+  env.DB.prepare(`UPDATE products SET name=COALESCE(?,name),price_minor=COALESCE(?,price_minor),
+   available=COALESCE(?,available) WHERE id=? AND restaurant_id=?`)
    .bind(name,price,available,id,access.restaurantId),
   env.DB.prepare(`INSERT INTO restaurant_audit(restaurant_id,actor_id,product_id,action)
    VALUES(?,?,?,'product_updated')`).bind(access.restaurantId,actor.userId,id)
  ]);
- return {product:{id,name,priceMinor:price,available:Boolean(available)}};
+ const product=await env.DB.prepare('SELECT name,price_minor,available FROM products WHERE id=? AND restaurant_id=?')
+  .bind(id,access.restaurantId).first();
+ return {product:{id,name:product.name,priceMinor:product.price_minor,available:Boolean(product.available)}};
 }
 export async function updateAvailability(req,env,actor,access){
  requireStaff(access.staff_role,['owner','manager']);

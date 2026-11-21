@@ -114,6 +114,8 @@ export async function restaurantStatus(req,env,actor,access,orderId){
  const prior=await env.DB.prepare('SELECT request_key FROM order_actions WHERE actor_id=? AND request_key=?')
   .bind(actor.userId,key).first();
  if(!prior){
+  if(access.staff_role==='kitchen'&&!['Preparando','Listo'].includes(status))
+   throw new ApiError(403,'ROLE_FORBIDDEN');
   if(current.status==='Listo'&&status==='Entregado'&&current.delivery_method!=='pickup')
    throw new ApiError(422,'COURIER_DELIVERY_REQUIRED');
   assertStatusMove(current.status,status,staffMoves);
@@ -191,7 +193,7 @@ export async function courierOrders(env,actor){
  const {results=[]}=await env.DB.prepare(`${dataOrder} WHERE courier_id=?
   AND status NOT IN ('Entregado','Cancelado','Rechazado') ORDER BY created_at DESC,id LIMIT 20`)
   .bind(actor.userId).all();
- return {orders:results.map(x=>orderDto(x,{includeAddress:true}))};
+ return {orders:results.map(x=>orderDto(x,{includeAddress:x.courier_response==='accepted'}))};
 }
 export async function courierStatus(req,env,actor,orderId){
  await assertCourierActive(env,actor);
@@ -229,7 +231,7 @@ export async function customerCreate(req,env,actor){
  requireRole(actor,'customer');
  if(env.ORDER_CREATION_ENABLED!=='true')throw new ApiError(503,'ORDER_CREATION_DISABLED');
  const body=await readJson(req,16384);
- requireKeys(body,['restaurantId','items','deliveryMethod','deliveryAddress','phone']);
+ requireKeys(body,['restaurantId','items','deliveryMethod','deliveryAddress','phone','expectedTotalMinor']);
  const phone=typeof body.phone==='string'?body.phone.replace(/[\s()-]/g,''):'';
  if(!/^\+504[0-9]{8}$/.test(phone))throw new ApiError(400,'PHONE_REQUIRED');
  const restaurantId=requireUuid(body.restaurantId,'restaurantId');
@@ -244,7 +246,9 @@ export async function customerCreate(req,env,actor){
  });
  if(new Set(items.map(x=>x.productId)).size!==items.length)throw new ApiError(400,'DUPLICATE_PRODUCT');
  const key=idempotencyKey(req);
- const intent={restaurantId,deliveryMethod,deliveryAddress,phone,items};
+ const expectedTotalMinor=body.expectedTotalMinor===undefined?undefined:
+  requireInteger(body.expectedTotalMinor,0,2000000000,'expectedTotalMinor');
+ const intent={restaurantId,deliveryMethod,deliveryAddress,phone,items,expectedTotalMinor};
  const hash=await sha256(JSON.stringify(intent));
  const replay=async()=>{
   const prev=await env.DB.prepare(`SELECT c.request_hash,o.* FROM order_create_requests c
@@ -252,7 +256,7 @@ export async function customerCreate(req,env,actor){
     .bind(actor.userId,key).first();
   if(!prev)return null;
   if(prev.request_hash!==hash)throw new ApiError(409,'IDEMPOTENCY_KEY_REUSED');
-  return {order:orderDto(prev),deliveryPin:deliveryMethod==='delivery'
+  return {order:orderDto(prev),deliveryPin:deliveryMethod==='delivery'&&!CLOSED.includes(prev.status)
     ?await deliveryPin(env.PIN_SECRET,prev.id):null,replayed:true};
  };
  const prior=await replay();if(prior)return prior;
@@ -260,17 +264,21 @@ export async function customerCreate(req,env,actor){
    AND plan IN ('ONLINE','PLUS') AND subscription_status='active' AND online_state='open'`)
    .bind(restaurantId).first();
  if(!restaurant)throw new ApiError(409,'RESTAURANT_NOT_ACCEPTING');
- const resolved=[];
- for(const item of items){
-  const p=await env.DB.prepare(`SELECT id,name,price_minor FROM products
-   WHERE id=? AND restaurant_id=? AND available=1`).bind(item.productId,restaurantId).first();
+ const {results=[]}=await env.DB.prepare(`SELECT id,name,price_minor FROM products
+  WHERE restaurant_id=? AND available=1 AND id IN (${items.map(()=>'?').join(',')})`)
+  .bind(restaurantId,...items.map(item=>item.productId)).all();
+ const catalog=new Map(results.map(product=>[product.id,product]));
+ const resolved=items.map(item=>{
+  const p=catalog.get(item.productId);
   if(!p)throw new ApiError(409,'PRODUCT_UNAVAILABLE');
-  resolved.push({...p,quantity:item.quantity});
- }
+  return {...p,quantity:item.quantity};
+ });
  const subtotal=resolved.reduce((sum,p)=>sum+p.price_minor*p.quantity,0);
  const fee=deliveryMethod==='delivery'?restaurant.delivery_fee_minor:0;
  if(!Number.isSafeInteger(subtotal)||subtotal+fee>2000000000)
   throw new ApiError(400,'INVALID_TOTAL');
+ if(expectedTotalMinor!==undefined&&expectedTotalMinor!==subtotal+fee)
+  throw new ApiError(409,'CHECKOUT_TOTAL_CHANGED');
  const id=crypto.randomUUID(),orderNumber='DV-'+id.replaceAll('-','').slice(0,12).toUpperCase();
  const stmts=[
   env.DB.prepare(`INSERT INTO online_orders(id,restaurant_id,customer_id,order_number,delivery_method,
@@ -296,12 +304,21 @@ export async function customerOrders(env,actor){
   .bind(actor.userId).all();
  return {orders:results.map(x=>orderDto(x))};
 }
+export async function customerCheckoutStatus(req,env,actor){
+ requireRole(actor,'customer');
+ const key=idempotencyKey(req);
+ const row=await env.DB.prepare(`SELECT o.id FROM order_create_requests c
+   JOIN online_orders o ON o.id=c.order_id AND o.customer_id=c.user_id
+   WHERE c.user_id=? AND c.request_key=?`).bind(actor.userId,key).first();
+ if(!row)throw new ApiError(404,'CHECKOUT_NOT_FOUND');
+ return customerOrder(env,actor,row.id);
+}
 export async function customerOrder(env,actor,orderId){
  requireRole(actor,'customer');
  const order=await env.DB.prepare(`${dataOrder} WHERE customer_id=? AND id=?`)
    .bind(actor.userId,requireUuid(orderId)).first();
  if(!order)throw new ApiError(404,'ORDER_NOT_FOUND');
- const {results=[]}=await env.DB.prepare(`SELECT name_snapshot,unit_price_minor,quantity,line_total_minor
+ const {results=[]}=await env.DB.prepare(`SELECT product_id,name_snapshot,unit_price_minor,quantity,line_total_minor
     FROM online_order_items WHERE order_id=? ORDER BY id`).bind(order.id).all();
  return {order:{...orderDto(order,{includeAddress:true}),items:results},
   deliveryPin:order.delivery_method==='delivery'&&!CLOSED.includes(order.status)

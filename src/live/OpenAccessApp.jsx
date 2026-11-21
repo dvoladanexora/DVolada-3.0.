@@ -1,8 +1,10 @@
-import React,{useEffect,useMemo,useState} from 'react';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {ShoppingBag,Search,MapPin,Phone,Store,WifiOff,ShieldCheck,Bell,BellOff} from 'lucide-react';
 import {isDvoladaPushConfigured,enableDvoladaPush,disableDvoladaPush} from './onesignal-push.js';
 import {createLiveApi} from './live-api.js';
 import {applyDvoladaTheme} from '../theme-policy.js';
+import CatalogSearch from './CatalogSearch.jsx';
+import {readCart,writeCart,updateQuantity} from './cart-draft.js';
 import './live.css';
 
 /**
@@ -17,8 +19,10 @@ const API_ORIGIN=import.meta.env.VITE_DVOLADA_API_URL||(stagingPanels?window.loc
 export default function OpenAccessApp(){
  const [restaurants,setRestaurants]=useState([]);
  const [selected,setSelected]=useState(null),[products,setProducts]=useState([]);
- const [search,setSearch]=useState(''),[cart,setCart]=useState([]);
- const [cartRestaurantId,setCartRestaurantId]=useState(null);
+ const [draft,setDraft]=useState(()=>readCart('guest'));
+ const {items:cart,restaurantId:cartRestaurantId}=draft;
+ const [search,setSearch]=useState(''),[replaceCart,setReplaceCart]=useState(null);
+ const menuRequest=useRef(0);
  const [name,setName]=useState(''),[phone,setPhone]=useState(''),[address,setAddress]=useState('');
  const [mode,setMode]=useState('delivery'),[message,setMessage]=useState('');
  const [theme,setTheme]=useState('light'),[offline,setOffline]=useState(!navigator.onLine);
@@ -27,6 +31,7 @@ export default function OpenAccessApp(){
   if(!API_ORIGIN)return null;
   try{return createLiveApi({baseUrl:API_ORIGIN,getSessionToken:()=>null})}catch{return null}
  },[]);
+ useEffect(()=>{writeCart('guest',draft)},[draft]);
  useEffect(()=>{
   const media=matchMedia('(prefers-color-scheme: dark)');
   const update=()=>applyDvoladaTheme({root:document.documentElement,themeColorMeta:document.querySelector('meta[name="theme-color"]'),
@@ -62,21 +67,24 @@ export default function OpenAccessApp(){
    setMessage(notices[result.status]||'La configuración de notificaciones todavía no está lista.');
   }catch{setPushStatus('off');setMessage('No se pudieron configurar las notificaciones. Probá nuevamente.');}
  }
- async function openRestaurant(r){
+ async function openRestaurant(id){
   if(!api||offline)return;
   setMessage('');
-  try{const response=await api.products(r.id);if(cartRestaurantId!==r.id)setCart([]);setCartRestaurantId(r.id);setSelected(r);setProducts(response.products||[])}
-  catch{setMessage('No se pudo cargar el menú. No se creó ningún pedido.')}
+  const request=++menuRequest.current;
+  try{
+   const response=await api.products(id);
+   if(request!==menuRequest.current)return;
+   setSelected(response.restaurant);setProducts(response.products||[]);
+  }catch{if(request===menuRequest.current)setMessage('No se pudo cargar el menú. No se creó ningún pedido.')}
  }
- function adjust(item,delta){
-  setCart(previous=>{
-   const entry=previous.find(x=>x.id===item.id);
-   if(!entry&&delta>0)return [...previous,{id:item.id,name:item.name,price:item.price_minor,qty:1}];
-   return previous.map(x=>x.id===item.id?{...x,qty:Math.min(25,Math.max(0,x.qty+delta))}:x).filter(x=>x.qty>0);
-  });
+ function add(item){
+  const product={productId:item.id,name:item.name,priceMinor:item.price_minor};
+  const next={restaurantId:selected.id,items:updateQuantity(cartRestaurantId===selected.id?cart:[],product,1)};
+  if(cart.length&&cartRestaurantId!==selected.id)setReplaceCart(next);
+  else setDraft(next);
  }
  const visible=restaurants.filter(r=>r.name.toLowerCase().includes(search.trim().toLowerCase()));
- const subtotal=cart.reduce((sum,p)=>sum+p.price*p.qty,0);
+ const subtotal=cart.reduce((sum,p)=>sum+p.priceMinor*p.quantity,0);
  const fee=mode==='delivery'?(restaurants.find(r=>r.id===cartRestaurantId)?.delivery_fee_minor||0):0;
  const validPhone=/^[0-9]{8}$/.test(phone);
  const canAttempt=!!(cart.length&&name.trim().length>=2&&validPhone&&(mode==='pickup'||address.trim().length>=8));
@@ -103,23 +111,30 @@ export default function OpenAccessApp(){
    <div className="dvl-columns">
     <section className="dvl-panel">
      <h2><Store size={20}/> {selected?selected.name:'Restaurantes afiliados'}</h2>
-     {selected&&<button className="dvl-action secondary" onClick={()=>{setSelected(null);setProducts([])}}>Volver a restaurantes</button>}
-     {!selected&&<><label>Buscar restaurante<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="¿Qué se te antoja?"/></label>
+     {selected&&<button className="dvl-action secondary" onClick={()=>{menuRequest.current++;setSelected(null);setProducts([])}}>Volver a restaurantes</button>}
+     {!selected&&<><CatalogSearch api={api} offline={offline} term={search} onChange={setSearch} openRestaurant={openRestaurant} money={money}/>
       <div className="dvl-stack" style={{marginTop:18}}>{visible.map(r=><div className="dvl-row" key={r.id}><div>
        <strong>{r.name}</strong><small>{r.online_state==='open'?'Aceptando pedidos':'En pausa'}</small></div>
-       <button className="dvl-action secondary" disabled={offline||r.online_state!=='open'} onClick={()=>openRestaurant(r)}>Ver productos</button>
+       <button className="dvl-action secondary" disabled={offline||r.online_state!=='open'} onClick={()=>openRestaurant(r.id)}>Ver productos</button>
       </div>)}
       {!visible.length&&<p>No hay negocios disponibles todavía.</p>}</div></>}
      {selected&&<div className="dvl-stack" style={{marginTop:18}}>{products.map(p=><div key={p.id} className="dvl-row"><div>
        <strong>{p.name}</strong><small>{money(p.price_minor)}</small></div>
-       <button className="dvl-action secondary" onClick={()=>adjust(p,1)}>Agregar</button>
+       <button className="dvl-action secondary" disabled={offline||selected.online_state!=='open'} onClick={()=>add(p)}>Agregar</button>
       </div>)}{!products.length&&<p>Este negocio todavía no tiene productos.</p>}</div>}
     </section>
     <section className="dvl-panel">
      <h2><ShoppingBag size={20}/> Mi pedido</h2>
+     {replaceCart&&<div className="dvl-cart-confirm" role="group" aria-label="Cambiar carrito">
+      <p>Cada pedido corresponde a un restaurante. ¿Querés reemplazar el carrito actual?</p>
+      <div className="dvl-inline">
+       <button className="dvl-action" onClick={()=>{setDraft(replaceCart);setReplaceCart(null)}}>Reemplazar</button>
+       <button className="dvl-action secondary" onClick={()=>setReplaceCart(null)}>Conservar carrito</button>
+      </div>
+     </div>}
      {!cart.length&&<p>Agregá un producto para comenzar.</p>}
-     {cart.map(p=><div className="dvl-row" key={p.id}><div><strong>{p.name}</strong><small>{money(p.price)} × {p.qty}</small></div>
-      <button className="dvl-action secondary" onClick={()=>adjust({id:p.id},-1)}>−</button></div>)}
+     {cart.map(p=><div className="dvl-row" key={p.productId}><div><strong>{p.name}</strong><small>{money(p.priceMinor)} × {p.quantity}</small></div>
+      <button className="dvl-action secondary" onClick={()=>setDraft(current=>({...current,items:updateQuantity(current.items,p,-1)}))}>Quitar uno</button></div>)}
      {cart.length>0&&<><div className="dvl-row"><strong>Productos</strong><strong>{money(subtotal)}</strong></div>
       <div className="dvl-row"><strong>Envío de referencia</strong><strong>{money(fee)}</strong></div>
       <div className="dvl-row dvl-total"><strong>Total de referencia</strong><strong>{money(subtotal+fee)}</strong></div>

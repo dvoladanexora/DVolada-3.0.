@@ -8,7 +8,7 @@ test('live build is public and no longer requires Firebase',()=>{
  assert.match(main,/IS_LIVE_BUILD\?<OpenAccessApp\/>/);
  assert.doesNotMatch(publicView,/firebase|signInWithEmailAndPassword|createUserWithEmailAndPassword/i);
  assert.match(publicView,/api\.restaurants\(\)/);
- assert.match(publicView,/api\.products\(r\.id\)/);
+ assert.match(publicView,/api\.products\(id\)/);
 });
 test('guest checkout collects customer phone but does not claim to send orders',()=>{
  const ui=file('src/live/OpenAccessApp.jsx');

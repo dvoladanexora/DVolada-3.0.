@@ -78,3 +78,19 @@ test('retrying the same push event preserves the provider deduplication key',asy
  assert.equal(keys[0],keys[1]);
  assert.notEqual(keys[0],keys[2]);
 });
+
+test('React QA hosts OneSignal separately with secure CSP and isolated worker scope',()=>{
+ const qa=file('staging/qa-worker.mjs');
+ const build=file('scripts/package-qa-worker.mjs');
+ const mainCsp=qa.match(/'Content-Security-Policy': "([^"]+)"/)?.[1]||'';
+ assert.match(mainCsp,/script-src 'self' https:\/\/cdn\.onesignal\.com https:\/\/api\.onesignal\.com;/);
+ assert.doesNotMatch(mainCsp,/script-src[^;]*\*/);
+ assert.match(mainCsp,/frame-ancestors 'none'/);
+ assert.match(qa,/pathname === '\/push-config'/);
+ assert.match(qa,/Service-Worker-Allowed/);
+ assert.match(qa,/\/push\/onesignal\//);
+ assert.match(build,/'push\/onesignal\/OneSignalSDKWorker\.js'/);
+ const identity=file('backend/src/qa-push-identity.js');
+ assert.match(identity,/QA_ONESIGNAL_IDENTITY_VERIFIED/);
+ assert.match(identity,/QA_ONESIGNAL_SIGNING_KEY/);
+});

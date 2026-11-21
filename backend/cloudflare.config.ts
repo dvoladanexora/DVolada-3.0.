@@ -21,7 +21,7 @@ export default defineConfig(({mode})=>{
     DB:bindings.d1({name:isStaging?'dvolada-staging':'dvolada-prod'}),
     SESSION_PEPPER:bindings.secret(),
     PIN_SECRET:bindings.secret(),
-    CORS_ORIGINS:bindings.text(isStaging?'http://localhost:5173':'https://dvolada.example.invalid'),
+    CORS_ORIGINS:bindings.text(isStaging?'http://localhost:5173,https://dvolada-web-staging.pages.dev':'https://dvolada.example.invalid'),
     ORDER_CREATION_ENABLED:bindings.text('false'),
     // Keep Web Push disabled until OneSignal is approved and securely connected.
     ONESIGNAL_APP_ID:bindings.text('dvolada-not-configured'),

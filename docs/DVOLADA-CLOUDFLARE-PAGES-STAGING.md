@@ -68,3 +68,13 @@ No se fusionó a main. No se realizó ningún cobro ni se conectó OneSignal tod
 - Cloudflare Browser Rendering abrió `https://dvolada-web-staging.pages.dev/` y verificó que `#push-status` muestra «Activá notificaciones cuando quieras. En iPhone, primero instalá Dvolada.» y que el botón `#subscribe` **no** está deshabilitado.
 - **Pendiente**: prueba de permiso y suscripción en un Samsung real, confirmar primer dispositivo suscrito en OneSignal y probar envío manual limitado de notificación a ese único dispositivo.
 - No se guardó ni solicitó ninguna REST API Key por chat. Las notificaciones transaccionales por pedido continúan sin conexión y apagadas; `ORDER_CREATION_ENABLED=false`.
+
+## Corrección del permiso push (21 noviembre 2026)
+
+- El usuario indicó que al pulsar el botón no aparecía el permiso de notificaciones. Se corrigió la vista de staging: ahora inicializa OneSignal al cargar el sitio, antes del toque del usuario, y llama `Notifications.requestPermission()` directamente desde la interacción cuando Chrome todavía no tiene permiso.
+- Se agregaron mensajes específicos para permiso bloqueado (`Notification.permission === 'denied'`), Chrome ya autorizado, iOS no instalado y error o tiempo agotado del SDK.
+- Direct Upload realizado en Cloudflare Pages: despliegue `4d72aea8-9585-4410-bb26-2ca78ca57337`. La API Cloudflare confirmó estado **success**.
+- Browser Rendering confirmó que la página actualizada aparece y muestra instrucciones cuando el navegador deniega permisos. El navegador automatizado deniega notificaciones por defecto; **esto no prueba si el Samsung del usuario acepta el permiso**.
+- Pruebas GitHub Actions del código posterior a la corrección: https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44881596134 (success).
+- URL sin cambios: https://dvolada-web-staging.pages.dev/ . Se puede abrir con `?v=2` para forzar lectura de la versión actualizada.
+- Pendiente de prueba en dispositivo real y de comprobar primera suscripción registrada en el panel OneSignal. La suscripción no implica aún que se haya enviado ninguna notificación transaccional de pedido.

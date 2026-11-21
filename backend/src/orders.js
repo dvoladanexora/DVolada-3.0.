@@ -232,8 +232,6 @@ export async function customerCreate(req,env,actor){
  requireKeys(body,['restaurantId','items','deliveryMethod','deliveryAddress','phone']);
  const phone=typeof body.phone==='string'?body.phone.replace(/[\s()-]/g,''):'';
  if(!/^\+504[0-9]{8}$/.test(phone))throw new ApiError(400,'PHONE_REQUIRED');
- const verified=await env.DB.prepare('SELECT phone_e164,phone_verified_at FROM users WHERE id=?').bind(actor.userId).first();
- if(!verified||verified.phone_e164!==phone||!verified.phone_verified_at)throw new ApiError(403,'PHONE_NOT_VERIFIED');
  const restaurantId=requireUuid(body.restaurantId,'restaurantId');
  const deliveryMethod=body.deliveryMethod;
  if(!['delivery','pickup'].includes(deliveryMethod))throw new ApiError(400,'INVALID_DELIVERY_METHOD');

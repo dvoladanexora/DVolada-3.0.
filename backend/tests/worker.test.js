@@ -7,7 +7,7 @@ import worker from '../src/index.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -467,18 +467,18 @@ test('only the platform role can enroll independent verified customers as courie
  assert.equal(denyStaff.status,409);
 });
 
-test('checkout rejects missing or unverified customer phone; anonymous catalogue stays open',async()=>{
+test('checkout requires a contact phone without claiming OTP verification; anonymous catalogue stays open',async()=>{
  const f=await fixture();
  const catalog=await worker.fetch(new Request('https://api.example.test/api/v1/catalog/restaurants'),f.env);
  assert.equal(catalog.status,200);
  const invalid=await f.create({phone:'98765432'});
  assert.equal(invalid.status,400,JSON.stringify(invalid.body));
  const wrong=await f.create({phone:'+50499990000'});
- assert.equal(wrong.status,403,JSON.stringify(wrong.body));
+ assert.equal(wrong.status,201,JSON.stringify(wrong.body));
  f.DB.db.prepare('UPDATE users SET phone_verified_at=NULL WHERE id=?').run(f.tokens.customer.id);
  const unverified=await f.create();
- assert.equal(unverified.status,403);
- assert.equal(unverified.body.error,'PHONE_NOT_VERIFIED');
+ assert.equal(unverified.status,201,JSON.stringify(unverified.body));
+ assert.equal(f.DB.db.prepare('SELECT phone_verified_at FROM users WHERE id=?').get(f.tokens.customer.id).phone_verified_at,null);
  const orders=f.DB.db.prepare('SELECT COUNT(*) AS n FROM online_orders').get();
- assert.equal(orders.n,0);
+ assert.equal(orders.n,2);
 });

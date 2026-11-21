@@ -18,12 +18,13 @@ test('guest checkout collects customer phone but does not claim to send orders',
  assert.doesNotMatch(ui,/api\.createOrder\(/);
  assert.match(ui,/Pedidos reales desactivados/);
 });
-test('server enforces verified customer phone at checkout and keeps sales off by default',()=>{
+test('server requires a contact phone without OTP and keeps sales off by default',()=>{
  const orders=file('backend/src/orders.js'),config=file('backend/cloudflare.config.ts');
- const migration=file('backend/migrations/0007_customer_phones.sql');
- assert.match(orders,/PHONE_NOT_VERIFIED/);
- assert.match(orders,/phone_verified_at/);
+ const migration=file('backend/migrations/0008_phone_required_without_otp.sql');
+ assert.match(orders,/PHONE_REQUIRED/);
+ assert.doesNotMatch(orders,/PHONE_NOT_VERIFIED|phone_verified_at/);
  assert.match(migration,/trg_checkout_phone/);
+ assert.doesNotMatch(migration,/PHONE_NOT_VERIFIED/);
  assert.match(config,/ORDER_CREATION_ENABLED:bindings\.text\('false'\)/);
  assert.doesNotMatch(file('backend/src/index.js'),/exchangeFirebase|FIREBASE_PROJECT_ID/);
 });

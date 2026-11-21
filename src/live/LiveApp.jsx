@@ -49,6 +49,7 @@ export default function LiveApp(){
  const [phone,setPhone]=useState('');
  const [deliveryAddress,setDeliveryAddress]=useState(''),[deliveryMethod,setDeliveryMethod]=useState('delivery');
  const [orders,setOrders]=useState([]),[selectedRestaurantId,setSelectedRestaurantId]=useState('');
+ const [orderDetail,setOrderDetail]=useState(null);
  const [couriers,setCouriers]=useState([]),[courierChoice,setCourierChoice]=useState({});
  const [manageProducts,setManageProducts]=useState([]),[newProductName,setNewProductName]=useState(''),[newProductPrice,setNewProductPrice]=useState('');
  const [editPrices,setEditPrices]=useState({}),[restaurantCapabilities,setRestaurantCapabilities]=useState(null);
@@ -184,6 +185,12 @@ export default function LiveApp(){
    setSelectedPin({id:order.id,pin:data.deliveryPin,status:data.order.status});
   },{refresh:false})
  }
+ async function showRestaurantOrder(order){
+  return run(async()=>{
+   const result=await api.restaurantOrder(selectedRestaurantId,order.id);
+   setOrderDetail({restaurantId:selectedRestaurantId,orderId:order.id,items:result.order.items});
+  },{refresh:false});
+ }
  async function action(fn){const result=await run(fn);if(result)setStatus('Cambio confirmado en el servidor.');return result}
  const userRole=session?.user?.role;
  const availableScopes=[
@@ -220,7 +227,7 @@ export default function LiveApp(){
   </form>}
   {session&&<>
    <nav className="dvl-roles" aria-label="Paneles autorizados">{availableScopes.map(s=><button key={s} className={scope===s?'active':''}
-    onClick={()=>{setScope(s);setError('');setSelectedPin(null)}}>{s==='customer'?<ShoppingBag size={17}/>:s==='restaurant'?<Store size={17}/>:s==='courier'?<Bike size={17}/>:<ShieldCheck size={17}/>} {roles[s]}</button>)}
+    onClick={()=>{setScope(s);setError('');setSelectedPin(null);setOrderDetail(null)}}>{s==='customer'?<ShoppingBag size={17}/>:s==='restaurant'?<Store size={17}/>:s==='courier'?<Bike size={17}/>:<ShieldCheck size={17}/>} {roles[s]}</button>)}
     <Action kind="secondary" disabled={busy||offline} onClick={()=>run(()=>load(scope,selectedRestaurantId),{refresh:false})}><RefreshCw size={15}/> Actualizar</Action>
    </nav>
    {scope==='customer'&&<div className="dvl-columns">
@@ -263,7 +270,7 @@ export default function LiveApp(){
    </div>}
    {scope==='restaurant'&&<div className="dvl-stack">
     <section className="dvl-panel"><div className="dvl-row"><h2>Centro de pedidos</h2><label>Negocio<select value={selectedRestaurantId}
-     onChange={e=>setSelectedRestaurantId(e.target.value)}>{session.restaurants?.map(r=><option key={r.restaurant_id} value={r.restaurant_id}>{r.name}</option>)}</select></label></div>
+     onChange={e=>{setOrderDetail(null);setOrders([]);setSelectedRestaurantId(e.target.value)}}>{session.restaurants?.map(r=><option key={r.restaurant_id} value={r.restaurant_id}>{r.name}</option>)}</select></label></div>
      <p className="dvl-muted">Solo los empleados autorizados pueden cambiar estados; los cambios simultáneos generan conflicto.</p>
     </section>
     {canManage&&<section className="dvl-panel"><h2>Menú y disponibilidad</h2>
@@ -297,6 +304,9 @@ export default function LiveApp(){
      </div>)}</div>
     </section>}
     <div className="dvl-grid">{orders.map(o=><OrderCard key={o.id} order={o}>
+      <Action kind="secondary" disabled={busy||offline} onClick={()=>showRestaurantOrder(o)}>Ver comanda</Action>
+      {orderDetail?.orderId===o.id&&orderDetail.restaurantId===selectedRestaurantId&&
+       <ul aria-label="Artículos de la comanda">{orderDetail.items.map((item,index)=><li key={index}>{item.quantity} × {item.name_snapshot}</li>)}</ul>}
       <div className="dvl-inline">{(staffTransitions[o.status]||[]).map(next=><Action key={next} disabled={busy||offline}
         onClick={()=>action(()=>api.restaurantStatus(selectedRestaurantId,o,next,newKey()))}>{next}</Action>)}</div>
       {o.status==='Listo'&&o.deliveryMethod==='pickup'&&<Action disabled={busy||offline} onClick={()=>action(()=>api.restaurantStatus(selectedRestaurantId,o,'Entregado',newKey()))}>Entregar en mostrador</Action>}

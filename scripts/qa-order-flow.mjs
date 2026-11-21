@@ -64,6 +64,10 @@ async function flow(suffix, otherSuffix) {
 
   await manager.restaurantStatus(restaurant, order, 'Aceptado', key());
   order = await verify('Aceptado');
+  const ticket = await kitchen.restaurantOrder(restaurant, id);
+  assert.deepEqual(ticket.order.items.map(({ quantity, name_snapshot }) => ({ quantity, name_snapshot })), [
+    { quantity: 1, name_snapshot: 'QA Producto ' + suffix },
+  ]);
   await kitchen.restaurantStatus(restaurant, order, 'Preparando', key());
   order = await verify('Preparando');
   await kitchen.restaurantStatus(restaurant, order, 'Listo', key());

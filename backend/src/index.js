@@ -62,7 +62,7 @@ async function route(req,env){
    env.DB.prepare(`SELECT COUNT(*) AS total,SUM(CASE WHEN online_state='open' THEN 1 ELSE 0 END) AS open
       FROM restaurants WHERE plan IN ('ONLINE','PLUS')`).first(),
    env.DB.prepare(`SELECT COUNT(*) AS total,
-     SUM(CASE WHEN status IN ('Pendiente','Aceptado','Preparando','Listo') THEN 1 ELSE 0 END) AS active,
+     SUM(CASE WHEN status NOT IN ('Entregado','Cancelado','Rechazado') THEN 1 ELSE 0 END) AS active,
      SUM(CASE WHEN status='Entregado' THEN 1 ELSE 0 END) AS delivered FROM online_orders`).first(),
    env.DB.prepare('SELECT COUNT(*) AS active FROM courier_profiles WHERE active=1').first()
   ]);

@@ -45,7 +45,7 @@ export default function LiveApp(){
  const sessionRef=useRef(null),checkoutKey=useRef(null),alive=useRef(true);
  const [pushConfig,setPushConfig]=useState(null),[pushEnabled,setPushEnabled]=useState(false);
  const [session,setSession]=useState(null),[accessCode,setAccessCode]=useState('');
- const [status,setStatus]=useState(''),[error,setError]=useState('');
+ const [status,setStatus]=useState(''),[error,setError]=useState(''),[refreshWarning,setRefreshWarning]=useState('');
  const [scope,setScope]=useState('customer'),[restaurants,setRestaurants]=useState([]),[products,setProducts]=useState([]);
  const [shoppingRestaurant,setShoppingRestaurant]=useState(''),[cart,setCart]=useState([]);
  const [cartRestaurantId,setCartRestaurantId]=useState('');
@@ -80,21 +80,30 @@ export default function LiveApp(){
   catch{return null}
  },[configured]);
 
+ const panelRef=useRef(null),latestRead=useRef(0);
+ if(panelRef.current?.scope!==scope||panelRef.current?.restaurantId!==selectedRestaurantId){
+  panelRef.current={scope,restaurantId:selectedRestaurantId};
+ }
+
  const load=useCallback(async (view=scope,restaurantId=selectedRestaurantId)=>{
-  if(!api||!sessionRef.current||!navigator.onLine)return;
-  if(view==='customer'){const result=await api.customerOrders();if(alive.current)setOrders(result.orders||[])}
+  const activeSession=sessionRef.current;
+  if(!api||!activeSession||!navigator.onLine)return;
+  const panel=panelRef.current;
+  const request=++latestRead.current;
+  const canApply=()=>alive.current&&sessionRef.current===activeSession&&panelRef.current===panel&&latestRead.current===request;
+  if(view==='customer'){const result=await api.customerOrders();if(canApply())setOrders(result.orders||[])}
   if(view==='restaurant'&&restaurantId){
    const [result,eligible,menu,capabilities]=await Promise.all([
     api.restaurantOrders(restaurantId),api.eligibleCouriers(restaurantId).catch(()=>({couriers:[]})),
     api.restaurantProducts(restaurantId),api.restaurantCapabilities(restaurantId)
    ]);
-   if(alive.current){setOrders(result.orders||[]);setCouriers(eligible.couriers||[]);
+   if(canApply()){setOrders(result.orders||[]);setCouriers(eligible.couriers||[]);
     setManageProducts(menu.products||[]);setRestaurantCapabilities(capabilities)}
   }
-  if(view==='courier'){const r=await api.courierOrders();if(alive.current)setOrders(r.orders||[])}
+  if(view==='courier'){const r=await api.courierOrders();if(canApply())setOrders(r.orders||[])}
   if(view==='admin'){
    const [overview,managed]=await Promise.all([api.adminOverview(),api.adminRestaurants()]);
-   if(alive.current){setAdminStats(overview);setAdminRestaurants(managed.restaurants||[])}
+   if(canApply()){setAdminStats(overview);setAdminRestaurants(managed.restaurants||[])}
   }
  },[api,scope,selectedRestaurantId]);
  useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
@@ -112,17 +121,24 @@ export default function LiveApp(){
   return()=>{stopped=true};
  },[api,offline]);
  useEffect(()=>{
-  if(!session||!api||offline)return;
+  if(!session||!api||offline||busy)return;
   let live=true;
   load(scope,selectedRestaurantId).catch(e=>{if(live)setError(errorLabel(e))});
-  const timer=setInterval(()=>{if(live&&!busy)load(scope,selectedRestaurantId).catch(()=>{})},15000);
+  const timer=setInterval(()=>{if(live)load(scope,selectedRestaurantId).catch(()=>{})},15000);
   return()=>{live=false;clearInterval(timer)};
  },[session,api,scope,selectedRestaurantId,load,busy,offline]);
 
  async function run(fn,{refresh=true}={}){
   if(busy||offline)return;
-  setBusy(true);setError('');
-  try{const res=await fn();if(refresh)await load(scope,selectedRestaurantId);return res}
+  setBusy(true);setError('');setRefreshWarning('');
+  try{
+   const result=await fn();
+   if(refresh){
+    try{await load(scope,selectedRestaurantId)}
+    catch{setRefreshWarning('El cambio se guardó. Tocá Actualizar para volver a cargar los datos.')}
+   }
+   return result;
+  }
   catch(e){setError(errorLabel(e));if(e instanceof LiveApiError&&e.status===409){load(scope,selectedRestaurantId).catch(()=>{})}}
   finally{if(alive.current)setBusy(false)}
  }
@@ -178,7 +194,7 @@ export default function LiveApp(){
    }
    if(sessionRef.current)await api.logout().catch(()=>{});
    sessionRef.current=null;setSession(null);setOrders([]);setCart([]);setCartRestaurantId('');setShoppingRestaurant('');setProducts([]);
-   checkoutKey.current=null;setScope('customer');setSelectedPin(null);setPhone('');setDeliveryAddress('');
+   checkoutKey.current=null;setScope('customer');setSelectedPin(null);setPhone('');setDeliveryAddress('');setRefreshWarning('');
    setStatus(pushFailure?'Sesión cerrada. Revisá el permiso de notificaciones de este sitio en el navegador.':'');
   }catch(e){setError(errorLabel(e))}
   finally{setBusy(false)}
@@ -256,6 +272,7 @@ export default function LiveApp(){
   {offline&&<div className="dvl-offline" role="alert"><WifiOff size={19}/> Sin conexión. Los pedidos se muestran como potencialmente desactualizados; las acciones están bloqueadas.</div>}
   <WaitOrError message={status}/>
   <WaitOrError message={error} warning/>
+  <WaitOrError message={refreshWarning}/>
   {session&&<div className="dvl-id-note"><span>ID de vinculación: <code>{formattedUserId}</code></span><Action kind="text"
    onClick={()=>navigator.clipboard?.writeText(formattedUserId).catch(()=>{})}>Copiar</Action></div>}
   {!session&&<form className="dvl-panel dvl-login" onSubmit={signIn}>

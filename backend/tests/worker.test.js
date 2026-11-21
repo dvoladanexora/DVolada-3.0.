@@ -200,6 +200,7 @@ test('courier assignment, two active orders maximum, PIN verification and comple
    by:'courier',method:'PATCH',key:randomUUID(),body:{status,expectedVersion:version}
   });
   assert.equal(step.status,200);version++;
+  assert.deepEqual((await f.call('/api/v1/admin/overview',{by:'platformAdmin'})).body.orders,{total:3,active:3,delivered:0});
  }
  const incorrect=await f.call('/api/v1/courier/orders/'+a.id+'/deliver',{
   by:'courier',method:'POST',key:randomUUID(),
@@ -212,6 +213,7 @@ test('courier assignment, two active orders maximum, PIN verification and comple
  });
  assert.equal(finish.status,200);
  assert.equal(finish.body.order.status,'Entregado');
+ assert.deepEqual((await f.call('/api/v1/admin/overview',{by:'platformAdmin'})).body.orders,{total:3,active:2,delivered:1});
  assert.equal((await assign(c.id)).status,200);
  assert.equal(f.DB.db.prepare('SELECT COUNT(*) AS n FROM online_order_events WHERE order_id=?').get(a.id).n,10);
 });

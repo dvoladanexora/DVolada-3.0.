@@ -1,0 +1,30 @@
+/* Modal operativo: decisiones deliberadas y fáciles de revisar */
+.dv-order-decision-backdrop{position:fixed;inset:0;z-index:20000;display:grid;place-items:center;overflow-y:auto;padding:16px;background:rgba(10,15,23,.66);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px)}
+.dv-order-decision{box-sizing:border-box;width:min(490px,100%);max-height:calc(100dvh - 32px);overflow-y:auto;background:var(--ow-card,var(--surface));color:var(--ow-ink,var(--ink));border-radius:25px;padding:clamp(18px,3vw,29px);box-shadow:0 28px 85px rgba(0,0,0,.3);border:1px solid var(--ow-line,var(--line))}
+.dv-order-decision>header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.dv-order-decision-icon{display:grid;place-items:center;width:49px;height:49px;background:color-mix(in srgb,var(--accent) 13%,var(--ow-card,var(--surface)));color:var(--accent);border-radius:15px}
+.dv-order-decision>header>button{width:39px;height:39px;border-radius:50%;border:1px solid var(--ow-line,var(--line));background:var(--ow-bg,var(--soft));color:var(--ow-ink,var(--ink));display:grid;place-items:center}
+.dv-order-decision-eyebrow{font-size:10px;font-weight:850;letter-spacing:.12em;color:var(--accent)}
+.dv-order-decision h2{font-size:clamp(22px,4vw,28px);letter-spacing:-.04em;margin:9px 0}
+.dv-order-decision-order{font-size:12px;margin:5px 0;font-variant-numeric:tabular-nums}
+.dv-order-decision-help{font-size:13px;color:var(--ow-sub,var(--muted));line-height:1.6;margin:12px 0 14px}
+.dv-order-decision-notice{display:flex;align-items:flex-start;gap:10px;padding:12px 13px;background:color-mix(in srgb,#edab43 13%,var(--ow-card,var(--surface)));border:1px solid color-mix(in srgb,#e4a642 35%,var(--ow-line,var(--line)));border-radius:13px;font-size:12px;line-height:1.5;margin-bottom:14px}
+.dv-order-decision-notice svg{flex-shrink:0;color:#ca802d}
+.dv-order-decision-reasons{display:flex;gap:7px;flex-wrap:wrap;margin:15px 0}
+.dv-order-decision-reasons button{border:1px solid var(--ow-line,var(--line));background:var(--ow-bg,var(--soft));color:var(--ow-ink,var(--ink));border-radius:11px;padding:10px 11px;font-size:11px;font-weight:750;min-height:38px}
+.dv-order-decision-reasons button.selected{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--ow-card,var(--surface)))}
+.dv-order-decision form>label{display:block;font-size:12px;font-weight:850;margin-bottom:7px}
+.dv-order-decision form>label span{color:var(--accent)}
+.dv-order-decision textarea{resize:vertical;box-sizing:border-box;width:100%;min-height:85px;border:1px solid var(--ow-line,var(--line));background:var(--ow-bg,var(--soft));color:var(--ow-ink,var(--ink));padding:12px 13px;border-radius:12px;font-size:13px}
+.dv-order-decision form>small{display:block;text-align:right;font-size:11px;color:var(--ow-sub,var(--muted));margin-top:4px}
+.dv-order-decision-error{margin:10px 0;color:#c34c42;font-size:12px;font-weight:800}
+.dv-order-decision-actions{display:grid;grid-template-columns:1fr 1.3fr;gap:10px;margin-top:21px}
+.dv-order-decision-actions button{display:flex;gap:8px;align-items:center;justify-content:center;min-height:47px;border:1px solid var(--ow-line,var(--line));border-radius:13px;font-size:12px;font-weight:850;cursor:pointer}
+.dv-order-decision-actions button.secondary{background:var(--ow-bg,var(--soft));color:var(--ow-ink,var(--ink))}
+.dv-order-decision-actions button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.dv-order-decision-actions button.is-danger{background:#ad433d;border-color:#ad433d}
+.dv-order-decision-actions button:disabled{opacity:.45;cursor:not-allowed}
+.dv-order-decision-footnote{color:var(--ow-sub,var(--muted));font-size:11px;line-height:1.5;margin:16px 0 0}
+.dv-order-decision button:focus-visible,.dv-order-decision textarea:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@supports not (background:color-mix(in srgb,#fff,#000)){.dv-order-decision-icon,.dv-order-decision-reasons button.selected,.dv-order-decision-notice{background:var(--ow-bg,var(--soft))}}
+@media(max-width:420px){.dv-order-decision-actions{grid-template-columns:1fr}.dv-order-decision{border-radius:20px}}

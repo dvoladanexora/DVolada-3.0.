@@ -16,3 +16,10 @@ export const CUSTOMER_HIDDEN_PAGES=Object.freeze([
 ]);
 export const isPubliclyHidden=page=>CUSTOMER_HIDDEN_PAGES.includes(page)&&
  !(INTERNAL_PREVIEW_ENABLED&&['driver','admin','delivery-panel'].includes(page));
+
+/** Protege la web pública: NO registrar órdenes locales como si las recibiera un negocio.
+ * El checkout comercial debe quedar habilitado exclusivamente tras integrar una API
+ * autenticada con confirmación persistente, versión y idempotencia en el servidor.
+ * Una variable Vite del build de producción NO puede activar esta demostración.
+ */
+export const DEMO_ORDER_WRITES_ENABLED=INTERNAL_PREVIEW_ENABLED;

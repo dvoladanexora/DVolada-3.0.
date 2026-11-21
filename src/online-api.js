@@ -17,13 +17,29 @@ export function createOnlineApi({baseUrl,getAccessToken,fetchImpl=fetch}){
  async function request(path,{method='GET',body,signal,idempotencyKey}={}){
   const token=await getAccessToken();
   if(!token)throw new OnlineApiError('Sesión no disponible',401);
-  const response=await fetchImpl(base+path,{
-   method,signal,cache:'no-store',
-   headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{}),...(idempotencyKey?{'Idempotency-Key':idempotencyKey}:{})},
-   ...(body?{body:JSON.stringify(body)}:{})
-  });
-  const data=await response.json().catch(()=>({error:'Respuesta inválida del servidor'}));
-  if(!response.ok)throw new OnlineApiError(data.error||'Error de servidor',response.status,data);
+  let response;
+  try{
+   response=await fetchImpl(base+path,{
+    method,signal,cache:'no-store',credentials:'omit',redirect:'error',
+    headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{}),...(idempotencyKey?{'Idempotency-Key':idempotencyKey}:{})},
+    ...(body?{body:JSON.stringify(body)}:{})
+   });
+  }catch(error){
+   if(signal?.aborted)throw error;
+   // Un PATCH pudo alcanzar al servidor aunque se perdiera la respuesta.
+   // NO reintentar automáticamente: volver a leer el estado primero.
+   throw new OnlineApiError(method==='PATCH'
+    ?'Se interrumpió la conexión. Verificá el estado actual del pedido antes de intentar otra vez.'
+    :'No se pudo conectar con el servidor. Revisá tu conexión e intentá nuevamente.',0);
+  }
+  let data;
+  try{data=await response.json()}catch{}
+  const valid=data&&typeof data==='object'&&!Array.isArray(data);
+  if(!response.ok)throw new OnlineApiError(
+   valid&&typeof data.error==='string'?data.error:'Error de servidor',
+   response.status,valid?data:null
+  );
+  if(!valid)throw new OnlineApiError('El servidor respondió con datos inválidos. No se aplicó ningún cambio local.',502);
   return data;
  }
  return {

@@ -1,0 +1,83 @@
+name: Generar lockfiles revisados (solo auditoría)
+on:
+  push:
+    branches:
+      - audit/online-integral-work-2026-11
+    paths:
+      - .github/workflows/generate-lockfiles-audit.yml
+      - package.json
+      - server/package.json
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lockfiles-audit
+  cancel-in-progress: false
+jobs:
+  validate:
+    if: github.repository == 'dvoladanexora/DVolada-3.0.' && github.ref == 'refs/heads/audit/online-integral-work-2026-11'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generar lockfiles sin scripts de instalación
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm --prefix server install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Instalar exactamente las versiones seleccionadas
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix server ci --ignore-scripts --no-audit --no-fund
+      - name: Auditar dependencias y servidor
+        run: |
+          npm audit --audit-level=high
+          npm --prefix server audit --omit=dev --audit-level=high
+      - name: Ejecutar todas las pruebas
+        run: npm run test:all
+      - name: Validar compilación y recursos de prueba
+        run: |
+          npm run check:server
+          npm run build
+          test ! -e dist/device-studio.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lockfiles-audit-validated
+          path: |
+            package-lock.json
+            server/package-lock.json
+          if-no-files-found: error
+          retention-days: 7
+  commit-lockfiles:
+    needs: validate
+    if: github.event_name == 'push' && github.repository == 'dvoladanexora/DVolada-3.0.' && github.ref == 'refs/heads/audit/online-integral-work-2026-11'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit/online-integral-work-2026-11
+          persist-credentials: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: lockfiles-audit-validated
+          path: .
+      - name: Guardar exclusivamente las dependencias revisadas en la rama de auditoría
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- package-lock.json server/package-lock.json
+          if git diff --cached --quiet; then
+            echo 'Lockfiles ya estaban actualizados'
+            exit 0
+          fi
+          git commit -m 'build(security): lock reviewed frontend and API dependencies'
+          git push origin HEAD:refs/heads/audit/online-integral-work-2026-11

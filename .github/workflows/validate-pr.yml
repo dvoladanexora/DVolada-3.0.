@@ -40,6 +40,8 @@ jobs:
         run: npm run test:push
       - name: Probar PWA de staging de Cloudflare Pages
         run: npm run test:staging
+      - name: Regresión integral de módulos heredados y D1 sin datos reales
+        run: npm run test:all
       - name: Validar sintaxis del servidor legado aislado
         run: node --check server/src/server.js
       - name: Validar sintaxis de Firebase verificado

@@ -12,7 +12,8 @@
     "test:theme": "node --test tests/theme-policy.test.js",
     "test:live": "node --test tests/live-api.test.js",
     "test:access": "node --test tests/open-access.test.js",
-    "test:push": "node --test tests/push-ui.test.js"
+    "test:push": "node --test tests/push-ui.test.js",
+    "test:staging": "node --test tests/staging-site.test.js"
   },
   "dependencies": {
     "react": "^18.3.1",

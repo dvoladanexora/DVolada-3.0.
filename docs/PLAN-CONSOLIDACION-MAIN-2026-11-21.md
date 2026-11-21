@@ -1,5 +1,5 @@
 # Dvolada — consolidación controlada para `main`
-**Fecha:** 2026-11-21. **Estado:** candidata de integración; **NO autorizada para lanzamiento público**.
+**Fecha:** 2026-11-21. **Estado vigente:** PR #78 listo para revisión de fusión con CI aprobada; **NO-GO para lanzamiento público**.
 
 ## Alcance verificado
 Repositorio `dvoladanexora/DVolada-3.0.`. En la revisión inicial había **79 ramas** y **8 PR abiertos**; ningún PR estaba fusionado a `main`. GitHub mostró las ocho ramas con PR en estado de revisión/CI pasada en su último commit, aunque PR #68 y #69 eran ramas antiguas divergentes.
@@ -49,12 +49,26 @@ Los Workers `dvolada-qa`, `dvolada-api-staging` y D1 `dvolada-staging` son prueb
 - Una notificación manual de OneSignal QA llegó al Samsung S23 Ultra mediante Chrome. No están demostrados todavía los avisos transaccionales por pedido ni la distribución entre roles.
 - En Chrome/Chromium remoto pasaron distintas anchuras y temas; faltan S23/S24/iOS físicos, prueba de banner emergente, instalación PWA y regresiones completas después de integrar ramas.
 
+
+## Validación final automatizada de la candidata — 21/11/2026
+
+**Rama:** `integration/dvolada-main-candidate-20261121`. **Commit validado:** `7940392da86bb34557ae076cd685b7e762a9845f`.
+
+- **CI verde, sin saltar suites:** [GitHub Actions #44918894687](https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44918894687). Los tres jobs `verify`, `qa-smoke` y `legacy-postgres` aprobaron.
+- **239/239 pruebas de regresión** en `npm run test:all`, además de los subconjuntos, **20/20 pruebas del Worker** y compilación de React QA/Live/demo; pruebas PostgreSQL 16 con base descartable.
+- Los ocho archivos comunes se reconciliaron conservando las vistas QA/Live y el modo demo auditado, con pruebas de accesibilidad, seguridad y PWA.
+- Lockfiles reproducibles presentes, `npm ci` y `npm audit --audit-level=high` aprobados; Sharp actualizado sin registrar secretos.
+- El workflow de GitHub Pages quedó **manual**, condicionado a `main` y repositorio exacto. Fusionar código no equivale a publicarlo.
+- **Cerradas las 37 fallas históricas que figuraban en el primer informe.** Estas cifras antiguas solo se conservan abajo como registro de auditoría, no como pendientes actuales.
+
+**Alcance:** esto demuestra preparación del código para revisión de fusión. **No demuestra** pruebas de recepción OneSignal por cada rol, instalación física PWA en todos los dispositivos, cobros reales ni autorización comercial. No habilitar pedidos/cobros reales ni desplegar producción por inferencia de este resultado.
+
 ## Puertas para marcar esta candidata «lista para fusionar»
-- [ ] CI nueva candidata **verde** con todos los tests, incluido `test:all` y la compilación React QA y demo.
-- [ ] Resolver y revisar las ocho coincidencias de archivos, sin perder código del servidor actual ni funcionalidades auditadas.
-- [ ] Validar `server/` PostgreSQL legado en entorno descartable si se conserva y etiquetarlo como NO producción; verificar que no compite con Workers/D1.
+- [x] CI nueva candidata **verde** con todos los tests, incluido `test:all` y la compilación React QA y demo.
+- [x] Resolver y revisar las ocho coincidencias de archivos, sin perder código del servidor actual ni funcionalidades auditadas.
+- [x] Validar `server/` PostgreSQL legado en entorno descartable si se conserva y etiquetarlo como NO producción; verificar que no compite con Workers/D1.
 - [ ] Comprobar cobertura/paridad de PR #68 y #69 y las ramas históricas relevantes antes de cerrarlas; no insertar código antiguo que revierta un arreglo reciente.
-- [ ] Regenerar lockfiles, revisar dependencias/auditoría y garantizar instalación reproducible.
+- [x] Regenerar lockfiles, revisar dependencias/auditoría y garantizar instalación reproducible.
 - [ ] Cero secretos ni datos reales en Git, paquetes o artefactos.
 - [ ] Realizar QA visual de los paneles integrados; verificar roles, idempotencia, PIN, carrito, offline, temas y D1 aislada.
 - [ ] Decidir y documentar el efecto de despliegue a GitHub Pages al fusionar `main`; aprobación explícita para el cambio de publicación.
@@ -64,13 +78,13 @@ Los Workers `dvolada-qa`, `dvolada-api-staging` y D1 `dvolada-staging` son prueb
 **Una sola fusión consolidada y revisada** desde esta candidata a `main`, solo después de cumplir las puertas anteriores, en lugar de mezclar directamente ocho PR y disparar publicaciones parciales. Conservar #72–#77 como fuentes auditables hasta comprobar la paridad y no declarar un PR obsoleto «fusionado» solo por cerrar el ticket.
 
 
-## Primera validación de esta candidata (2026-11-21)
+## Primera validación histórica de esta candidata (2026-11-21; ya superada)
 
 - GitHub Actions PR #78: **job `qa-smoke` aprobado** con pruebas de cliente/API, acceso, push, PWA y Worker SQLite, además de compilación React QA y demo. Esto valida construcción y regresiones automatizadas de la versión React, **no** es autorización para desplegar ni prueba física.
 - **Job PostgreSQL legado aprobado** con base descartable. Se conserva separada de D1, sin promesa de despliegue.
 - **Suite histórica combinada: 196/234 aprobadas; 38 fallidas.** Ejecutar `npm run test:all` para reproducir. Entre los fallos hay expectativas de navegación demo antigua, lógica de pedidos locales, caché, privacidad, acceso por rol y publicación. Un test de texto fallido no demuestra por sí solo un error de servidor, pero tampoco puede ignorarse.
 - Se restauraron el enlace accesible «Saltar al contenido», marcas móviles de página, CSS de foco y carga diferida del panel de compartir/instalar.
 - El workflow de GitHub Pages de esta candidata **ya requiere ejecución manual, rama `main` y repositorio exacto**, además de las pruebas. En `main` todavía rige el workflow automático anterior hasta que se fusione esta candidata.
-- **NO cambiar el estado de borrador ni fusionar** mientras `verify` siga en rojo. Los ocho archivos solapados requieren revisar paridad; migraciones y secretos de QA no deben convertirse en configuración de producción.
+- **Restricción histórica, ya superada:** en esa versión `verify` estaba en rojo y el PR era borrador. La sección de validación final arriba documenta el CI verde y la preparación para revisión. Las migraciones y secretos de QA nunca deben convertirse en configuración de producción.
 
 Ver GitHub Actions y resultados: https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44915510042

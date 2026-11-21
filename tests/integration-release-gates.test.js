@@ -56,3 +56,15 @@ test('la caché de PWA y la configuración web push no exponen rutas privadas',(
  assert.ok(push.includes("serviceWorkerPath:'push/onesignal/OneSignalSDKWorker.js'"));
  assert.ok(push.includes('autoPrompt:false'));
 });
+
+test('las plantillas y el Worker público no llevan valores privados de OneSignal',()=>{
+ const example=read('.env.example');
+ const qa=read('staging/qa-worker.mjs');
+ const signer=read('backend/src/qa-push-identity.js');
+ assert.match(example,/^VITE_DVOLADA_LIVE_MODE=false$/m);
+ assert.match(example,/^VITE_DVOLADA_API_URL=$/m);
+ assert.match(example,/^VITE_ONESIGNAL_APP_ID=$/m);
+ assert.ok(!qa.includes('QA_ONESIGNAL_SIGNING_KEY'),'el secreto solo debe llegar al servidor');
+ assert.ok(signer.includes('env.QA_ONESIGNAL_SIGNING_KEY'));
+ assert.doesNotMatch(example,/-----BEGIN PRIVATE KEY-----/);
+});

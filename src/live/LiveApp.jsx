@@ -46,6 +46,7 @@ export default function LiveApp(){
  const [status,setStatus]=useState(''),[error,setError]=useState('');
  const [scope,setScope]=useState('customer'),[restaurants,setRestaurants]=useState([]),[products,setProducts]=useState([]);
  const [shoppingRestaurant,setShoppingRestaurant]=useState(''),[cart,setCart]=useState([]);
+ const [cartRestaurantId,setCartRestaurantId]=useState('');
  const [phone,setPhone]=useState('');
  const [deliveryAddress,setDeliveryAddress]=useState(''),[deliveryMethod,setDeliveryMethod]=useState('delivery');
  const [orders,setOrders]=useState([]),[selectedRestaurantId,setSelectedRestaurantId]=useState('');
@@ -145,15 +146,21 @@ export default function LiveApp(){
  async function logout(){
   setBusy(true);
   try{if(sessionRef.current)await api.logout().catch(()=>{});
-   sessionRef.current=null;setSession(null);setOrders([]);setCart([]);setScope('customer');setSelectedPin(null);setPhone('');setDeliveryAddress('');setStatus('');
+   sessionRef.current=null;setSession(null);setOrders([]);setCart([]);setCartRestaurantId('');setShoppingRestaurant('');setProducts([]);
+   checkoutKey.current=null;setScope('customer');setSelectedPin(null);setPhone('');setDeliveryAddress('');setStatus('');
   }finally{setBusy(false)}
  }
  async function viewProducts(restaurantId){
   setError('');
   try{
    const r=await api.products(restaurantId);
-   setShoppingRestaurant(restaurantId);setProducts(r.products||[]);setCart([]);
-   checkoutKey.current=null;
+   setShoppingRestaurant(restaurantId);
+   setProducts(r.products||[]);
+   if(cartRestaurantId!==restaurantId){
+    setCart([]);
+    setCartRestaurantId(restaurantId);
+    checkoutKey.current=null;
+   }
   }catch(e){setError(errorLabel(e))}
  }
  function addProduct(p){
@@ -169,14 +176,14 @@ export default function LiveApp(){
   setCart(current=>current.map(x=>x.productId===id?{...x,quantity:x.quantity-1}:x).filter(x=>x.quantity>0));
  }
  async function checkout(){
-  if(!shoppingRestaurant||!cart.length||!session)return;
+  if(!cartRestaurantId||!cart.length||!session)return;
   if(deliveryMethod==='delivery'&&deliveryAddress.trim().length<8)return setError('Ingresá una dirección completa.');
   if(!/^[0-9]{8}$/.test(phone))return setError('Ingresá los ocho dígitos del teléfono.');
   const key=checkoutKey.current||newKey();checkoutKey.current=key;
-  const intent={restaurantId:shoppingRestaurant,deliveryMethod,deliveryAddress,phone:'+504'+phone,
+  const intent={restaurantId:cartRestaurantId,deliveryMethod,deliveryAddress,phone:'+504'+phone,
    items:cart.map(({productId,quantity})=>({productId,quantity}))};
   const result=await run(()=>api.createOrder(intent,key),{refresh:false});
-  if(result){checkoutKey.current=null;setCart([]);setProducts([]);setShoppingRestaurant('');setSelectedPin({id:result.order.id,pin:result.deliveryPin});
+  if(result){checkoutKey.current=null;setCart([]);setCartRestaurantId('');setProducts([]);setShoppingRestaurant('');setSelectedPin({id:result.order.id,pin:result.deliveryPin});
    setStatus('Pedido de prueba confirmado.');load().catch(e=>setError(errorLabel(e)))}
  }
  async function showCustomerOrder(order){
@@ -202,7 +209,7 @@ export default function LiveApp(){
  const roles={customer:'Cliente',restaurant:'Restaurante',courier:'Repartidor',admin:'Centro de Control'};
  const selectedBusiness=session?.restaurants?.find(x=>x.restaurant_id===selectedRestaurantId);
  const subtotal=cart.reduce((sum,p)=>sum+p.priceMinor*p.quantity,0);
- const restaurant=restaurants.find(r=>r.id===shoppingRestaurant);
+ const restaurant=restaurants.find(r=>r.id===cartRestaurantId);
  const fee=deliveryMethod==='delivery'?restaurant?.delivery_fee_minor??0:0;
  const canManage=['owner','manager'].includes(selectedBusiness?.staff_role);
  const formattedUserId=session?.user?.id||'';
@@ -235,7 +242,7 @@ export default function LiveApp(){
      {!shoppingRestaurant?<div className="dvl-stack">{restaurants.map(r=><div className="dvl-row" key={r.id}><div><strong>{r.name}</strong><small>{r.online_state==='open'?'Aceptando pedidos':'En pausa'}</small></div>
       <Action disabled={offline||r.online_state!=='open'} kind="secondary" onClick={()=>viewProducts(r.id)}>Ver menú</Action></div>)}
       {!restaurants.length&&<p>Próximamente encontrarás los restaurantes afiliados aquí.</p>}</div>:
-      <><Action kind="text" onClick={()=>{setShoppingRestaurant('');setProducts([]);setCart([]);checkoutKey.current=null}}>Volver a restaurantes</Action>
+      <><Action kind="text" onClick={()=>{setShoppingRestaurant('');setProducts([])}}>Volver a restaurantes</Action>
        <div className="dvl-stack">{products.map(p=><div className="dvl-row" key={p.id}><div><strong>{p.name}</strong><small>{price(p.price_minor)}</small></div>
         <Action kind="secondary" disabled={offline} onClick={()=>addProduct(p)}>Agregar</Action></div>)}
        {!products.length&&<p>Este local todavía no tiene productos disponibles.</p>}</div></>}

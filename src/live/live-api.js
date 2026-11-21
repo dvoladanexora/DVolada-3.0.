@@ -37,6 +37,7 @@ export function createLiveApi({baseUrl,getSessionToken,fetchImpl=fetch}){
   products:id=>request('/api/v1/catalog/restaurants/'+s(id)+'/products',{auth:false}),
   exchange:(idToken,deviceLabel)=>request('/api/v1/auth/exchange',{auth:false,method:'POST',body:{idToken,deviceLabel}}),
   me:()=>request('/api/v1/auth/me'),
+  pushIdentity:()=>request('/api/v1/push/identity',{method:'POST'}),
   logout:()=>request('/api/v1/auth/logout',{method:'POST'}),
   customerOrders:()=>request('/api/v1/customer/orders'),
   customerOrder:id=>request('/api/v1/customer/orders/'+s(id)),

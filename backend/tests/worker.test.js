@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
-import {randomBytes,randomUUID} from 'node:crypto';
+import {generateKeyPairSync,randomBytes,randomUUID,verify} from 'node:crypto';
 import worker from '../src/index.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
@@ -481,4 +481,34 @@ test('checkout requires a contact phone without claiming OTP verification; anony
  assert.equal(f.DB.db.prepare('SELECT phone_verified_at FROM users WHERE id=?').get(f.tokens.customer.id).phone_verified_at,null);
  const orders=f.DB.db.prepare('SELECT COUNT(*) AS n FROM online_orders').get();
  assert.equal(orders.n,2);
+});
+
+test('QA push identities are signed only for the authenticated account and exact QA origin',async()=>{
+ const f=await fixture();
+ const {privateKey,publicKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+ const origin='https://dvolada-qa.dvoladanexora.workers.dev';
+ Object.assign(f.env,{QA_ONESIGNAL_APP_ID:randomUUID(), QA_ONESIGNAL_ORIGIN:origin,
+  QA_ONESIGNAL_SIGNING_KEY:privateKey.export({format:'pem',type:'pkcs8'}),
+  QA_ONESIGNAL_IDENTITY_VERIFIED:'true'});
+ const issue=(token,host=origin)=>worker.fetch(new Request(host+'/api/v1/push/identity',{
+  method:'POST',headers:{...(token?{Authorization:'Bearer '+token}:{}),'Content-Type':'application/json'},
+  body:JSON.stringify({externalId:f.tokens.customer2.id})
+ }),f.env);
+ assert.equal((await issue(null)).status,401);
+ assert.equal((await issue(f.tokens.customer.token,'https://dvolada-web-staging.pages.dev')).status,503);
+ for(const role of ['customer','customer2','staffA','staffB','courier']){
+  const response=await issue(f.tokens[role].token);
+  assert.equal(response.status,200);
+  assert.match(response.headers.get('cache-control'),/no-store/);
+  const {externalId,jwt}=await response.json();
+  assert.equal(externalId,'dvolada-qa:'+f.tokens[role].id);
+  const [head,payload,signature]=jwt.split('.');
+  const claims=JSON.parse(Buffer.from(payload,'base64url'));
+  assert.equal(claims.identity.external_id,externalId);
+  assert.equal(claims.iss,f.env.QA_ONESIGNAL_APP_ID);
+  assert.ok(claims.exp<=Date.now()/1000+300);
+  assert.ok(verify('sha256',Buffer.from(head+'.'+payload),{key:publicKey,dsaEncoding:'ieee-p1363'},Buffer.from(signature,'base64url')));
+ }
+ f.env.QA_ONESIGNAL_IDENTITY_VERIFIED='false';
+ assert.equal((await issue(f.tokens.customer.token)).status,503);
 });

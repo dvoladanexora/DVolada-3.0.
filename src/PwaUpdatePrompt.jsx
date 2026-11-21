@@ -4,13 +4,13 @@ import './pwa-update.css';
 
 const CURRENT_BUILD=document.querySelector('meta[name="dvolada-build"]')?.content||'';
 const BASE=import.meta.env.BASE_URL;
-export default function PwaUpdatePrompt(){
+export default function PwaUpdatePrompt({live=false}){
  const [waiting,setWaiting]=useState(null),[newBuild,setNewBuild]=useState(''),[busy,setBusy]=useState(false),[dismissed,setDismissed]=useState('');
- const waitingRef=useRef(null);
+ const waitingRef=useRef(null),updateRequested=useRef(false);
  useEffect(()=>{
   let alive=true,registration=null,timer=null,removeWorker=()=>{};
   const inspect=reg=>{if(!alive)return;if(reg?.waiting&&navigator.serviceWorker.controller){waitingRef.current=reg.waiting;setWaiting(reg.waiting)}};
-  const onController=()=>window.location.reload();
+  const onController=()=>{if(updateRequested.current)window.location.reload()};
   const check=async()=>{
    if(!navigator.onLine)return;
    try{
@@ -39,9 +39,11 @@ export default function PwaUpdatePrompt(){
  const available=Boolean(newBuild||waiting);
  const update=()=>{
   if(!available)return;
+  if(live&&!window.confirm('La actualización vuelve a cargar Dvolada. El carrito abierto y la sesión de prueba se pueden cerrar. ¿Actualizar ahora?'))return;
   let cart=[];
   try{cart=JSON.parse(localStorage.getItem('dv_cart')||'[]')}catch{}
   if(Array.isArray(cart)&&cart.length&&!window.confirm('Tenés productos en tu carrito. D Volada los mantiene guardados, pero una actualización puede interrumpir lo que estés haciendo. ¿Actualizar ahora?'))return;
+  updateRequested.current=true;
   setBusy(true);
   const worker=waitingRef.current;
   if(worker){worker.postMessage({type:'SKIP_WAITING'});setTimeout(()=>window.location.reload(),3500)}

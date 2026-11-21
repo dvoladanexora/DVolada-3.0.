@@ -7,6 +7,15 @@ const ALLOWED_KINDS=new Set(['order_created','order_accepted','order_preparing',
  'order_ready','courier_assigned','order_collected','order_on_the_way','order_arrived',
  'order_delivered','order_cancelled']);
 
+async function eventKey(orderId, kind){
+ const digest = new Uint8Array(await crypto.subtle.digest('SHA-256',
+  new TextEncoder().encode('dvolada:push:'+orderId+':'+kind)));
+ digest[6]=(digest[6]&0x0f)|0x40;
+ digest[8]=(digest[8]&0x3f)|0x80;
+ const hex=Array.from(digest.slice(0,16),byte=>byte.toString(16).padStart(2,'0')).join('');
+ return [hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');
+}
+
 export async function sendOrderPush(env,{subscriptionIds,kind,orderNumber,orderId,fetcher=fetch}={}){
  if(env.PUSH_NOTIFICATIONS_ENABLED!=='true')return {sent:false,reason:'disabled'};
  if(!env.ONESIGNAL_APP_ID||!env.ONESIGNAL_REST_API_KEY)return {sent:false,reason:'unconfigured'};
@@ -34,6 +43,7 @@ export async function sendOrderPush(env,{subscriptionIds,kind,orderNumber,orderI
   body:JSON.stringify({
    app_id:env.ONESIGNAL_APP_ID,
    include_subscription_ids:ids,
+   idempotency_key:await eventKey(orderId,kind),
    target_channel:'push',
    headings:{es:titles[kind]},
    contents:{es:'Pedido '+orderNumber+'. Consultá su estado en Dvolada.'},

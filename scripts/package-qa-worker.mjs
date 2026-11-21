@@ -1,4 +1,4 @@
-import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import sharp from 'sharp';
@@ -15,6 +15,7 @@ const types = {
 const assets = {};
 const files = [
   'index.html', 'sw.js', 'version.json', 'manifest-live.webmanifest',
+  'push/onesignal/OneSignalSDKWorker.js',
   'icon-clean-192.png', 'icon-clean-512.png', 'logo.png',
   'file_00000000e77081fd8cf8ee8349e461b6.png',
   ...(await readdir('dist/assets')).map(name => 'assets/' + name),

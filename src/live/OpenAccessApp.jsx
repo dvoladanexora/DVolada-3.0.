@@ -42,10 +42,11 @@ export default function OpenAccessApp(){
  useEffect(()=>{
   let active=true;
   if(!api){setMessage('Conexión del catálogo pendiente. El servidor todavía no está disponible para compras.');return}
-  api.restaurants().then(r=>{if(active)setRestaurants(r.restaurants||[])})
+  if(offline)return;
+  api.restaurants().then(r=>{if(active){setRestaurants(r.restaurants||[]);setMessage('')}})
    .catch(()=>{if(active)setMessage('No se pudo obtener el catálogo del servidor. Probá nuevamente más tarde.')});
   return()=>{active=false};
- },[api]);
+ },[api,offline]);
  async function togglePush(){
   if(pushStatus==='busy')return;
   const turningOff=pushStatus==='enabled';
@@ -85,7 +86,7 @@ export default function OpenAccessApp(){
     <strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
    <div className="dvl-head-actions">
     {stagingPanels&&<a className="dvl-action secondary" href="/pruebas">Paneles de pruebas</a>}
-    {isDvoladaPushConfigured()&&<button className="dvl-action secondary" disabled={offline||pushStatus==='busy'}
+    {!stagingPanels&&isDvoladaPushConfigured()&&<button className="dvl-action secondary" disabled={offline||pushStatus==='busy'}
      type="button" onClick={togglePush} aria-label={pushStatus==='enabled'?'Desactivar notificaciones':'Activar notificaciones'}>
      {pushStatus==='enabled'?<BellOff size={16}/>:<Bell size={16}/>}
      {pushStatus==='enabled'?'Silenciar':'Notificarme'}

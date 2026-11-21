@@ -13,7 +13,7 @@
     "test:live": "node --test tests/live-api.test.js",
     "test:access": "node --test tests/open-access.test.js",
     "test:push": "node --test tests/push-ui.test.js",
-    "test:staging": "node --test tests/staging-site.test.js"
+    "test:staging": "node --test tests/staging-site.test.js tests/pwa-qa.test.js"
   },
   "dependencies": {
     "react": "^18.3.1",

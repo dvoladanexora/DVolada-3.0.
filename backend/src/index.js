@@ -7,6 +7,7 @@ import {
  courierOrders,courierStatus,courierOffer,confirmDelivery,customerCreate,customerOrders,
  customerOrder,customerCancel
 } from './orders.js';
+import { issueQaPushIdentity } from './qa-push-identity.js';
 import {createRestaurant,updateRestaurant,assignMember,enrollCourier,createProduct,
  updateProduct,updateAvailability} from './management.js';
 
@@ -40,6 +41,9 @@ async function route(req,env){
  }
  const actor=await identity(req,env);
  if(['POST','PATCH'].includes(method))await mutationRateLimit(env,actor);
+ if(method==='POST'&&path==='/api/v1/push/identity'){
+  return respond(req,env,200,await issueQaPushIdentity(req,env,actor));
+ }
  if(method==='GET'&&path==='/api/v1/auth/me'){
   const {results=[]}=await env.DB.prepare(`SELECT m.restaurant_id,m.staff_role,r.name
     FROM restaurant_memberships m JOIN restaurants r ON r.id=m.restaurant_id

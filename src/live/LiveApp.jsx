@@ -2,6 +2,7 @@ import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {ShoppingBag,Store,Bike,ShieldCheck,LogOut,RefreshCw,WifiOff,LockKeyhole,ArrowRight,Package,CheckCircle2} from 'lucide-react';
 import {createLiveApi,LiveApiError} from './live-api.js';
 import './live.css';
+import { enableQaPush, disableQaPush } from './onesignal-push.js';
 import {applyDvoladaTheme} from '../theme-policy.js';
 
 const apiOrigin=import.meta.env.VITE_DVOLADA_API_URL||window.location.origin;
@@ -42,6 +43,7 @@ function OrderCard({order,children}){
 }
 export default function LiveApp(){
  const sessionRef=useRef(null),checkoutKey=useRef(null),alive=useRef(true);
+ const [pushConfig,setPushConfig]=useState(null),[pushEnabled,setPushEnabled]=useState(false);
  const [session,setSession]=useState(null),[accessCode,setAccessCode]=useState('');
  const [status,setStatus]=useState(''),[error,setError]=useState('');
  const [scope,setScope]=useState('customer'),[restaurants,setRestaurants]=useState([]),[products,setProducts]=useState([]);
@@ -102,18 +104,20 @@ export default function LiveApp(){
   return()=>{window.removeEventListener('online',on);window.removeEventListener('offline',off)}
  },[]);
  useEffect(()=>{
-  if(!api)return;
+  if(!api||offline)return;
   let stopped=false;
+  fetch('/push-config',{cache:'no-store'}).then(r=>r.ok?r.json():null)
+   .then(config=>{if(!stopped)setPushConfig(config)}).catch(()=>{});
   api.restaurants().then(r=>{if(!stopped)setRestaurants(r.restaurants||[])}).catch(()=>{});
   return()=>{stopped=true};
- },[api]);
+ },[api,offline]);
  useEffect(()=>{
-  if(!session||!api)return;
+  if(!session||!api||offline)return;
   let live=true;
   load(scope,selectedRestaurantId).catch(e=>{if(live)setError(errorLabel(e))});
   const timer=setInterval(()=>{if(live&&!busy)load(scope,selectedRestaurantId).catch(()=>{})},15000);
   return()=>{live=false;clearInterval(timer)};
- },[session,api,scope,selectedRestaurantId,load,busy]);
+ },[session,api,scope,selectedRestaurantId,load,busy,offline]);
 
  async function run(fn,{refresh=true}={}){
   if(busy||offline)return;
@@ -143,12 +147,41 @@ export default function LiveApp(){
    setBusy(false);
   }
  }
+ async function setQaPush(enabled){
+  if(busy||offline)return;
+  setBusy(true);setError('');
+  try{
+   if(!enabled){
+    await disableQaPush(pushConfig);
+    setPushEnabled(false);setStatus('Notificaciones desactivadas en este navegador.');
+   }else{
+    const result=await enableQaPush(pushConfig,()=>api.pushIdentity());
+    setPushEnabled(result.status==='enabled');
+    setStatus({
+     enabled:'Notificaciones activadas para tu cuenta.',
+     pending:'Suscripción pendiente. Revisá el permiso del navegador.',
+     blocked:'Permiso de notificaciones denegado en el navegador.',
+     unsupported:'Este navegador no admite notificaciones.',
+     'install-ios':'En iPhone, instalá Dvolada en la pantalla de inicio.',
+    }[result.status]||'Notificaciones aún no configuradas.');
+   }
+  }catch(e){setError(errorLabel(e))}
+  finally{setBusy(false)}
+ }
  async function logout(){
   setBusy(true);
-  try{if(sessionRef.current)await api.logout().catch(()=>{});
+  try{
+   let pushFailure=false;
+   if(pushConfig?.enabled){
+    try{await disableQaPush(pushConfig)}catch{pushFailure=true}
+    setPushEnabled(false);
+   }
+   if(sessionRef.current)await api.logout().catch(()=>{});
    sessionRef.current=null;setSession(null);setOrders([]);setCart([]);setCartRestaurantId('');setShoppingRestaurant('');setProducts([]);
-   checkoutKey.current=null;setScope('customer');setSelectedPin(null);setPhone('');setDeliveryAddress('');setStatus('');
-  }finally{setBusy(false)}
+   checkoutKey.current=null;setScope('customer');setSelectedPin(null);setPhone('');setDeliveryAddress('');
+   setStatus(pushFailure?'Sesión cerrada. Revisá el permiso de notificaciones de este sitio en el navegador.':'');
+  }catch(e){setError(errorLabel(e))}
+  finally{setBusy(false)}
  }
  async function viewProducts(restaurantId){
   setError('');
@@ -236,6 +269,10 @@ export default function LiveApp(){
    <nav className="dvl-roles" aria-label="Paneles autorizados">{availableScopes.map(s=><button key={s} className={scope===s?'active':''}
     onClick={()=>{setScope(s);setError('');setSelectedPin(null);setOrderDetail(null)}}>{s==='customer'?<ShoppingBag size={17}/>:s==='restaurant'?<Store size={17}/>:s==='courier'?<Bike size={17}/>:<ShieldCheck size={17}/>} {roles[s]}</button>)}
     <Action kind="secondary" disabled={busy||offline} onClick={()=>run(()=>load(scope,selectedRestaurantId),{refresh:false})}><RefreshCw size={15}/> Actualizar</Action>
+    {pushConfig?.enabled&&<>
+     {!pushEnabled&&<Action kind="secondary" disabled={busy||offline} onClick={()=>setQaPush(true)}>Activar notificaciones</Action>}
+     <Action kind="secondary" disabled={busy||offline} onClick={()=>setQaPush(false)}>Desactivar notificaciones</Action>
+    </>}
    </nav>
    {scope==='customer'&&<div className="dvl-columns">
     <section className="dvl-panel"><h2>Restaurantes afiliados</h2>

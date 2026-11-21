@@ -62,3 +62,19 @@ test('failed provider responses stay opaque to callers',async()=>{
  });
  assert.deepEqual(r,{sent:false,reason:'provider-error',status:403});
 });
+
+test('retrying the same push event preserves the provider deduplication key',async()=>{
+ const env={PUSH_NOTIFICATIONS_ENABLED:'true',ONESIGNAL_APP_ID:appId,ONESIGNAL_REST_API_KEY:'test'};
+ const keys=[];
+ const fetcher=async(_url,{body})=>{
+  keys.push(JSON.parse(body).idempotency_key);
+  return {ok:true,json:async()=>({id:'test'})};
+ };
+ const args={subscriptionIds:[subscriptionId],orderId,orderNumber:'DV 77',fetcher};
+ await sendOrderPush(env,{...args,kind:'order_created'});
+ await sendOrderPush(env,{...args,kind:'order_created'});
+ await sendOrderPush(env,{...args,kind:'order_ready'});
+ assert.match(keys[0],/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+ assert.equal(keys[0],keys[1]);
+ assert.notEqual(keys[0],keys[2]);
+});

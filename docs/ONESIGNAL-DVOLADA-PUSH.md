@@ -8,7 +8,7 @@ Preparación en **rama prelaunch/phase-3-live-integration**, PR #77, **sin fusio
 - [x] Service Worker independiente: `/push/onesignal/OneSignalSDKWorker.js`, ámbito `/push/onesignal/`; **no sustituir `/sw.js`** de Dvolada.
 - [x] Código servidor `backend/src/onesignal-push.js` para API REST, restringido a suscripciones explícitas autorizadas por servidor y eventos de pedido definidos. Sin broadcast y con clave de API únicamente en el Worker.
 - [x] En la configuración Cloudflare `PUSH_NOTIFICATIONS_ENABLED=false` por defecto. Sin notificaciones ni gastos hasta autorización.
-- [ ] Crear cuenta/app OneSignal Free, configurar dominio HTTPS de la **PWA** y obtener App ID.
+- [x] El propietario creó la cuenta OneSignal Free y la aplicación **Dvolada App**. Se desplegó la URL de pruebas `https://dvolada-web-staging.pages.dev`; resta guardarla como Site URL en OneSignal y copiar el App ID público.
 - [ ] Configurar secreto REST API key **directamente** en Cloudflare (no en GitHub ni en chat), enlazar suscripciones a sesiones de usuario, restaurante y repartidor, y activar despachos solamente después de pruebas de propiedad.
 - [ ] Conectar los eventos reales de pedido con la función de envío una vez que se terminen sesiones y checkout. Las transiciones NO emiten push automáticamente todavía.
 - [ ] Comprobar en Chrome Android, Samsung Internet y iPhone con iOS >=16.4, PWA instalada; también revocación de permisos, logout, pérdida de red y duplicados.
@@ -17,8 +17,8 @@ Preparación en **rama prelaunch/phase-3-live-integration**, PR #77, **sin fusio
 
 1. Abrir https://onesignal.com/ y crear cuenta **Free** usando `dvoladanexora@gmail.com` (puede usar contraseña exclusiva y 2FA).
 2. Crear aplicación OneSignal **Dvolada Web Staging**. Tipo de plataforma: **Web**. Integración: **Custom Code**.
-3. Esperar a que definamos la **URL HTTPS exacta de la PWA frontend en pruebas**. El **sitio web** NO es la API `dvolada-api-staging.dvoladanexora.workers.dev`. El origen debe coincidir exactamente con el que sirve la app instalada.
-4. En OneSignal: Settings > Push & In-App Setup > Web, indicar **Site URL** y elegir **Custom Code**, sin avisos de permiso automáticos.
+3. URL HTTPS de la vista PWA de pruebas: **`https://dvolada-web-staging.pages.dev`**. El sitio no es la API `dvolada-api-staging.dvoladanexora.workers.dev`. Consultar `docs/DVOLADA-CLOUDFLARE-PAGES-STAGING.md`.
+4. En OneSignal, formulario **Site setup**, introducir **Site URL** `https://dvolada-web-staging.pages.dev`, dejar Auto resubscribe activado y presionar Save. No configurar el enlace del Worker API como Site URL.
 5. Copiar el **App ID público** (UUID) de Settings > Keys & IDs. Para compilar frontend Live, agregar: `VITE_ONESIGNAL_APP_ID=<APP_ID>`. Este ID no es secreto.
 6. Crear una **REST API Key** de OneSignal de permisos mínimos, guardar el valor **únicamente** como secreto `ONESIGNAL_REST_API_KEY` dentro del Worker Cloudflare correspondiente. **Nunca enviar el valor por chat, subirlo a GitHub, guardar en localStorage ni ponerlo en `VITE_`**.
 7. Al probar en un dominio de producción distinto, usar otra aplicación OneSignal con el origen de producción, para no mezclar suscriptores de pruebas y clientes.
@@ -49,4 +49,4 @@ Documentación oficial:
 
 ## Importante
 
-*No* activar notificaciones reales hasta que Dvolada tenga autenticación/sesiones seguras para invitado, cliente, restaurante y repartidor. El teléfono puede recopilarse sin OTP por ahora, pero eso **no equivale a verificarlo** y se necesitan controles contra pedidos fraudulentos antes del lanzamiento.
+*No* activar notificaciones de pedidos reales hasta que Dvolada tenga autenticación/sesiones seguras para invitado, cliente, restaurante y repartidor. Se decidió no contratar OTP/SMS pagado por ahora. El teléfono puede recopilarse sin OTP, pero eso **no equivale a verificarlo** y se necesitan controles contra pedidos fraudulentos antes del lanzamiento. El staging permanece bloqueado a compras por la regla D1 de teléfono verificado; esta deberá cambiar con una migración auditada cuando exista el nuevo método seguro de pedidos.

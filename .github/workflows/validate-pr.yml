@@ -64,3 +64,35 @@ jobs:
           VITE_DVOLADA_LIVE_MODE: 'true'
           VITE_DVOLADA_STAGING_PANELS: 'true'
         run: npm run build && node scripts/package-qa-worker.mjs
+
+  legacy-postgres:
+    name: Verificar seguridad del servidor PostgreSQL legado
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dvolada_test
+          POSTGRES_PASSWORD: ci-isolated-credentials
+          POSTGRES_DB: dvolada_security_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dvolada_test -d dvolada_security_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar dependencias reproducibles del servidor legado
+        run: npm --prefix server ci --ignore-scripts --no-audit --no-fund
+      - name: Comprobar sintaxis y aislamiento de pedidos PostgreSQL
+        run: npm --prefix server run check
+      - name: Probar permisos, concurrencia y auditoría con PostgreSQL descartable
+        env:
+          DVOLADA_TEST_DATABASE_URL: postgres://dvolada_test:ci-isolated-credentials@127.0.0.1:5432/dvolada_security_test
+        run: npm --prefix server run test:db

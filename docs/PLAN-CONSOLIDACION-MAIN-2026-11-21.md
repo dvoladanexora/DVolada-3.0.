@@ -62,3 +62,15 @@ Los Workers `dvolada-qa`, `dvolada-api-staging` y D1 `dvolada-staging` son prueb
 
 ## Estrategia recomendada
 **Una sola fusión consolidada y revisada** desde esta candidata a `main`, solo después de cumplir las puertas anteriores, en lugar de mezclar directamente ocho PR y disparar publicaciones parciales. Conservar #72–#77 como fuentes auditables hasta comprobar la paridad y no declarar un PR obsoleto «fusionado» solo por cerrar el ticket.
+
+
+## Primera validación de esta candidata (2026-11-21)
+
+- GitHub Actions PR #78: **job `qa-smoke` aprobado** con pruebas de cliente/API, acceso, push, PWA y Worker SQLite, además de compilación React QA y demo. Esto valida construcción y regresiones automatizadas de la versión React, **no** es autorización para desplegar ni prueba física.
+- **Job PostgreSQL legado aprobado** con base descartable. Se conserva separada de D1, sin promesa de despliegue.
+- **Suite histórica combinada: 196/234 aprobadas; 38 fallidas.** Ejecutar `npm run test:all` para reproducir. Entre los fallos hay expectativas de navegación demo antigua, lógica de pedidos locales, caché, privacidad, acceso por rol y publicación. Un test de texto fallido no demuestra por sí solo un error de servidor, pero tampoco puede ignorarse.
+- Se restauraron el enlace accesible «Saltar al contenido», marcas móviles de página, CSS de foco y carga diferida del panel de compartir/instalar.
+- El workflow de GitHub Pages de esta candidata **ya requiere ejecución manual, rama `main` y repositorio exacto**, además de las pruebas. En `main` todavía rige el workflow automático anterior hasta que se fusione esta candidata.
+- **NO cambiar el estado de borrador ni fusionar** mientras `verify` siga en rojo. Los ocho archivos solapados requieren revisar paridad; migraciones y secretos de QA no deben convertirse en configuración de producción.
+
+Ver GitHub Actions y resultados: https://github.com/dvoladanexora/DVolada-3.0./actions/runs/44915510042

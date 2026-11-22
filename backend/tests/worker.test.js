@@ -8,7 +8,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -784,4 +784,76 @@ test('changing an extra price between quote and write rejects the full order bat
  const created=await f.create({restaurantId,items:[{productId,quantity:1,optionIds:[extra]}]});
  assert.equal(created.body.error,'PRODUCT_UNAVAILABLE');
  assert.equal(f.DB.db.prepare('SELECT COUNT(*) AS count FROM online_orders').get().count,0);
+});
+
+test('password account stores only a peppered verifier and requires a fresh proof after recovery',async()=>{
+ const f=await fixture(),origin='https://dvolada-qa.dvoladanexora.workers.dev';
+ Object.assign(f.env,{CORS_ORIGINS:origin,QA_CLIENT_ACCESS:'true'});
+ const send=(op,body)=>worker.fetch(new Request(origin+'/api/v1/auth/client/'+op,{
+  method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body),
+ }),f.env);
+ const login='qa.password.01',proof='a'.repeat(64),replacement='b'.repeat(64);
+ assert.equal((await send('register',{displayName:'QA',login,proof:'bad'})).status,400);
+ const created=await send('register',{displayName:'Prueba de cliente',login,proof});
+ assert.equal(created.status,201);
+ const codes=await created.json();
+ assert.equal(codes.access,undefined);
+ assert.notEqual(f.DB.db.prepare('SELECT password_hash FROM client_credentials WHERE login_name=?').get(login).password_hash,proof);
+ assert.equal((await send('register',{displayName:'QA duplicado',login,proof})).status,409);
+ assert.equal((await send('login',{login,proof:replacement})).status,401);
+ const session=await send('login',{login,proof});
+ assert.equal(session.status,204);
+ const restored=await send('recover',{login,proof:replacement,code:codes.recovery});
+ assert.equal(restored.status,200);
+ assert.equal((await send('recover',{login,proof:replacement,code:codes.recovery})).status,401);
+ assert.equal((await send('login',{login,proof})).status,401);
+ assert.equal((await send('login',{login,proof:replacement})).status,204);
+ assert.equal((await send('login',{login,proof:replacement})).status,429);
+ const cookie=session.headers.get('set-cookie').split(';')[0];
+ assert.equal((await worker.fetch(new Request(origin+'/api/v1/auth/me',{headers:{Cookie:cookie}}),f.env)).status,401);
+});
+
+test('Flash checkout enforces access, time, eligible product and limits, and releases canceled reservations',async()=>{
+ const f=await fixture();
+ f.env.QA_FLASH='true';
+ const [restaurantId,otherRestaurant]=f.restaurants,[productId,otherProduct]=f.productIds;
+ const now=Math.floor(Date.now()/1000);
+ const config={restaurantId,productId,title:'Flash prueba',discountMinor:500,startsAt:now-100,endsAt:now+300,
+  perCustomer:1,globalLimit:1};
+ const create=(body,by='platformAdmin')=>f.call('/api/v1/admin/flash',{method:'POST',by,body});
+ assert.equal((await create(config,'customer')).status,403);
+ assert.equal((await create({...config,giftProductId:otherProduct,discountMinor:0})).status,400);
+ const discount=await create(config);
+ assert.equal(discount.status,201);
+ const flashId=discount.body.id;
+ const future=await create({...config,title:'Futura',startsAt:now+100,endsAt:now+300});
+ assert.equal(future.status,201);
+ assert.deepEqual((await f.call('/api/v1/catalog/flash')).body.campaigns.map(x=>x.id),[flashId]);
+ const send=(by='customer',pick=flashId,body={},key=randomUUID())=>f.call('/api/v1/customer/orders',{
+  method:'POST',by,key,body:{restaurantId,items:[{productId,quantity:1}],deliveryMethod:'pickup',phone:'+50400000003',flashId:pick,...body}
+ });
+ assert.equal((await send('customer',flashId,{coupon:'QA123'})).body.error,'PROMOTIONS_EXCLUSIVE');
+ assert.equal((await send('customer',flashId,{restaurantId:otherRestaurant,items:[{productId:otherProduct,quantity:1}]})).status,409);
+ assert.equal((await send('customer',future.body.id)).status,409);
+ assert.equal((await send('customer',flashId,{expectedTotalMinor:1})).status,409);
+ assert.equal(f.DB.db.prepare('SELECT COUNT(*) AS n FROM online_orders WHERE flash_id=?').get(flashId).n,0);
+ const key=randomUUID(),placed=await send('customer',flashId,{expectedTotalMinor:9550},key);
+ assert.equal(placed.status,201);
+ assert.equal(placed.body.order.totalMinor,9550);
+ assert.equal((await send('customer',flashId,{expectedTotalMinor:9550},key)).body.order.id,placed.body.order.id);
+ assert.equal((await send('customer2')).body.error,'FLASH_UNAVAILABLE');
+ assert.deepEqual((await f.call('/api/v1/customer/flash')).body.campaigns,[]);
+ const cancel=await f.call('/api/v1/customer/orders/'+placed.body.order.id+'/cancel',{
+  method:'POST',body:{expectedVersion:1},key:randomUUID()});
+ assert.equal(cancel.status,200);
+ assert.equal((await send('customer2')).status,201);
+ const gift=await create({...config,title:'Regalo',discountMinor:0,giftProductId:productId});
+ assert.equal(gift.status,201);
+ const gifted=await send('customer',gift.body.id);
+ assert.equal(gifted.status,201);
+ assert.equal(gifted.body.order.discountMinor,0);
+ assert.equal(gifted.body.order.flashGiftName,'Baleada');
+ assert.equal((await f.call('/api/v1/customer/orders/'+gifted.body.order.id)).body.order.flashGiftName,'Baleada');
+ assert.equal((await f.call('/api/v1/admin/flash/'+gift.body.id,{by:'platformAdmin',method:'PATCH'})).status,200);
+ assert.equal((await send('customer2',gift.body.id)).status,409);
 });

@@ -11,6 +11,7 @@ import { issueQaPushIdentity } from './qa-push-identity.js';
 import {createRestaurant,updateRestaurant,assignMember,enrollCourier,createProduct,
  updateProduct,updateAvailability} from './management.js';
 
+import {adminFlash,flashCatalogue} from './flash.js';
 import {clientAuth,clientAccessEnabled,readClientCookie,changeClientCookie} from './client-access.js';
 import {favorites,clientProfile,conversation,orderClaim} from './client-workspace.js';
 
@@ -63,6 +64,8 @@ async function route(req,env){
  }
  const access=/^\/api\/v1\/auth\/client\/(register|login|recover)$/.exec(path);
  if(method==='POST'&&access)return clientAuth(req,env,access[1]);
+ if(method==='GET'&&path==='/api/v1/catalog/flash')
+  return respond(req,env,200,{...(env.QA_FLASH==='true'?await flashCatalogue(env):{campaigns:[]}),enabled:env.QA_FLASH==='true'});
  if(method==='GET'&&path==='/api/v1/auth/client/config')
   return respond(req,env,200,{enabled:clientAccessEnabled(req,env)});
  const token=!req.headers.has('authorization')&&readClientCookie(req,env);
@@ -102,6 +105,11 @@ async function route(req,env){
  if(path==='/api/v1/customer/favorites'&&method==='GET'||favorite&&method==='PATCH')
   return favorites(req,env,actor,favorite?.[1]);
  if(path==='/api/v1/customer/profile'&&['GET','PATCH'].includes(method))return clientProfile(req,env,actor);
+ if(method==='GET'&&path==='/api/v1/customer/flash')
+  return respond(req,env,200,env.QA_FLASH==='true'?await flashCatalogue(env,actor):{campaigns:[]});
+ const flashAdmin=/^\/api\/v1\/admin\/flash(?:\/([0-9a-f-]+))?$/.exec(path);
+ if(flashAdmin&&env.QA_FLASH==='true'&&(flashAdmin[1]?method==='PATCH':['GET','POST'].includes(method)))
+  return respond(req,env,method==='POST'?201:200,await adminFlash(req,env,actor,flashAdmin[1]));
  if(method==='GET'&&path==='/api/v1/admin/overview'){
   if(actor.role!=='platform_admin')throw new ApiError(403,'ROLE_FORBIDDEN');
   const [restaurants,orders,couriers]=await Promise.all([

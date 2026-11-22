@@ -3,6 +3,7 @@ import {ShoppingBag,Search,MapPin,Phone,Store,WifiOff,ShieldCheck,Bell,BellOff} 
 import {isDvoladaPushConfigured,enableDvoladaPush,disableDvoladaPush} from './onesignal-push.js';
 import {createLiveApi} from './live-api.js';
 import {applyDvoladaTheme} from '../theme-policy.js';
+import {FlashOffers} from './FlashCampaigns.jsx';
 import CatalogSearch from './CatalogSearch.jsx';
 import {readCart,writeCart,updateQuantity} from './cart-draft.js';
 import './live.css';
@@ -17,6 +18,7 @@ const stagingPanels=import.meta.env.VITE_DVOLADA_STAGING_PANELS==='true';
 const API_ORIGIN=import.meta.env.VITE_DVOLADA_API_URL||(stagingPanels?window.location.origin:'');
 
 export default function OpenAccessApp(){
+ const [flashOffers,setFlashOffers]=useState([]);
  const [restaurants,setRestaurants]=useState([]);
  const [selected,setSelected]=useState(null),[products,setProducts]=useState([]);
  const [draft,setDraft]=useState(()=>readCart('guest'));
@@ -48,9 +50,11 @@ export default function OpenAccessApp(){
   let active=true;
   if(!api){setMessage('Conexión del catálogo pendiente. El servidor todavía no está disponible para compras.');return}
   if(offline)return;
+  const refresh=()=>api.publicFlash().then(data=>{if(active)setFlashOffers(data.campaigns)}).catch(()=>{});
+  refresh();const timer=setInterval(refresh,30000);
   api.restaurants().then(r=>{if(active){setRestaurants(r.restaurants||[]);setMessage('')}})
    .catch(()=>{if(active)setMessage('No se pudo obtener el catálogo del servidor. Probá nuevamente más tarde.')});
-  return()=>{active=false};
+  return()=>{active=false;clearInterval(timer)};
  },[api,offline]);
  async function togglePush(){
   if(pushStatus==='busy')return;
@@ -109,6 +113,7 @@ export default function OpenAccessApp(){
    {offline&&<div className="dvl-offline" role="alert"><WifiOff size={18}/> Sin conexión. No podemos confirmar pedidos.</div>}
    {message&&<div className="dvl-notice" role="status">{message}</div>}
    <div className="dvl-columns">
+    <FlashOffers campaigns={offline?[]:flashOffers} money={money} open={openRestaurant}/>
     <section className="dvl-panel">
      <h2><Store size={20}/> {selected?selected.name:'Restaurantes afiliados'}</h2>
      {selected&&<button className="dvl-action secondary" onClick={()=>{menuRequest.current++;setSelected(null);setProducts([])}}>Volver a restaurantes</button>}

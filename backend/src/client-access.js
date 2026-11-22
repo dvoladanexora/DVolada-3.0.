@@ -3,6 +3,8 @@ import {ApiError, hmacHex, readJson, requireKeys, requireText, respond} from './
 export const clientCookie = '__Host-dvolada-client';
 const qaOrigin = 'https://dvolada-qa.dvoladanexora.workers.dev';
 const secretPattern = /^[A-Za-z0-9_-]{43}$/;
+const loginPattern = /^[a-z0-9][a-z0-9._-]{3,39}$/;
+const proofPattern = /^[a-f0-9]{64}$/;
 const maxAge = 60 * 60 * 24 * 7;
 
 export function clientAccessEnabled(req, env) {
@@ -37,7 +39,20 @@ export async function clientAuth(req, env, operation) {
  if (throttle.attempts > 12) throw new ApiError(429, 'LOGIN_RATE_LIMITED');
 
  const body = await readJson(req);
- requireKeys(body, operation === 'register' ? ['displayName'] : ['code']);
+ requireKeys(body, operation === 'register' ? ['displayName','login','proof'] : operation==='recover'?['code','login','proof']:['code','login','proof']);
+ const passwordMode=body.login!==undefined||body.proof!==undefined;
+ const login=typeof body.login==='string'?body.login.trim().toLowerCase():'';
+ if(passwordMode&&(!loginPattern.test(login)||typeof body.proof!=='string'||!proofPattern.test(body.proof)||
+   (operation==='login'&&body.code!==undefined)))throw new ApiError(400,'CLIENT_CREDENTIAL_FORMAT');
+ if(passwordMode){
+  const account=await hmacHex(env.SESSION_PEPPER,'client-login-rate:v1:'+login);
+  const limit=await env.DB.prepare(`INSERT INTO client_auth_throttle(source_hash,time_bucket,attempts)
+   VALUES(?,?,1) ON CONFLICT(source_hash) DO UPDATE SET
+   attempts=CASE WHEN time_bucket=excluded.time_bucket THEN attempts+1 ELSE 1 END,time_bucket=excluded.time_bucket
+   RETURNING attempts`).bind(account,bucket).first();
+  if(limit.attempts>8)throw new ApiError(429,'LOGIN_RATE_LIMITED');
+ }
+ const passwordHash=passwordMode?await hmacHex(env.SESSION_PEPPER,'client-password:pbkdf2-v1:'+login+':'+body.proof):null;
  const now = Math.floor(Date.now()/1000);
  const token = randomSecret();
  const session = env.DB.prepare(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at)
@@ -53,20 +68,29 @@ export async function clientAuth(req, env, operation) {
   const displayName = requireText(body.displayName, 2, 80, 'displayName');
   const id = crypto.randomUUID();
   const codes = await issueCodes();
-  await env.DB.batch([
+  try{await env.DB.batch([
    env.DB.prepare("INSERT INTO users(id,display_name,account_role) VALUES(?,?,'customer')").bind(id,displayName),
-   env.DB.prepare('INSERT INTO client_credentials(user_id,access_hash,recovery_hash) VALUES(?,?,?)')
-    .bind(id,codes.accessHash,codes.recoveryHash),
+   env.DB.prepare('INSERT INTO client_credentials(user_id,access_hash,recovery_hash,login_name,password_hash) VALUES(?,?,?,?,?)')
+    .bind(id,codes.accessHash,codes.recoveryHash,passwordMode?login:null,passwordHash),
    session.bind(...sessionArgs,id,1)
-  ]);
-  return changeClientCookie(respond(req,env,201,{access:codes.access,recovery:codes.recovery}),token);
+  ])}catch(error){
+   if(passwordMode&&/UNIQUE constraint failed: client_credentials.login_name/.test(String(error)))throw new ApiError(409,'CLIENT_LOGIN_UNAVAILABLE');
+   throw error;
+  }
+  return changeClientCookie(respond(req,env,201,{...(passwordMode?{}:{access:codes.access}),recovery:codes.recovery}),token);
  }
 
- if (typeof body.code !== 'string' || !secretPattern.test(body.code)) throw new ApiError(401,'CLIENT_CODE_INVALID');
  const recovery = operation === 'recover';
- const hash = await hmacHex(env.SESSION_PEPPER,(recovery?'client-recover:v1:':'client-access:v1:')+body.code);
- const row = await env.DB.prepare(`SELECT c.user_id,c.revision FROM client_credentials c JOIN users u ON u.id=c.user_id
-  WHERE c.${recovery?'recovery_hash':'access_hash'}=? AND u.status='active' AND u.account_role='customer'`).bind(hash).first();
+ if((recovery||!passwordMode)&&(typeof body.code!=='string'||!secretPattern.test(body.code)))
+  throw new ApiError(401,'CLIENT_CODE_INVALID');
+ const hash=recovery||!passwordMode
+  ?await hmacHex(env.SESSION_PEPPER,(recovery?'client-recover:v1:':'client-access:v1:')+body.code):null;
+ const credentialQuery=`SELECT c.user_id,c.revision FROM client_credentials c JOIN users u ON u.id=c.user_id
+  WHERE u.status='active' AND u.account_role='customer' AND `;
+ const row=await (passwordMode
+  ?env.DB.prepare(credentialQuery+(recovery?'c.login_name=? AND c.recovery_hash=?':'c.login_name=? AND c.password_hash=?'))
+   .bind(login,recovery?hash:passwordHash)
+  :env.DB.prepare(credentialQuery+(recovery?'c.recovery_hash=?':'c.access_hash=?')+' AND c.login_name IS NULL').bind(hash)).first();
  if (!row) throw new ApiError(401,'CLIENT_CODE_INVALID');
 
  if (!recovery) {
@@ -77,8 +101,8 @@ export async function clientAuth(req, env, operation) {
 
  const codes = await issueCodes();
  const [rotated] = await env.DB.batch([
-  env.DB.prepare(`UPDATE client_credentials SET access_hash=?,recovery_hash=?,revision=revision+1
-   WHERE user_id=? AND revision=? AND recovery_hash=?`).bind(codes.accessHash,codes.recoveryHash,row.user_id,row.revision,hash),
+  env.DB.prepare(`UPDATE client_credentials SET access_hash=?,recovery_hash=?,password_hash=?,revision=revision+1
+   WHERE user_id=? AND revision=? AND recovery_hash=?`).bind(codes.accessHash,codes.recoveryHash,passwordHash,row.user_id,row.revision,hash),
   env.DB.prepare(`UPDATE auth_sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL
    AND EXISTS(SELECT 1 FROM client_credentials WHERE user_id=? AND recovery_hash=?)`)
    .bind(now,row.user_id,row.user_id,codes.recoveryHash),
@@ -87,5 +111,5 @@ export async function clientAuth(req, env, operation) {
    .bind(...sessionArgs,row.user_id,codes.recoveryHash)
  ]);
  if (!rotated.meta.changes) throw new ApiError(401,'CLIENT_CODE_INVALID');
- return changeClientCookie(respond(req,env,200,{access:codes.access,recovery:codes.recovery}),token);
+ return changeClientCookie(respond(req,env,200,{...(passwordMode?{}:{access:codes.access}),recovery:codes.recovery}),token);
 }

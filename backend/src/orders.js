@@ -1,3 +1,4 @@
+import {resolveFlash} from './flash.js';
 import {
  ApiError,requireUuid,requireInteger,requireText,requireKeys,readJson,sha256,
  idempotencyKey,sqlConflict,requireRole,requireStaff,deliveryPin
@@ -16,16 +17,16 @@ const courierMoves={
  'En camino':['En ubicación']
 };
 const dataOrder=`SELECT id,restaurant_id,customer_id,courier_id,order_number,delivery_method,
- delivery_address,status,version,courier_response,subtotal_minor,delivery_fee_minor,total_minor,discount_minor,pin_attempts,
+ delivery_address,status,version,courier_response,subtotal_minor,delivery_fee_minor,total_minor,discount_minor,flash_gift_name,pin_attempts,
  created_at,updated_at FROM online_orders`;
 const briefOrder=`SELECT id,restaurant_id,courier_id,order_number,delivery_method,status,version,courier_response,
- subtotal_minor,delivery_fee_minor,total_minor,discount_minor,created_at,updated_at FROM online_orders`;
+ subtotal_minor,delivery_fee_minor,total_minor,discount_minor,flash_gift_name,created_at,updated_at FROM online_orders`;
 function orderDto(order,{includeAddress=false}={}){
  if(!order)return null;
  const data={id:order.id,restaurantId:order.restaurant_id,orderNumber:order.order_number,
    status:order.status,version:order.version,courierResponse:order.courier_response,deliveryMethod:order.delivery_method,
    courierId:order.courier_id,subtotalMinor:order.subtotal_minor,
-   deliveryFeeMinor:order.delivery_fee_minor,discountMinor:order.discount_minor||0,totalMinor:order.total_minor-(order.discount_minor||0),
+   deliveryFeeMinor:order.delivery_fee_minor,discountMinor:order.discount_minor||0,flashGiftName:order.flash_gift_name||null,totalMinor:order.total_minor-(order.discount_minor||0),
    createdAt:order.created_at,updatedAt:order.updated_at};
  if(includeAddress)data.deliveryAddress=order.delivery_address;
  return data;
@@ -252,7 +253,7 @@ export async function customerCreate(req,env,actor){
  requireRole(actor,'customer');
  if(env.ORDER_CREATION_ENABLED!=='true')throw new ApiError(503,'ORDER_CREATION_DISABLED');
  const body=await readJson(req,16384);
- requireKeys(body,['restaurantId','items','deliveryMethod','deliveryAddress','phone','expectedTotalMinor','coupon']);
+ requireKeys(body,['restaurantId','items','deliveryMethod','deliveryAddress','phone','expectedTotalMinor','coupon','flashId']);
  const phone=typeof body.phone==='string'?body.phone.replace(/[\s()-]/g,''):'';
  if(!/^\+504[0-9]{8}$/.test(phone))throw new ApiError(400,'PHONE_REQUIRED');
  const restaurantId=requireUuid(body.restaurantId,'restaurantId');
@@ -275,7 +276,10 @@ export async function customerCreate(req,env,actor){
  const expectedTotalMinor=body.expectedTotalMinor===undefined?undefined:
   requireInteger(body.expectedTotalMinor,0,2000000000,'expectedTotalMinor');
  const coupon=body.coupon===undefined?undefined:couponCode(body.coupon);
- const intent={restaurantId,deliveryMethod,deliveryAddress,phone,items,expectedTotalMinor,coupon};
+ const flashId=body.flashId===undefined?undefined:requireUuid(body.flashId,'flashId');
+ if(flashId&&coupon)throw new ApiError(400,'PROMOTIONS_EXCLUSIVE');
+ if(flashId&&env.QA_FLASH!=='true')throw new ApiError(409,'FLASH_UNAVAILABLE');
+ const intent={restaurantId,deliveryMethod,deliveryAddress,phone,items,expectedTotalMinor,coupon,flashId};
  const hash=await sha256(JSON.stringify(intent));
  const replay=async()=>{
   const prev=await env.DB.prepare(`SELECT c.request_hash,o.* FROM order_create_requests c
@@ -317,7 +321,8 @@ export async function customerCreate(req,env,actor){
  const fee=deliveryMethod==='delivery'?restaurant.delivery_fee_minor:0;
  if(!Number.isSafeInteger(subtotal)||subtotal+fee>2000000000)
   throw new ApiError(400,'INVALID_TOTAL');
- const discount=coupon?Math.min(subtotal,await validCoupon(env,actor,restaurantId,coupon)):0;
+ const flash=flashId?await resolveFlash(env,actor,flashId,restaurantId,resolved):null;
+ const discount=flash?.discountMinor??(coupon?Math.min(subtotal,await validCoupon(env,actor,restaurantId,coupon)):0);
  if(coupon&&!discount)throw new ApiError(409,'COUPON_UNAVAILABLE');
  const total=subtotal+fee-discount;
  if(expectedTotalMinor!==undefined&&expectedTotalMinor!==total)
@@ -325,8 +330,8 @@ export async function customerCreate(req,env,actor){
  const id=crypto.randomUUID(),orderNumber='DV-'+id.replaceAll('-','').slice(0,12).toUpperCase();
  const stmts=[
   env.DB.prepare(`INSERT INTO online_orders(id,restaurant_id,customer_id,order_number,delivery_method,
-   delivery_address,status,version,subtotal_minor,delivery_fee_minor,total_minor,customer_phone_e164,coupon_code,discount_minor) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-   .bind(id,restaurantId,actor.userId,orderNumber,deliveryMethod,deliveryAddress,'Pendiente',1,subtotal,fee,subtotal+fee,phone,coupon??null,discount),
+   delivery_address,status,version,subtotal_minor,delivery_fee_minor,total_minor,customer_phone_e164,coupon_code,discount_minor,flash_id,flash_gift_name) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+   .bind(id,restaurantId,actor.userId,orderNumber,deliveryMethod,deliveryAddress,'Pendiente',1,subtotal,fee,subtotal+fee,phone,coupon??null,discount,flashId??null,flash?.giftName??null),
   ...resolved.map(p=>env.DB.prepare(`INSERT INTO online_order_items(id,order_id,product_id,name_snapshot,
     unit_price_minor,quantity,line_total_minor,options_json,options_minor) VALUES(?,?,?,?,?,?,?,?,?)`)
     .bind(crypto.randomUUID(),id,p.id,p.name,p.price_minor,p.quantity,p.price_minor*p.quantity,JSON.stringify(p.options),p.optionsMinor)),
@@ -338,7 +343,7 @@ export async function customerCreate(req,env,actor){
  try{await env.DB.batch(stmts)}
  catch(error){const duplicated=await replay();if(duplicated)return duplicated;throw sqlConflict(error)}
  return {order:{id,restaurantId,orderNumber,status:'Pendiente',version:1,deliveryMethod,
-  subtotalMinor:subtotal,deliveryFeeMinor:fee,discountMinor:discount,totalMinor:total},
+  subtotalMinor:subtotal,deliveryFeeMinor:fee,discountMinor:discount,flashGiftName:flash?.giftName??null,totalMinor:total},
   deliveryPin:deliveryMethod==='delivery'?await deliveryPin(env.PIN_SECRET,id):null,replayed:false};
 }
 export async function customerOrders(env,actor){

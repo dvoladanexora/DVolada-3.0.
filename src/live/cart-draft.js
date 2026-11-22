@@ -4,6 +4,10 @@ const validOption = option => uuid.test(option?.id) && typeof option.name==='str
   option.name.length<=100 && Number.isSafeInteger(option.price_minor) && option.price_minor>=0;
 const cartLine = ({productId,name,priceMinor,quantity,options}) =>
   ({productId,name,priceMinor,quantity,...(options?.length?{options:options.map(({id,name,price_minor})=>({id,name,price_minor}))}:{})});
+const flashDraft = value => uuid.test(value?.id||'')&&uuid.test(value.restaurantId||'')&&
+  (!value.productId||uuid.test(value.productId))&&Number.isSafeInteger(value.discountMinor)&&value.discountMinor>=0
+  ?{id:value.id,restaurantId:value.restaurantId,productId:value.productId,discountMinor:value.discountMinor,
+     giftName:typeof value.giftName==='string'?value.giftName.slice(0,150):null}:null;
 const storageKey = account => 'dvolada:cart:v1:' + account;
 
 export function readCart(account, storage) {
@@ -17,18 +21,18 @@ export function readCart(account, storage) {
         items.some(item => !uuid.test(item.productId) || typeof item.name !== 'string' ||
           item.name.length > 160 || !Number.isSafeInteger(item.priceMinor) || item.priceMinor < 0 ||
           !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 25)) return empty();
-    return { restaurantId: data.restaurantId, items, pendingKey: uuid.test(data.pendingKey) ? data.pendingKey : null, ...(data.coupon&&/^[A-Z0-9-]{4,24}$/.test(data.coupon.code)&&Number.isSafeInteger(data.coupon.discountMinor)&&data.coupon.discountMinor>0?{coupon:{code:data.coupon.code,discountMinor:data.coupon.discountMinor}}:{}) };
+    return { restaurantId: data.restaurantId, items, pendingKey: uuid.test(data.pendingKey) ? data.pendingKey : null, ...(data.coupon&&/^[A-Z0-9-]{4,24}$/.test(data.coupon.code)&&Number.isSafeInteger(data.coupon.discountMinor)&&data.coupon.discountMinor>0?{coupon:{code:data.coupon.code,discountMinor:data.coupon.discountMinor}}:{}), ...(flashDraft(data.flash)?{flash:flashDraft(data.flash)}:{}) };
   } catch {
     return empty();
   }
 }
 
-export function writeCart(account, { restaurantId, items, pendingKey, coupon }, storage) {
+export function writeCart(account, { restaurantId, items, pendingKey, coupon, flash }, storage) {
   try {
     const target = storage ?? window.sessionStorage;
     if (!items.length) target.removeItem(storageKey(account));
     else target.setItem(storageKey(account), JSON.stringify({
-      restaurantId, pendingKey, coupon:coupon?{code:coupon.code,discountMinor:coupon.discountMinor}:undefined,
+      restaurantId, pendingKey, coupon:coupon?{code:coupon.code,discountMinor:coupon.discountMinor}:undefined,flash:flashDraft(flash)||undefined,
       items: items.map(cartLine),
     }));
     return true;

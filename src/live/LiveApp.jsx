@@ -6,6 +6,7 @@ import './live.css';
 import { enableQaPush, disableQaPush } from './onesignal-push.js';
 import {applyDvoladaTheme} from '../theme-policy.js';
 import ClientAccess,{ClientCodes} from './ClientAccess.jsx';
+import {FlashAdmin,FlashOffers} from './FlashCampaigns.jsx';
 import ClientSupport from './ClientSupport.jsx';
 import CatalogSearch from './CatalogSearch.jsx';
 import {readCart,writeCart,updateQuantity} from './cart-draft.js';
@@ -43,9 +44,15 @@ function errorLabel(error){
   PIN_LOCKED:'Demasiados intentos. Se requiere intervención autorizada.',
   FIREBASE_IDENTITY_UNVERIFIED:'Verificá tu correo antes de ingresar.',
   FIREBASE_NOT_CONFIGURED:'Todavía no se configuró Firebase para Dvolada.',
+  FLASH_UNAVAILABLE:'La promoción terminó, se agotó o dejó de aplicar. Revisá el carrito.',
+  PROMOTIONS_EXCLUSIVE:'Elegí un cupón o una promoción Flash.',
+  INVALID_FLASH_REWARD:'Elegí un regalo o un descuento.',
+  INVALID_FLASH_CATALOG:'Revisá los productos elegidos para el restaurante.',
   INVALID_COUPON:'Revisá el formato del cupón.',
   COUPON_UNAVAILABLE:'Cupón vencido, ya utilizado o ajeno a este restaurante.',
   CLIENT_CODE_INVALID:'La clave o el código no es válido.',
+  CLIENT_CREDENTIAL_FORMAT:'Revisá el usuario y la contraseña.',
+  CLIENT_LOGIN_UNAVAILABLE:'Ese usuario ya está en uso.',
   LOGIN_RATE_LIMITED:'Demasiados intentos de acceso. Intentá más tarde.'
  };
  return lookup[error.code]||error.code||'Error de conexión';
@@ -61,6 +68,7 @@ export default function LiveApp(){
  const [pushConfig,setPushConfig]=useState(null),[pushEnabled,setPushEnabled]=useState(false);
  const [accountEnabled,setAccountEnabled]=useState(false),[accessReady,setAccessReady]=useState(false);
  const [newCodes,setNewCodes]=useState(null),[support,setSupport]=useState(null);
+ const [flashEnabled,setFlashEnabled]=useState(false),[flashOffers,setFlashOffers]=useState([]),[flashSelection,setFlashSelection]=useState(null);
  const [favoriteIds,setFavoriteIds]=useState([]),[onlyFavorites,setOnlyFavorites]=useState(false);
  const [session,setSession]=useState(null),[accessCode,setAccessCode]=useState('');
  const [status,setStatus]=useState(''),[error,setError]=useState(''),[refreshWarning,setRefreshWarning]=useState('');
@@ -104,7 +112,7 @@ export default function LiveApp(){
 
  const endLocalSession=useCallback(()=>{
   sessionRef.current=null;menuRequest.current++;
-  setNewCodes(null);setSupport(null);setFavoriteIds([]);setOnlyFavorites(false);
+  setNewCodes(null);setSupport(null);setFlashOffers([]);setFlashSelection(null);setFavoriteIds([]);setOnlyFavorites(false);
   setSession(null);setScope('customer');setSelectedRestaurantId('');
   setOrders([]);setOrderDetail(null);setManageProducts([]);setRestaurantCapabilities(null);
   setCouriers([]);setCourierChoice({});setAdminStats(null);setAdminRestaurants([]);
@@ -124,7 +132,7 @@ export default function LiveApp(){
   setScope(me.user.role==='platform_admin'?'admin':me.user.role==='courier'?'courier':first?'restaurant':'customer');
   if(me.user.role==='customer'&&!first){
    const draft=readCart(me.user.id);
-   setCart(draft.items);setCartRestaurantId(draft.restaurantId);setPendingKey(draft.pendingKey);setAppliedCoupon(draft.coupon||null);setCouponText(draft.coupon?.code||'');
+   setCart(draft.items);setCartRestaurantId(draft.restaurantId);setPendingKey(draft.pendingKey);setAppliedCoupon(draft.coupon||null);setCouponText(draft.coupon?.code||'');setFlashSelection(draft.flash||null);
   }
   setSession(me);
  },[]);
@@ -184,8 +192,8 @@ export default function LiveApp(){
  useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
  const cartAccount=session?.user?.role==='customer'&&!session.restaurants?.length?session.user.id:null;
  useEffect(()=>{
-  if(cartAccount)writeCart(cartAccount,{restaurantId:cartRestaurantId,items:cart,pendingKey,coupon:appliedCoupon});
- },[cartAccount,cartRestaurantId,cart,pendingKey,appliedCoupon]);
+  if(cartAccount)writeCart(cartAccount,{restaurantId:cartRestaurantId,items:cart,pendingKey,coupon:appliedCoupon,flash:flashSelection});
+ },[cartAccount,cartRestaurantId,cart,pendingKey,appliedCoupon,flashSelection]);
  useEffect(()=>{
   const on=()=>setOffline(false),off=()=>setOffline(true);
   window.addEventListener('online',on);window.addEventListener('offline',off);
@@ -196,6 +204,7 @@ export default function LiveApp(){
   let stopped=false;
   fetch('/push-config',{cache:'no-store'}).then(r=>r.ok?r.json():null)
    .then(config=>{if(!stopped)setPushConfig(config)}).catch(()=>{});
+  api.publicFlash().then(result=>{if(!stopped)setFlashEnabled(result.enabled)}).catch(()=>{});
   api.restaurants().then(r=>{if(!stopped)setRestaurants(r.restaurants||[])}).catch(()=>{});
   return()=>{stopped=true};
  },[api,offline]);
@@ -216,6 +225,15 @@ export default function LiveApp(){
   return()=>{active=false};
  },[api,cartAccount,offline,handleSessionError]);
 
+ useEffect(()=>{
+  if(!cartAccount||offline||!flashEnabled)return;
+  let active=true;
+  const refresh=()=>api.customerFlash().then(data=>{if(active)setFlashOffers(data.campaigns)})
+   .catch(error=>{if(active&&error.status===401)handleSessionError(error)});
+  refresh();
+  const timer=setInterval(refresh,30000);
+  return()=>{active=false;clearInterval(timer)};
+ },[api,cartAccount,offline,flashEnabled,handleSessionError]);
  async function toggleFavorite(id){
   const result=await run(()=>api.setFavorite(id,!favoriteIds.includes(id)),{refresh:false});
   if(result)setFavoriteIds(ids=>result.favorite?[...new Set([...ids,id])]:ids.filter(item=>item!==id));
@@ -225,7 +243,7 @@ export default function LiveApp(){
   setBusy(true);setError('');
   try{
    const codes=await api.clientAuthenticate(mode,body);
-   if(codes.access)setNewCodes(codes);
+   if(codes.recovery)setNewCodes(codes);
    const me=await api.me(true);
    openSession(me,true);
   }catch(error){setError(errorLabel(error))}
@@ -323,7 +341,7 @@ export default function LiveApp(){
   if(cart.length&&cartRestaurantId!==restaurantId){
    setReplaceCart({restaurantId,items});return;
   }
-  if(restaurantId!==cartRestaurantId){setAppliedCoupon(null);setCouponText('')}
+  if(restaurantId!==cartRestaurantId){setAppliedCoupon(null);setCouponText('');setFlashSelection(null)}
   setCartRestaurantId(restaurantId);setCart(items);
  }
  function addProduct(p){
@@ -344,29 +362,31 @@ export default function LiveApp(){
  function confirmCheckout(result){
   if(!sessionRef.current)return;
   writeCart(cartAccount,{items:[]});
-  setAppliedCoupon(null);setCouponText('');setPendingKey(null);setCart([]);setCartRestaurantId('');setProducts([]);setShoppingRestaurant('');
+  setAppliedCoupon(null);setCouponText('');setFlashSelection(null);setPendingKey(null);setCart([]);setCartRestaurantId('');setProducts([]);setShoppingRestaurant('');
   setSelectedPin({id:result.order.id,pin:result.deliveryPin});
   setStatus('Pedido de prueba confirmado.');
   load().catch(e=>{if(!handleSessionError(e))setRefreshWarning('Actualizá la lista para ver el pedido.')});
  }
  async function checkout(){
   if(!cartRestaurantId||!cart.length||!cartAccount||checkoutInFlight.current||busy||offline||!restaurant)return;
+  if(flashSelection&&!activeFlash)return setError('Revisá la promoción Flash antes de confirmar.');
   if(deliveryMethod==='delivery'&&deliveryAddress.trim().length<8)return setError('Ingresá una dirección completa.');
   if(!/^[0-9]{8}$/.test(phone))return setError('Ingresá los ocho dígitos del teléfono.');
   const key=pendingKey||newKey();
   checkoutInFlight.current=true;
-  writeCart(cartAccount,{restaurantId:cartRestaurantId,items:cart,pendingKey:key,coupon:appliedCoupon});
+  writeCart(cartAccount,{restaurantId:cartRestaurantId,items:cart,pendingKey:key,coupon:appliedCoupon,flash:flashSelection});
   setPendingKey(key);
   const intent={restaurantId:cartRestaurantId,deliveryMethod,deliveryAddress,phone:'+504'+phone,
    expectedTotalMinor:subtotal+fee-discount,
    ...(appliedCoupon?{coupon:appliedCoupon.code}:{}),
+   ...(activeFlash?{flashId:activeFlash.id}:{}),
    items:cart.map(({productId,quantity,options})=>({productId,quantity,...(options?.length?{optionIds:options.map(option=>option.id)}:{})}))};
   try{
    const result=await run(async()=>{
     try{return await api.createOrder(intent,key)}
     catch(error){
      if(!pendingKey&&error instanceof LiveApiError&&([400,403,422].includes(error.status)||
-        ['RESTAURANT_NOT_ACCEPTING','PRODUCT_UNAVAILABLE','CHECKOUT_TOTAL_CHANGED','COUPON_UNAVAILABLE'].includes(error.code))){
+        ['RESTAURANT_NOT_ACCEPTING','PRODUCT_UNAVAILABLE','CHECKOUT_TOTAL_CHANGED','COUPON_UNAVAILABLE','FLASH_UNAVAILABLE'].includes(error.code))){
       setPendingKey(null);
      }
      throw error;
@@ -422,7 +442,13 @@ export default function LiveApp(){
  const selectedBusiness=session?.restaurants?.find(x=>x.restaurant_id===selectedRestaurantId);
  const subtotal=cart.reduce((sum,p)=>sum+p.priceMinor*p.quantity,0);
  const restaurant=restaurants.find(r=>r.id===cartRestaurantId);
- const discount=Math.min(subtotal,appliedCoupon?.discountMinor||0);
+ const eligibleFlash=flashOffers.filter(item=>item.restaurantId===cartRestaurantId&&
+  (!item.productId||cart.some(line=>line.productId===item.productId)));
+ const availableSelection=eligibleFlash.find(item=>item.id===flashSelection?.id);
+ const activeFlash=pendingKey?flashSelection:availableSelection;
+ const eligibleSubtotal=activeFlash?.productId?cart.filter(line=>line.productId===activeFlash.productId)
+  .reduce((sum,line)=>sum+line.priceMinor*line.quantity,0):subtotal;
+ const discount=activeFlash?Math.min(eligibleSubtotal,activeFlash.discountMinor):Math.min(subtotal,appliedCoupon?.discountMinor||0);
  const fee=deliveryMethod==='delivery'?restaurant?.delivery_fee_minor??0:0;
  const canManage=['owner','manager'].includes(selectedBusiness?.staff_role);
  const formattedUserId=session?.user?.id||'';
@@ -462,6 +488,7 @@ export default function LiveApp(){
      mode={support.mode} counterpart={scope!=='customer'} order={orders.find(order=>order.id===support.id)} api={api} offline={offline}
      close={()=>setSupport(null)} onSessionError={handleSessionError}/>}
    {scope==='customer'&&<div className="dvl-columns">
+    <FlashOffers campaigns={offline?[]:flashOffers} money={price} open={viewProducts}/>
     <section className="dvl-panel"><h2>Restaurantes afiliados</h2>
      {!shoppingRestaurant?<div className="dvl-stack">
       <label className="dvl-favorite-filter"><input type="checkbox" checked={onlyFavorites} onChange={event=>setOnlyFavorites(event.target.checked)}/> Solo mis favoritos</label>
@@ -498,7 +525,7 @@ export default function LiveApp(){
      {replaceCart&&<div className="dvl-cart-confirm" role="group" aria-label="Cambiar carrito">
       <p>Cada pedido corresponde a un solo restaurante. ¿Querés reemplazar el carrito actual?</p>
       <div className="dvl-inline">
-       <Action onClick={()=>{setCart(replaceCart.items);setCartRestaurantId(replaceCart.restaurantId);setAppliedCoupon(null);setCouponText('');setReplaceCart(null)}}>Reemplazar</Action>
+       <Action onClick={()=>{setCart(replaceCart.items);setCartRestaurantId(replaceCart.restaurantId);setAppliedCoupon(null);setCouponText('');setFlashSelection(null);setReplaceCart(null)}}>Reemplazar</Action>
        <Action kind="secondary" onClick={()=>setReplaceCart(null)}>Conservar carrito</Action>
       </div>
      </div>}
@@ -511,10 +538,17 @@ export default function LiveApp(){
        <Action kind="secondary" disabled={busy||Boolean(pendingKey)} onClick={()=>removeProduct(p.productId)}>Quitar uno</Action></div>)}</div>
       <div className="dvl-row"><strong>Productos</strong><strong>{price(subtotal)}</strong></div>
       <div className="dvl-row"><strong>Envío estimado</strong><strong>{price(fee)}</strong></div>
+      {eligibleFlash.length>0&&<label>Promoción Flash<select value={activeFlash?.id||''} disabled={busy||offline||Boolean(pendingKey)}
+       onChange={event=>{setFlashSelection(eligibleFlash.find(item=>item.id===event.target.value)||null);setAppliedCoupon(null);setCouponText('')}}>
+       <option value="">Sin promoción Flash</option>{eligibleFlash.map(item=><option key={item.id} value={item.id}>{item.title}</option>)}</select></label>}
+      {flashSelection&&!activeFlash&&<div className="dvl-notice warn" role="status">La promoción seleccionada ya no está disponible.
+       <Action kind="secondary" disabled={busy||Boolean(pendingKey)} onClick={()=>setFlashSelection(null)}>Quitar promoción</Action></div>}
+      {activeFlash?.giftName&&<p>Regalo: {activeFlash.giftName}</p>}
+      {activeFlash&&discount>0&&<p>Descuento Flash: −{price(discount)}</p>}
       <label>Cupón<input value={couponText} maxLength={24} disabled={busy||Boolean(pendingKey)}
-       onChange={event=>{setCouponText(event.target.value);setAppliedCoupon(null)}}/></label>
+       onChange={event=>{setCouponText(event.target.value);setAppliedCoupon(null);setFlashSelection(null)}}/></label>
       <Action kind="secondary" disabled={busy||offline||Boolean(pendingKey)||couponText.trim().length<4}
-       onClick={async()=>{const result=await run(()=>api.coupon(cartRestaurantId,couponText),{refresh:false});if(result)setAppliedCoupon(result)}}>Aplicar cupón</Action>
+       onClick={async()=>{const result=await run(()=>api.coupon(cartRestaurantId,couponText),{refresh:false});if(result){setAppliedCoupon(result);setFlashSelection(null)}}}>Aplicar cupón</Action>
       {appliedCoupon&&<div className="dvl-row"><strong>Descuento {appliedCoupon.code}</strong><strong>−{price(discount)}</strong></div>}
       <div className="dvl-row dvl-total"><strong>Total preliminar</strong><strong>{price(subtotal+fee-discount)}</strong></div>
       <label>Teléfono de Honduras (+504)<input inputMode="numeric" autoComplete="tel-national" value={phone}
@@ -541,7 +575,7 @@ export default function LiveApp(){
       {o.status==='Pendiente'&&<Action kind="text" disabled={busy||offline} onClick={()=>action(()=>api.cancelOrder(o,newKey()))}>Cancelar pedido</Action>}
       </OrderCard>)}</div>:<p>Tus pedidos confirmados aparecerán aquí.</p>}
       {selectedPin&&<div className="dvl-pin" role="status"><strong>Pedido {selectedPin.receipt?.orderNumber||selectedPin.id.slice(0,8)}</strong>
-       {selectedPin.receipt&&<><ul>{selectedPin.receipt.items.map(item=><li key={item.product_id}>
+       {selectedPin.receipt&&<>{selectedPin.receipt.flashGiftName&&<p>Regalo: {selectedPin.receipt.flashGiftName}</p>}<ul>{selectedPin.receipt.items.map(item=><li key={item.product_id}>
         {item.quantity} × {item.name_snapshot}{optionsFromReceipt(item).map(option=>' · '+option.name)}
        </li>)}</ul><span>Total: {price(selectedPin.receipt.totalMinor)}</span></>}
        <p>
@@ -586,13 +620,14 @@ export default function LiveApp(){
      </div>)}</div>
     </section>}
     <div className="dvl-grid">{orders.map(o=><OrderCard key={o.id} order={o}>
+      {o.flashGiftName&&<p>Regalo: {o.flashGiftName}</p>}
       <Action kind="secondary" disabled={busy||offline} onClick={()=>showRestaurantOrder(o)}>Ver comanda</Action>
       {canManage&&<Action kind="secondary" disabled={offline} onClick={()=>setSupport({id:o.id,mode:'restaurant'})}>Chat con cliente</Action>}
       {orderDetail?.orderId===o.id&&orderDetail.restaurantId===selectedRestaurantId&&<>
        <ul aria-label="Artículos de la comanda">{orderDetail.items.map((item,index)=><li key={index}>{item.quantity} × {item.name_snapshot}{optionsFromReceipt(item).map(option=>' · '+option.name)}</li>)}</ul>
        <Action kind="secondary" onClick={()=>window.print()}>Imprimir comanda</Action>
        {createPortal(<section className="dvl-print-sheet">
-        <h1>{selectedBusiness?.name}</h1><h2>Comanda #{orderDetail.orderNumber}</h2>
+        <h1>{selectedBusiness?.name}</h1><h2>Comanda #{orderDetail.orderNumber}</h2>{o.flashGiftName&&<p>Regalo: {o.flashGiftName}</p>}
         <ul>{orderDetail.items.map((item,index)=><li key={index}>{item.quantity} × {item.name_snapshot}{optionsFromReceipt(item).map(option=>' · '+option.name)}</li>)}</ul>
        </section>,document.body)}
       </>}
@@ -677,6 +712,7 @@ export default function LiveApp(){
        onClick={()=>action(()=>api.adminEnrollCourier(adminCourierId.trim()))}>Habilitar repartidor</Action>
      </div>
     </section>
+    {flashEnabled&&<FlashAdmin api={api} restaurants={adminRestaurants} busy={busy} offline={offline} run={run}/>}
     <section className="dvl-panel"><h2>Actividad administrativa</h2>
      <Action kind="secondary" disabled={busy||offline}
       onClick={()=>run(async()=>{const data=await api.adminAudit();setAudit(data.events)},{refresh:false})}>Consultar actividad</Action>

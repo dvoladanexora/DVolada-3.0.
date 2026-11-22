@@ -15,8 +15,13 @@ export default {
     if (env.QA_PUSH_ALLOWED === 'true') await drainQaOrderPush(env);
   },
   async fetch(request, env, ctx) {
-    const { hostname, pathname } = new URL(request.url);
-    if (env.DVOLADA_QA_HOST !== hostname) return new Response(null, { status: 404 });
+    const { hostname, pathname, protocol } = new URL(request.url);
+    const qa = hostname === 'dvolada-qa.dvoladanexora.workers.dev' && env.DVOLADA_QA_HOST === hostname;
+    const production = !qa && hostname !== 'dvolada-qa.dvoladanexora.workers.dev' &&
+      env.DVOLADA_ONLINE_HOST === hostname && env.DVOLADA_ONLINE_SERVE === 'true';
+    if (protocol !== 'https:' || (!qa && !production) || (production && /^\/pruebas(?:\/|$)/.test(pathname))) return new Response(null, { status: 404 });
+    if (production) env = {...env, QA_CLIENT_ACCESS:'false', QA_PUSH_ALLOWED:'false',
+      QA_FLASH:env.FLASH_ENABLED, QA_RESTAURANT_COMMERCIAL:env.RESTAURANT_COMMERCIAL_ENABLED};
     if (pathname === '/health' || pathname.startsWith('/api/v1/')) {
       if (pathname === '/api/v1/push/identity' && env.QA_PUSH_ALLOWED !== 'true')
         return new Response(JSON.stringify({ error: 'PUSH_SETUP_PENDING' }), {
@@ -37,7 +42,7 @@ export default {
         headers: { ...headers, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
       });
     }
-    const route = ['/', '/pruebas', '/pruebas/'].includes(pathname) ? '/index.html' : pathname;
+    const route = ['/', '/cuenta', '/cuenta/', '/pruebas', '/pruebas/'].includes(pathname) ? '/index.html' : pathname;
     const asset = Object.hasOwn(assets, route) ? assets[route] : null;
     if (!asset) return new Response(null, { status: 404, headers });
     const [type, compressed] = asset;

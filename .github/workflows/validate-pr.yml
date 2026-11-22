@@ -109,6 +109,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -122,10 +124,15 @@ jobs:
           npm run test:staging
       - name: Probar Worker con SQLite descartable
         run: node --experimental-sqlite --test backend/tests/worker.test.js
-      - name: Compilar aplicación React QA
+      - name: Construir artefacto canónico de Dvolada Online
         env:
-          VITE_DVOLADA_LIVE_MODE: 'true'
-          VITE_DVOLADA_STAGING_PANELS: 'true'
-        run: npm run build && node scripts/package-qa-worker.mjs
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash scripts/build-online-release.sh
+      - name: Conservar el artefacto probado y su huella
+        uses: actions/upload-artifact@v4
+        with:
+          name: dvolada-online-${{ github.event.pull_request.head.sha || github.sha }}
+          path: online-release/
+          if-no-files-found: error
       - name: Compilar demostración pública sin desplegar
         run: npm run build

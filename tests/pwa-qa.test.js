@@ -28,7 +28,7 @@ test('QA shell installs offline and excludes private and push routes from cache'
   listeners.fetch({request:{url:'https://qa.example'+path,method,mode},respondWith:value=>{response=value}});
   return response;
  }
- for(const path of ['/','/pruebas','/pruebas/']) assert.equal(await (await route(path)).text(),'/index.html');
+ for(const path of ['/','/pruebas','/pruebas/','/cuenta','/cuenta/']) assert.equal(await (await route(path)).text(),'/index.html');
  assert.equal(await (await route('/assets/main.js','GET','cors')).text(),'/assets/main.js');
  assert.equal(await (await route('/logo.png','GET','cors')).text(),'/logo.png');
  for(const path of ['/api/v1/auth/me','/push-config','/version.json','/push/onesignal/OneSignalSDKWorker.js']) assert.equal(route(path),undefined);

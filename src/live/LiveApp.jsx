@@ -16,6 +16,7 @@ import ClientSupport from './ClientSupport.jsx';
 import CatalogSearch from './CatalogSearch.jsx';
 import {readCart,writeCart,updateQuantity} from './cart-draft.js';
 
+const qaView=['/pruebas','/pruebas/'].includes(window.location.pathname);
 const apiOrigin=import.meta.env.VITE_DVOLADA_API_URL||window.location.origin;
 const optionPrice=options=>(options||[]).reduce((total,option)=>total+option.price_minor,0);
 const optionsFromReceipt=item=>{try{return JSON.parse(item.options_json||'[]')}catch{return []}};
@@ -81,6 +82,9 @@ function errorLabel(error){
   STAFF_CHANGE_FORBIDDEN:'No se puede cambiar el rol o acceso de esa cuenta.',
   INVALID_COUPON:'Revisá el formato del cupón.',
   COUPON_UNAVAILABLE:'Cupón vencido, ya utilizado o ajeno a este restaurante.',
+  PASSKEY_INVALID:'No pudimos verificar tu llave. Elegí la llave de esa cuenta o recuperá el acceso.',
+  PASSKEY_CHALLENGE_INVALID:'La solicitud venció o ya fue usada. Iniciá un intento nuevo.',
+  PASSKEY_ALREADY_REGISTERED:'La llave elegida ya pertenece a otra cuenta.',
   CLIENT_CODE_INVALID:'La clave o el código no es válido.',
   CLIENT_CREDENTIAL_FORMAT:'Revisá el usuario y la contraseña.',
   CLIENT_LOGIN_UNAVAILABLE:'Ese usuario ya está en uso.',
@@ -306,7 +310,11 @@ export default function LiveApp(){
   if(busy||offline||!accessReady)return;
   setBusy(true);setError('');
   try{
-   const codes=await api.clientAuthenticate(mode,body);
+   if(!window.PublicKeyCredential)throw new Error('Este navegador no admite llaves de acceso. Usá un navegador compatible.');
+   const {startAuthentication,startRegistration}=await import('@simplewebauthn/browser');
+   const {id,options}=await api.clientAuthenticate(mode,'begin',body);
+   const response=mode==='login'?await startAuthentication({optionsJSON:options}):await startRegistration({optionsJSON:options});
+   const codes=await api.clientAuthenticate(mode,'finish',{id,response});
    if(codes.recovery)setNewCodes(codes);
    const me=await api.me(true);
    openSession(me,true);
@@ -428,7 +436,7 @@ export default function LiveApp(){
   writeCart(cartAccount,{items:[]});
   setAppliedCoupon(null);setCouponText('');setFlashSelection(null);setPendingKey(null);setCart([]);setCartRestaurantId('');setProducts([]);setShoppingRestaurant('');
   setOrderNote('');setSelectedPin({id:result.order.id,pin:result.deliveryPin});
-  setStatus('Pedido de prueba confirmado.');
+  setStatus(qaView?'Pedido de prueba confirmado.':'Pedido confirmado.');
   load().catch(e=>{if(!handleSessionError(e))setRefreshWarning('Actualizá la lista para ver el pedido.')});
  }
  async function checkout(){
@@ -527,7 +535,7 @@ export default function LiveApp(){
    <div className="dvl-head-actions"><label className="dvl-theme">Tema<select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy||offline} onClick={logout}><LogOut size={15}/> Salir</Action>}</div></header>
   <main className="dvl-main">
   <div className="dvl-intro"><span className="dvl-kicker">NEXORA SYSTEMS · DVOLADA ONLINE</span>
-   <h1>{session?(scope==='restaurant'&&selectedBusiness?.staff_role==='kitchen'?'Cocina':roles[scope]):'Dvolada · Entorno de pruebas'}</h1>
+   <h1>{session?(scope==='restaurant'&&selectedBusiness?.staff_role==='kitchen'?'Cocina':roles[scope]) :(qaView?'Dvolada · Entorno de pruebas':'Dvolada · Mi cuenta')}</h1>
    <p>{session?'Todas las acciones oficiales se comprueban y guardan en el servidor.':'Accedé para hacer y seguir pedidos con seguridad.'}</p></div>
   {offline&&<div className="dvl-offline" role="alert"><WifiOff size={19}/> Sin conexión. Los pedidos se muestran como potencialmente desactualizados; las acciones están bloqueadas.</div>}
   <WaitOrError message={status}/>
@@ -540,7 +548,7 @@ export default function LiveApp(){
   <ClientCodes codes={newCodes} close={()=>setNewCodes(null)}/>
   {!session&&!accessReady&&!offline&&<p role="status">Verificando acceso…</p>}
   {!session&&accountEnabled&&<ClientAccess authenticate={authenticateClient} busy={busy} offline={offline}/>}
-  {!session&&(accessReady||offline)&&<form className="dvl-panel dvl-login" onSubmit={signIn}>
+  {qaView&&!session&&(accessReady||offline)&&<form className="dvl-panel dvl-login" onSubmit={signIn}>
    <h2>Ingresá con tu acceso de pruebas</h2>
    <label>Código de acceso<input type="password" autoComplete="off" value={accessCode}
     onChange={e=>setAccessCode(e.target.value)} required /></label>
@@ -636,7 +644,7 @@ export default function LiveApp(){
       {pendingKey&&<><p>Hay un intento pendiente. Buscá su confirmación o reintentá con los mismos datos.</p>
        <Action kind="secondary" disabled={busy||offline} onClick={recoverCheckout}>Buscar confirmación</Action></>}
       <Action disabled={busy||offline||!restaurant||Boolean(replaceCart)} onClick={checkout}><LockKeyhole size={16}/>
-       {pendingKey?'Reintentar el mismo pedido':'Confirmar pedido de prueba'}</Action>
+       {pendingKey?'Reintentar el mismo pedido':qaView?'Confirmar pedido de prueba':'Confirmar pedido'}</Action>
       </>}
     </section>
     <section className="dvl-panel dvl-span"><h2>Mis pedidos</h2>

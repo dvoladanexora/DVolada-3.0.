@@ -41,7 +41,7 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
   exchange:(idToken,deviceLabel)=>request('/api/v1/auth/exchange',{auth:false,method:'POST',body:{idToken,deviceLabel}}),
   me:(cookie=false)=>request('/api/v1/auth/me',{cookie}),
   clientAccess:()=>request('/api/v1/auth/client/config',{auth:false}),
-  clientAuthenticate:(operation,body)=>request('/api/v1/auth/client/'+s(operation),{auth:false,method:'POST',body}),
+  clientAuthenticate:(operation,stage,body)=>request('/api/v1/auth/client/'+s(operation)+'/'+s(stage),{auth:false,method:'POST',body}),
   clientProfile:()=>request('/api/v1/customer/profile'),
   renameClient:displayName=>request('/api/v1/customer/profile',{method:'PATCH',body:{displayName}}),
   favorites:()=>request('/api/v1/customer/favorites'),

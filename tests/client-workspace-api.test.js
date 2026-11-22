@@ -6,7 +6,7 @@ test('cookie requests bind the active account and leave account codes out of URL
  const requests=[];
  const api=createLiveApi({baseUrl:'https://qa.example',getSessionToken:()=>null,getClientAccount:()=>'qa-account',
   fetchImpl:async (url,options)=>{requests.push({url,...options});return new Response('{}')}});
- await api.clientAuthenticate('recover',{code:'generated-test-code'});
+ await api.clientAuthenticate('recover','begin',{code:'generated-test-code'});
  await api.me(true);
  await api.setFavorite('restaurant',true);
  assert.equal(requests[0].method,'POST');

@@ -18,7 +18,7 @@ const files = [
   'push/onesignal/OneSignalSDKWorker.js',
   'icon-clean-192.png', 'icon-clean-512.png', 'logo.png',
   'file_00000000e77081fd8cf8ee8349e461b6.png',
-  ...(await readdir('dist/assets')).map(name => 'assets/' + name),
+  ...(await readdir('dist/assets')).sort().map(name => 'assets/' + name),
 ];
 for (const name of files) {
   let bytes = await readFile('dist/' + name);

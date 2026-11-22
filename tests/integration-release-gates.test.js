@@ -51,7 +51,7 @@ test('la caché de PWA y la configuración web push no exponen rutas privadas',(
  assert.ok(worker.includes("if(req.method!=='GET')return"));
  assert.match(worker,/\(\?:api\|auth\|admin\|session\|push\)/);
  assert.ok(worker.includes('url.origin!==self.location.origin'));
- assert.ok(qa.includes('env.DVOLADA_QA_HOST !== hostname'));
+ assert.ok(qa.includes('env.DVOLADA_QA_HOST === hostname') && qa.includes("env.DVOLADA_ONLINE_SERVE === 'true'"));
  assert.ok(qa.includes("'X-Robots-Tag': 'noindex, nofollow'"));
  assert.ok(push.includes("serviceWorkerPath:'push/onesignal/OneSignalSDKWorker.js'"));
  assert.ok(push.includes('autoPrompt:false'));

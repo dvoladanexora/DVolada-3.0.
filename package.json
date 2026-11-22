@@ -26,13 +26,15 @@
     "dev:network": "vite --host 0.0.0.0"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "13.2.2",
+    "@simplewebauthn/server": "13.3.3",
+    "lucide-react": "^0.468.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "lucide-react": "^0.468.0"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "esbuild": "^0.25.12",
-    "vite": "^6.0.5",
-    "sharp": "^0.35.5"
+    "sharp": "^0.35.5",
+    "vite": "^6.0.5"
   }
 }

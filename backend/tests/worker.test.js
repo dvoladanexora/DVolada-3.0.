@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
-import {generateKeyPairSync,randomBytes,randomUUID,verify} from 'node:crypto';
+import {generateKeyPairSync,randomBytes,randomUUID,verify,createHash,sign} from 'node:crypto';
+import {isoCBOR} from '@simplewebauthn/server/helpers';
 import worker from '../src/index.js';
 import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -647,60 +648,6 @@ test('changing a delivery fee preserves a concurrently updated subscription',asy
  assert.equal(response.body.restaurant.online_state,'closed');
 });
 
-test('QA registration, cookie persistence, logout and one-use recovery', async()=>{
- const f=await fixture();
- const origin='https://dvolada-qa.dvoladanexora.workers.dev';
- f.env.CORS_ORIGINS=origin;
- async function request(path,{method='GET',body,cookie,account,source=origin,url=origin}={}){
-  const headers={Origin:source};
-  if(body)headers['Content-Type']='application/json';
-  if(cookie)headers.Cookie=cookie;
-  if(account)headers['X-Client-Account']=account;
-  return worker.fetch(new Request(url+path,{method,headers,body:body?JSON.stringify(body):undefined}),f.env);
- }
- const auth=(action,body,options)=>request('/api/v1/auth/client/'+action,{method:'POST',body,...options});
- assert.equal((await auth('register',{displayName:'Cliente ficticio'})).status,404);
- f.env.QA_CLIENT_ACCESS='true';
- assert.equal((await auth('register',{displayName:'Cliente ficticio'},{url:'https://other.example'})).status,404);
- assert.equal((await auth('register',{displayName:'Cliente ficticio',role:'platform_admin'})).status,400);
- const register=await auth('register',{displayName:'Cliente ficticio'});
- assert.equal(register.status,201);
- assert.match(register.headers.get('set-cookie'),/Path=\/; Secure; HttpOnly; SameSite=Strict/);
- const cookie=register.headers.get('set-cookie').split(';')[0];
- const codes=await register.json();
- assert.notEqual(codes.access,codes.recovery);
- const me=await request('/api/v1/auth/me',{cookie}).then(response=>response.json());
- assert.equal(me.user.role,'customer');
- assert.deepEqual(me.restaurants,[]);
- assert.equal((await request('/api/v1/customer/orders',{cookie,account:me.user.id})).status,200);
- assert.equal((await request('/api/v1/customer/orders',{cookie,account:f.tokens.customer.id})).status,401);
- const credential=f.DB.db.prepare('SELECT * FROM client_credentials WHERE user_id=?').get(me.user.id);
- assert.notEqual(credential.access_hash,codes.access);
- assert.notEqual(credential.recovery_hash,codes.recovery);
- const reopened=await auth('login',{code:codes.access});
- assert.equal(reopened.status,204);
- const oldCookie=reopened.headers.get('set-cookie').split(';')[0];
- const recovered=await auth('recover',{code:codes.recovery});
- assert.equal(recovered.status,200);
- const replacement=await recovered.json();
- const newCookie=recovered.headers.get('set-cookie').split(';')[0];
- assert.notEqual(replacement.access,codes.access);
- assert.equal((await auth('recover',{code:codes.recovery})).status,401);
- assert.equal((await auth('login',{code:codes.access})).status,401);
- assert.equal((await request('/api/v1/auth/me',{cookie:oldCookie})).status,401);
- assert.equal((await request('/api/v1/auth/me',{cookie})).status,401);
- const unauthorised=await request('/api/v1/auth/logout',{method:'POST',cookie:newCookie,account:me.user.id,source:'https://other.example'});
- assert.equal(unauthorised.status,403);
- const logout=await request('/api/v1/auth/logout',{method:'POST',cookie:newCookie,account:me.user.id});
- assert.equal(logout.status,204);
- assert.match(logout.headers.get('set-cookie'),/Max-Age=0/);
- assert.equal((await request('/api/v1/auth/me',{cookie:newCookie})).status,401);
- const login=await auth('login',{code:replacement.access});
- assert.equal(login.status,204);
- f.DB.db.prepare('UPDATE auth_sessions SET expires_at=0 WHERE user_id=?').run(me.user.id);
- assert.equal((await request('/api/v1/auth/me',{cookie:login.headers.get('set-cookie').split(';')[0]})).status,401);
-});
-
 test('favorites are private and support follows the customer and authorised order participants',async()=>{
  const f=await fixture();
  const id=f.restaurants[0];
@@ -784,33 +731,6 @@ test('changing an extra price between quote and write rejects the full order bat
  const created=await f.create({restaurantId,items:[{productId,quantity:1,optionIds:[extra]}]});
  assert.equal(created.body.error,'PRODUCT_UNAVAILABLE');
  assert.equal(f.DB.db.prepare('SELECT COUNT(*) AS count FROM online_orders').get().count,0);
-});
-
-test('password account stores only a peppered verifier and requires a fresh proof after recovery',async()=>{
- const f=await fixture(),origin='https://dvolada-qa.dvoladanexora.workers.dev';
- Object.assign(f.env,{CORS_ORIGINS:origin,QA_CLIENT_ACCESS:'true'});
- const send=(op,body)=>worker.fetch(new Request(origin+'/api/v1/auth/client/'+op,{
-  method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body),
- }),f.env);
- const login='qa.password.01',proof='a'.repeat(64),replacement='b'.repeat(64);
- assert.equal((await send('register',{displayName:'QA',login,proof:'bad'})).status,400);
- const created=await send('register',{displayName:'Prueba de cliente',login,proof});
- assert.equal(created.status,201);
- const codes=await created.json();
- assert.equal(codes.access,undefined);
- assert.notEqual(f.DB.db.prepare('SELECT password_hash FROM client_credentials WHERE login_name=?').get(login).password_hash,proof);
- assert.equal((await send('register',{displayName:'QA duplicado',login,proof})).status,409);
- assert.equal((await send('login',{login,proof:replacement})).status,401);
- const session=await send('login',{login,proof});
- assert.equal(session.status,204);
- const restored=await send('recover',{login,proof:replacement,code:codes.recovery});
- assert.equal(restored.status,200);
- assert.equal((await send('recover',{login,proof:replacement,code:codes.recovery})).status,401);
- assert.equal((await send('login',{login,proof})).status,401);
- assert.equal((await send('login',{login,proof:replacement})).status,204);
- assert.equal((await send('login',{login,proof:replacement})).status,429);
- const cookie=session.headers.get('set-cookie').split(';')[0];
- assert.equal((await worker.fetch(new Request(origin+'/api/v1/auth/me',{headers:{Cookie:cookie}}),f.env)).status,401);
 });
 
 test('Flash checkout enforces access, time, eligible product and limits, and releases canceled reservations',async()=>{
@@ -1089,7 +1009,7 @@ test('settlements reconcile cash and transfer, apply historical rules, serialize
  assert.equal(courier.orders[0].restaurantMinor,undefined);
 });
 
-test('QA courier application, platform validation, sign-in, one-use recovery and global session revocation',async()=>{
+test('QA courier application, platform validation and global session revocation',async()=>{
  const f=await fixture();
  const origin='https://dvolada-qa.dvoladanexora.workers.dev';
  Object.assign(f.env,{CORS_ORIGINS:origin,QA_CLIENT_ACCESS:'true'});
@@ -1100,26 +1020,12 @@ test('QA courier application, platform validation, sign-in, one-use recovery and
   if(account)headers['X-Client-Account']=account;
   return worker.fetch(new Request(origin+'/api/v1/'+path,{method,headers,body:body&&JSON.stringify(body)}),f.env);
  };
- const auth=(action,body)=>req('auth/client/'+action,body);
- const registration=await auth('register',{displayName:'Repartidor ficticio'});
- const codes=await registration.json();
- const initial=registration.headers.get('set-cookie').split(';')[0];
- const me=await (await req('auth/me',undefined,{cookie:initial})).json();
- const account=me.user.id;
- assert.equal((await req('courier/orders',undefined,{cookie:initial,account})).status,403);
- for(let i=0;i<2;i++)assert.equal((await req('customer/courier-application',{},{cookie:initial,account})).status,200);
+ const {cookie,account}=await enrollPasskey(f,'qa.courier.profile');
+ assert.equal((await req('courier/orders',undefined,{cookie,account})).status,403);
+ for(let i=0;i<2;i++)assert.equal((await req('customer/courier-application',{},{cookie,account})).status,200);
  assert.equal((await f.call('/api/v1/admin/courier-applications')).status,403);
  assert.deepEqual((await f.call('/api/v1/admin/courier-applications',{by:'platformAdmin'})).body.applications.map(x=>x.user_id),[account]);
  assert.equal((await f.call('/api/v1/admin/couriers',{by:'platformAdmin',method:'POST',body:{userId:account}})).status,201);
- const login=await auth('login',{code:codes.access});
- assert.equal(login.status,204);
- const old=login.headers.get('set-cookie').split(';')[0];
- const recovery=await auth('recover',{code:codes.recovery});
- assert.equal(recovery.status,200);
- assert.equal((await auth('recover',{code:codes.recovery})).status,401);
- assert.equal((await req('auth/me',undefined,{cookie:old})).status,401);
- assert.equal((await auth('login',{code:codes.access})).status,401);
- const cookie=recovery.headers.get('set-cookie').split(';')[0];
  const current=await (await req('auth/me',undefined,{cookie})).json();
  assert.equal(current.user.role,'courier');
  assert.equal((await (await req('courier/orders',undefined,{cookie,account})).json()).profile.available,0);
@@ -1256,39 +1162,119 @@ test('Control Center limits coupons at checkout and records auditable future rat
  assert.deepEqual((await api('control/reports?from='+(now-60)+'&until='+(now+60)+'&restaurant='+rid)).body.orders,[{status:'Pendiente',orders:1}]);
 });
 
-test('session creation and recovery cannot cross administrative credential revocation',async()=>{
- const f=await fixture();
- const origin='https://dvolada-qa.dvoladanexora.workers.dev';
- Object.assign(f.env,{CORS_ORIGINS:origin,QA_CLIENT_ACCESS:'true'});
- const auth=(operation,body)=>worker.fetch(new Request(origin+'/api/v1/auth/client/'+operation,{
-  method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body)
- }),f.env);
- const original=(await (await auth('register',{displayName:'Cuenta ficticia de revocación'})).json());
- const id=f.DB.db.prepare("SELECT id FROM users WHERE display_name='Cuenta ficticia de revocación'").get().id;
- const before=f.DB.db.prepare('SELECT revision,recovery_hash FROM client_credentials WHERE user_id=?').get(id);
- const DB=f.DB, prepare=DB.prepare;
- let race=false;
- DB.prepare=(sql)=>{
-  const stmt=prepare(sql);
-  if(!sql.startsWith('SELECT c.user_id,c.revision,u.admin_version'))return stmt;
-  return {bind(...args){
-   const query=stmt.bind(...args);
-   return {async first(){
-    const row=await query.first();
-    if(race){
-     DB.db.prepare('UPDATE users SET admin_version=admin_version+1 WHERE id=?').run(id);
-     DB.db.prepare('UPDATE auth_sessions SET revoked_at=unixepoch() WHERE user_id=?').run(id);
-    }
-    return row;
-   }};
-  }};
+
+const passkeyOrigin='https://dvolada-qa.dvoladanexora.workers.dev';
+const bytes=value=>Buffer.from(value,'base64url');
+const base64=value=>Buffer.from(value).toString('base64url');
+const passkeyHash=value=>createHash('sha256').update(value).digest();
+
+function virtualPasskey(){
+ const keys=generateKeyPairSync('ec',{namedCurve:'prime256v1'}),credentialId=randomBytes(32);
+ const publicKey=keys.publicKey.export({format:'jwk'});
+ const cose=isoCBOR.encode(new Map([[1,2],[3,-7],[-1,1],[-2,bytes(publicKey.x)],[-3,bytes(publicKey.y)]]));
+ const rpHash=passkeyHash(new URL(passkeyOrigin).hostname);
+ let counter=0;
+ return {
+  registration(options,{origin=passkeyOrigin,flags=0x45}={}){
+   const authData=Buffer.concat([rpHash,Buffer.of(flags),Buffer.alloc(4),Buffer.alloc(16),Buffer.of(0,credentialId.length),credentialId,cose]);
+   const clientData=Buffer.from(JSON.stringify({type:'webauthn.create',origin,crossOrigin:false,challenge:options.challenge}));
+   const object=isoCBOR.encode(new Map([['fmt','none'],['attStmt',new Map()],['authData',authData]]));
+   return {id:base64(credentialId),rawId:base64(credentialId),type:'public-key',
+    response:{clientDataJSON:base64(clientData),attestationObject:base64(object)},clientExtensionResults:{}};
+  },
+  assertion(options,{origin=passkeyOrigin,flags=5}={}){
+   const count=Buffer.alloc(4);count.writeUInt32BE(++counter);
+   const authData=Buffer.concat([rpHash,Buffer.of(flags),count]);
+   const clientData=Buffer.from(JSON.stringify({type:'webauthn.get',origin,crossOrigin:false,challenge:options.challenge}));
+   const signature=sign('sha256',Buffer.concat([authData,passkeyHash(clientData)]),keys.privateKey);
+   return {id:base64(credentialId),rawId:base64(credentialId),type:'public-key',response:{clientDataJSON:base64(clientData),
+    authenticatorData:base64(authData),signature:base64(signature)},clientExtensionResults:{}};
+  }
  };
- race=true;
- assert.equal((await auth('login',{code:original.access})).status,401);
- assert.equal((await auth('recover',{code:original.recovery})).status,401);
- assert.deepEqual(DB.db.prepare('SELECT revision,recovery_hash FROM client_credentials WHERE user_id=?').get(id),before);
- assert.equal(DB.db.prepare('SELECT COUNT(*) AS n FROM auth_sessions WHERE user_id=? AND revoked_at IS NULL').get(id).n,0);
- race=false;
- assert.equal((await auth('recover',{code:original.recovery})).status,200);
- assert.equal((await auth('recover',{code:original.recovery})).status,401);
+}
+function passkeyRequest(f,path,body,{cookie,account,origin=passkeyOrigin,url=passkeyOrigin,method=body?'POST':'GET'}={}){
+ const headers={Origin:origin};
+ if(body)headers['Content-Type']='application/json';
+ if(cookie)headers.Cookie=cookie;
+ if(account)headers['X-Client-Account']=account;
+ return worker.fetch(new Request(url+'/api/v1/'+path,{method,headers,body:body&&JSON.stringify(body)}),f.env);
+}
+const partCookie=response=>response.headers.get('set-cookie')?.split(';')[0];
+const beginKey=(f,action,body,options)=>passkeyRequest(f,'auth/client/'+action+'/begin',body,options);
+const finishKey=(f,action,id,response,cookie)=>passkeyRequest(f,'auth/client/'+action+'/finish',{id,response},{cookie});
+async function enrollPasskey(f,login){
+ Object.assign(f.env,{CORS_ORIGINS:passkeyOrigin,QA_CLIENT_ACCESS:'true'});
+ const access=await beginKey(f,'register',{login,displayName:'Cliente ficticio'});
+ assert.equal(access.status,200);
+ const {id,options}=await access.json(),authenticator=virtualPasskey();
+ const created=await finishKey(f,'register',id,authenticator.registration(options),partCookie(access));
+ assert.equal(created.status,201);
+ const cookie=partCookie(created),{recovery}=await created.json();
+ const {user}=await (await passkeyRequest(f,'auth/me',undefined,{cookie})).json();
+ return {authenticator,cookie,recovery,account:user.id};
+}
+
+test('passkeys reject retired proofs, reuse, wrong browser/origin and missing user verification',async()=>{
+ const f=await fixture(),login='qa.passkey.alpha';
+ const fakeProof='a'.repeat(64);
+ assert.equal((await beginKey(f,'register',{login,displayName:'QA'})).status,403);
+ const {authenticator,cookie,account}=await enrollPasskey(f,login);
+ for(const mode of ['login','recover'])assert.equal((await passkeyRequest(f,'auth/client/'+mode,{login,proof:fakeProof})).status,410);
+ assert.equal((await beginKey(f,'register',{login,displayName:'QA',proof:fakeProof})).status,400);
+ assert.equal((await beginKey(f,'login',{login},{origin:'https://other.example'})).status,403);
+ assert.equal((await passkeyRequest(f,'customer/orders',undefined,{cookie,account:f.tokens.customer.id})).status,401);
+ const make=async()=>{const start=await beginKey(f,'login',{login});return {...await start.json(),browser:partCookie(start)}};
+ const fail=async(details)=>{const f1=await make();
+  assert.equal((await finishKey(f,'login',f1.id,authenticator.assertion(f1.options,details),f1.browser)).status,401)
+ };
+ await fail({origin:'https://wrong.example'});
+ await fail({flags:1});
+ const a=await make(),signed=authenticator.assertion(a.options);
+ assert.equal((await finishKey(f,'login',a.id,signed,null)).status,401);
+ const concurrent=await Promise.all([0,1].map(()=>finishKey(f,'login',a.id,signed,a.browser)));
+ assert.deepEqual(concurrent.map(res=>res.status).sort(),[204,401]);
+ const b=await make();
+ assert.equal((await finishKey(f,'login',b.id,signed,b.browser)).status,401);
+ const old=await make();
+ f.DB.db.prepare('UPDATE client_passkey_challenges SET expires_at=0 WHERE id=?').run(old.id);
+ assert.equal((await finishKey(f,'login',old.id,authenticator.assertion(old.options),old.browser)).status,401);
+ const loginCookie=partCookie(concurrent.find(res=>res.status===204));
+ assert.match(loginCookie,/^__Host-dvolada-client=/);
+ const logout=await passkeyRequest(f,'auth/logout',undefined,{method:'POST',cookie:loginCookie,account});
+ assert.equal(logout.status,204);
+ assert.match(logout.headers.get('set-cookie'),/Secure; HttpOnly; SameSite=Strict; Max-Age=0/);
+ assert.equal((await passkeyRequest(f,'auth/me',undefined,{cookie:loginCookie})).status,401);
+});
+
+test('recovery migrates a legacy account, preserves its ID and accepts only one concurrent replacement',async()=>{
+ const f=await fixture(),legacy=f.tokens.customer,login='qa.legacy.recovery',recovery=randomBytes(32).toString('base64url');
+ Object.assign(f.env,{CORS_ORIGINS:passkeyOrigin,QA_CLIENT_ACCESS:'true'});
+ f.DB.db.prepare('INSERT INTO client_credentials(user_id,login_name,password_hash,access_hash,recovery_hash) VALUES(?,?,?,?,?)')
+  .run(legacy.id,login,'legacy-proof-verifier','old-access-hash',await hmacHex(PEPPER,'client-recover:v1:'+recovery));
+ const start=async()=>{const response=await beginKey(f,'recover',{login,code:recovery});
+  assert.equal(response.status,200);return {...await response.json(),browser:partCookie(response)}};
+ const stale=await start();
+ f.DB.db.prepare('UPDATE users SET admin_version=admin_version+1 WHERE id=?').run(legacy.id);
+ assert.equal((await finishKey(f,'recover',stale.id,virtualPasskey().registration(stale.options),stale.browser)).status,401);
+ const flows=await Promise.all([start(),start()]);
+ const done=await Promise.all(flows.map(item=>finishKey(f,'recover',item.id,virtualPasskey().registration(item.options),item.browser)));
+ assert.deepEqual(done.map(res=>res.status).sort(),[200,401]);
+ const next=done.find(res=>res.status===200),codes=await next.json();
+ assert.notEqual(codes.recovery,recovery);
+ assert.equal((await beginKey(f,'recover',{login,code:recovery})).status,401);
+ assert.equal((await f.call('/api/v1/auth/me')).status,401);
+ const {user}=await (await passkeyRequest(f,'auth/me',undefined,{cookie:partCookie(next)})).json();
+ assert.equal(user.id,legacy.id);
+ assert.equal(f.DB.db.prepare('SELECT password_hash FROM client_credentials WHERE user_id=?').get(legacy.id).password_hash,null);
+ assert.equal(f.DB.db.prepare('SELECT COUNT(*) AS n FROM auth_sessions WHERE user_id=? AND revoked_at IS NULL').get(legacy.id).n,1);
+});
+
+test('passkey options honor QA and explicit production origin and rate-limit requests',async()=>{
+ const f=await fixture(),prod='https://online.example.test';
+ Object.assign(f.env,{CORS_ORIGINS:passkeyOrigin+','+prod,QA_CLIENT_ACCESS:'true',DVOLADA_ONLINE_HOST:'online.example.test'});
+ const request=()=>beginKey(f,'login',{login:'qa.passkey'},{url:prod,origin:prod});
+ assert.equal((await request()).status,404);
+ f.env.CLIENT_PASSKEYS_ENABLED='true';
+ for(let i=0;i<24;i++)assert.equal((await request()).status,200);
+ assert.equal((await request()).status,429);
 });

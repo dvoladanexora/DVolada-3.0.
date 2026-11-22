@@ -1,120 +1,28 @@
-import {ApiError, hmacHex, readJson, requireKeys, requireText, respond} from './security.js';
+export const clientCookie='__Host-dvolada-client';
+const qaOrigin='https://dvolada-qa.dvoladanexora.workers.dev';
+export const secretPattern=/^[A-Za-z0-9_-]{43}$/;
+export const sessionSeconds=7*86400;
 
-export const clientCookie = '__Host-dvolada-client';
-const qaOrigin = 'https://dvolada-qa.dvoladanexora.workers.dev';
-const secretPattern = /^[A-Za-z0-9_-]{43}$/;
-const loginPattern = /^[a-z0-9][a-z0-9._-]{3,39}$/;
-const proofPattern = /^[a-f0-9]{64}$/;
-const maxAge = 60 * 60 * 24 * 7;
-
-export function clientAccessEnabled(req, env) {
- return env.QA_CLIENT_ACCESS === 'true' && new URL(req.url).origin === qaOrigin;
+export function clientAccessEnabled(req,env){
+ const url=new URL(req.url);
+ return url.protocol==='https:'&&(url.origin===qaOrigin
+  ?env.QA_CLIENT_ACCESS==='true'
+  :env.CLIENT_PASSKEYS_ENABLED==='true'&&url.host===env.DVOLADA_ONLINE_HOST);
 }
-
-export function readClientCookie(req, env) {
- if (!clientAccessEnabled(req, env)) return null;
- const value = (req.headers.get('cookie') || '').split(';').map(cookie => cookie.trim())
-  .find(cookie => cookie.startsWith(clientCookie + '='))?.slice(clientCookie.length + 1);
- return secretPattern.test(value || '') ? value : null;
+export function readSecretCookie(req,name){
+ const value=(req.headers.get('cookie')||'').split(';').map(cookie=>cookie.trim())
+  .find(cookie=>cookie.startsWith(name+'='))?.slice(name.length+1);
+ return secretPattern.test(value||'')?value:null;
 }
-
-export function changeClientCookie(res, value) {
- res.headers.set('set-cookie', clientCookie + '=' + value +
-  '; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=' + (value ? maxAge : 0));
+export function readClientCookie(req,env){
+ return clientAccessEnabled(req,env)?readSecretCookie(req,clientCookie):null;
+}
+export function secretCookie(res,name,value,seconds){
+ res.headers.append('set-cookie',name+'='+value+'; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age='+seconds);
  return res;
 }
-
-const randomSecret = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))
- .replaceAll('+','-').replaceAll('/','_').replace(/=+$/, '');
-
-export async function clientAuth(req, env, operation) {
- if (!clientAccessEnabled(req, env)) throw new ApiError(404, 'NOT_FOUND');
- if (req.headers.get('origin') !== qaOrigin) throw new ApiError(403, 'ORIGIN_FORBIDDEN');
- const bucket = Math.floor(Date.now()/600000);
- const source = await hmacHex(env.SESSION_PEPPER, 'client-rate:v1:' + (req.headers.get('cf-connecting-ip') || 'unknown'));
- const throttle = await env.DB.prepare(`INSERT INTO client_auth_throttle(source_hash,time_bucket,attempts)
-  VALUES(?,?,1) ON CONFLICT(source_hash) DO UPDATE SET
-  attempts=CASE WHEN time_bucket=excluded.time_bucket THEN attempts+1 ELSE 1 END,time_bucket=excluded.time_bucket
-  RETURNING attempts`).bind(source,bucket).first();
- if (throttle.attempts > 12) throw new ApiError(429, 'LOGIN_RATE_LIMITED');
-
- const body = await readJson(req);
- requireKeys(body, operation === 'register' ? ['displayName','login','proof'] : operation==='recover'?['code','login','proof']:['code','login','proof']);
- const passwordMode=body.login!==undefined||body.proof!==undefined;
- const login=typeof body.login==='string'?body.login.trim().toLowerCase():'';
- if(passwordMode&&(!loginPattern.test(login)||typeof body.proof!=='string'||!proofPattern.test(body.proof)||
-   (operation==='login'&&body.code!==undefined)))throw new ApiError(400,'CLIENT_CREDENTIAL_FORMAT');
- if(passwordMode){
-  const account=await hmacHex(env.SESSION_PEPPER,'client-login-rate:v1:'+login);
-  const limit=await env.DB.prepare(`INSERT INTO client_auth_throttle(source_hash,time_bucket,attempts)
-   VALUES(?,?,1) ON CONFLICT(source_hash) DO UPDATE SET
-   attempts=CASE WHEN time_bucket=excluded.time_bucket THEN attempts+1 ELSE 1 END,time_bucket=excluded.time_bucket
-   RETURNING attempts`).bind(account,bucket).first();
-  if(limit.attempts>8)throw new ApiError(429,'LOGIN_RATE_LIMITED');
- }
- const passwordHash=passwordMode?await hmacHex(env.SESSION_PEPPER,'client-password:pbkdf2-v1:'+login+':'+body.proof):null;
- const now = Math.floor(Date.now()/1000);
- const token = randomSecret();
- const eligible=`u.status='active' AND (u.account_role='customer' OR
-  (u.account_role='courier' AND EXISTS(SELECT 1 FROM courier_profiles cp WHERE cp.user_id=u.id AND cp.active=1)))`;
- const session = env.DB.prepare(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at)
-  SELECT ?,c.user_id,?,? FROM client_credentials c JOIN users u ON u.id=c.user_id
-  WHERE c.user_id=? AND c.revision=? AND u.admin_version=? AND ${eligible}`);
- const sessionArgs = [crypto.randomUUID(),await hmacHex(env.SESSION_PEPPER,'session:v1:'+token),now+maxAge];
- const issueCodes = async () => {
-  const access = randomSecret(), recovery = randomSecret();
-  return {access,recovery, accessHash:await hmacHex(env.SESSION_PEPPER,'client-access:v1:'+access),
-   recoveryHash:await hmacHex(env.SESSION_PEPPER,'client-recover:v1:'+recovery)};
- };
-
- if (operation === 'register') {
-  const displayName = requireText(body.displayName, 2, 80, 'displayName');
-  const id = crypto.randomUUID();
-  const codes = await issueCodes();
-  try{await env.DB.batch([
-   env.DB.prepare("INSERT INTO users(id,display_name,account_role) VALUES(?,?,'customer')").bind(id,displayName),
-   env.DB.prepare('INSERT INTO client_credentials(user_id,access_hash,recovery_hash,login_name,password_hash) VALUES(?,?,?,?,?)')
-    .bind(id,codes.accessHash,codes.recoveryHash,passwordMode?login:null,passwordHash),
-   session.bind(...sessionArgs,id,1,1)
-  ])}catch(error){
-   if(passwordMode&&/UNIQUE constraint failed: client_credentials.login_name/.test(String(error)))throw new ApiError(409,'CLIENT_LOGIN_UNAVAILABLE');
-   throw error;
-  }
-  return changeClientCookie(respond(req,env,201,{...(passwordMode?{}:{access:codes.access}),recovery:codes.recovery}),token);
- }
-
- const recovery = operation === 'recover';
- if((recovery||!passwordMode)&&(typeof body.code!=='string'||!secretPattern.test(body.code)))
-  throw new ApiError(401,'CLIENT_CODE_INVALID');
- const hash=recovery||!passwordMode
-  ?await hmacHex(env.SESSION_PEPPER,(recovery?'client-recover:v1:':'client-access:v1:')+body.code):null;
- const credentialQuery=`SELECT c.user_id,c.revision,u.admin_version
-  FROM client_credentials c JOIN users u ON u.id=c.user_id WHERE ${eligible} AND `;
- const row=await (passwordMode
-  ?env.DB.prepare(credentialQuery+(recovery?'c.login_name=? AND c.recovery_hash=?':'c.login_name=? AND c.password_hash=?'))
-   .bind(login,recovery?hash:passwordHash)
-  :env.DB.prepare(credentialQuery+(recovery?'c.recovery_hash=?':'c.access_hash=?')+' AND c.login_name IS NULL').bind(hash)).first();
- if (!row) throw new ApiError(401,'CLIENT_CODE_INVALID');
-
- if (!recovery) {
-  const result = await session.bind(...sessionArgs,row.user_id,row.revision,row.admin_version).run();
-  if (!result.meta.changes) throw new ApiError(401,'CLIENT_CODE_INVALID');
-  return changeClientCookie(respond(req,env,204),token);
- }
-
- const codes = await issueCodes();
- const [rotated] = await env.DB.batch([
-  env.DB.prepare(`UPDATE client_credentials SET access_hash=?,recovery_hash=?,password_hash=?,revision=revision+1
-   WHERE user_id=? AND revision=? AND recovery_hash=? AND EXISTS(
-    SELECT 1 FROM users u WHERE u.id=client_credentials.user_id AND u.admin_version=? AND ${eligible}
-   )`).bind(codes.accessHash,codes.recoveryHash,passwordHash,row.user_id,row.revision,hash,row.admin_version),
-  env.DB.prepare(`UPDATE auth_sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL
-   AND EXISTS(SELECT 1 FROM client_credentials WHERE user_id=? AND recovery_hash=?)`)
-   .bind(now,row.user_id,row.user_id,codes.recoveryHash),
-  env.DB.prepare(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at)
-   SELECT ?,user_id,?,? FROM client_credentials WHERE user_id=? AND recovery_hash=?`)
-   .bind(...sessionArgs,row.user_id,codes.recoveryHash)
- ]);
- if (!rotated.meta.changes) throw new ApiError(401,'CLIENT_CODE_INVALID');
- return changeClientCookie(respond(req,env,200,{...(passwordMode?{}:{access:codes.access}),recovery:codes.recovery}),token);
+export function changeClientCookie(res,value){
+ return secretCookie(res,clientCookie,value,value?sessionSeconds:0);
 }
+export const randomSecret=()=>btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))
+ .replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');

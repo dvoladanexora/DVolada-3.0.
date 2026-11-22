@@ -15,7 +15,8 @@ import {createRestaurant,updateRestaurant,assignMember,enrollCourier,createProdu
  updateProduct,updateAvailability} from './management.js';
 
 import {adminFlash,flashCatalogue} from './flash.js';
-import {clientAuth,clientAccessEnabled,readClientCookie,changeClientCookie} from './client-access.js';
+import {clientPasskey} from './client-passkeys.js';
+import {clientAccessEnabled,readClientCookie,changeClientCookie} from './client-access.js';
 import {staffAccess,staffAuthenticate} from './staff-access.js';
 import {settlements,settlementRule,requireSettlementStaff} from './restaurant-settlements.js';
 import {favorites,clientProfile,conversation,orderClaim} from './client-workspace.js';
@@ -74,8 +75,10 @@ async function route(req,env){
   }
   return respond(req,env,200,{restaurant:rest,products:results.map(({has_photo,...product})=>({...product,photoUrl:has_photo?'/api/v1/catalog/photos/'+product.id:null,options:byProduct.get(product.id)||[]}))});
  }
- const access=/^\/api\/v1\/auth\/client\/(register|login|recover)$/.exec(path);
- if(method==='POST'&&access)return clientAuth(req,env,access[1]);
+ const access=/^\/api\/v1\/auth\/client\/(register|login|recover)\/(begin|finish)$/.exec(path);
+ if(method==='POST'&&access)return clientPasskey(req,env,access[1],access[2]);
+ if(method==='POST'&&/^\/api\/v1\/auth\/client\/(register|login|recover)$/.test(path))
+  throw new ApiError(410,'CLIENT_LEGACY_RETIRED');
  if(method==='GET'&&path==='/api/v1/catalog/flash')
   return respond(req,env,200,{...(env.QA_FLASH==='true'?await flashCatalogue(env):{campaigns:[]}),enabled:env.QA_FLASH==='true'});
  if(method==='GET'&&path==='/api/v1/auth/client/config')

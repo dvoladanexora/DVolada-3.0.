@@ -11,6 +11,8 @@ import CatalogSearch from './CatalogSearch.jsx';
 import {readCart,writeCart,updateQuantity} from './cart-draft.js';
 
 const apiOrigin=import.meta.env.VITE_DVOLADA_API_URL||window.location.origin;
+const optionPrice=options=>(options||[]).reduce((total,option)=>total+option.price_minor,0);
+const optionsFromReceipt=item=>{try{return JSON.parse(item.options_json||'[]')}catch{return []}};
 const price=n=>'L '+(Number(n||0)/100).toLocaleString('es-HN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const orderLabel={Pendiente:'Pendiente',Aceptado:'Aceptado',Preparando:'Preparando',Listo:'Listo',
  Recogido:'Recogido','En camino':'En camino','En ubicación':'En ubicación',
@@ -41,6 +43,8 @@ function errorLabel(error){
   PIN_LOCKED:'Demasiados intentos. Se requiere intervención autorizada.',
   FIREBASE_IDENTITY_UNVERIFIED:'Verificá tu correo antes de ingresar.',
   FIREBASE_NOT_CONFIGURED:'Todavía no se configuró Firebase para Dvolada.',
+  INVALID_COUPON:'Revisá el formato del cupón.',
+  COUPON_UNAVAILABLE:'Cupón vencido, ya utilizado o ajeno a este restaurante.',
   CLIENT_CODE_INVALID:'La clave o el código no es válido.',
   LOGIN_RATE_LIMITED:'Demasiados intentos de acceso. Intentá más tarde.'
  };
@@ -62,6 +66,7 @@ export default function LiveApp(){
  const [status,setStatus]=useState(''),[error,setError]=useState(''),[refreshWarning,setRefreshWarning]=useState('');
  const [scope,setScope]=useState('customer'),[restaurants,setRestaurants]=useState([]),[products,setProducts]=useState([]);
  const [shoppingRestaurant,setShoppingRestaurant]=useState(''),[cart,setCart]=useState([]),[catalogTerm,setCatalogTerm]=useState('');
+ const [optionsByProduct,setOptionsByProduct]=useState({}),[appliedCoupon,setAppliedCoupon]=useState(null),[couponText,setCouponText]=useState('');
  const [pendingKey,setPendingKey]=useState(null),[replaceCart,setReplaceCart]=useState(null);
  const [cartRestaurantId,setCartRestaurantId]=useState('');
  const [phone,setPhone]=useState('');
@@ -107,6 +112,7 @@ export default function LiveApp(){
   setNewRestaurantName('');setNewRestaurantPlan('ONLINE');setAdminStaffRole('owner');
   setNewProductName('');setNewProductPrice('');setEditPrices({});
   setCart([]);setCartRestaurantId('');setShoppingRestaurant('');setProducts([]);setCatalogTerm('');
+  setOptionsByProduct({});setAppliedCoupon(null);setCouponText('');
   setPendingKey(null);setReplaceCart(null);setDeliveryMethod('delivery');
   setSelectedPin(null);setPinEntry('');setPhone('');setDeliveryAddress('');
   setPushEnabled(false);setRefreshWarning('');setStatus('');
@@ -118,7 +124,7 @@ export default function LiveApp(){
   setScope(me.user.role==='platform_admin'?'admin':me.user.role==='courier'?'courier':first?'restaurant':'customer');
   if(me.user.role==='customer'&&!first){
    const draft=readCart(me.user.id);
-   setCart(draft.items);setCartRestaurantId(draft.restaurantId);setPendingKey(draft.pendingKey);
+   setCart(draft.items);setCartRestaurantId(draft.restaurantId);setPendingKey(draft.pendingKey);setAppliedCoupon(draft.coupon||null);setCouponText(draft.coupon?.code||'');
   }
   setSession(me);
  },[]);
@@ -178,8 +184,8 @@ export default function LiveApp(){
  useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
  const cartAccount=session?.user?.role==='customer'&&!session.restaurants?.length?session.user.id:null;
  useEffect(()=>{
-  if(cartAccount)writeCart(cartAccount,{restaurantId:cartRestaurantId,items:cart,pendingKey});
- },[cartAccount,cartRestaurantId,cart,pendingKey]);
+  if(cartAccount)writeCart(cartAccount,{restaurantId:cartRestaurantId,items:cart,pendingKey,coupon:appliedCoupon});
+ },[cartAccount,cartRestaurantId,cart,pendingKey,appliedCoupon]);
  useEffect(()=>{
   const on=()=>setOffline(false),off=()=>setOffline(true);
   window.addEventListener('online',on);window.addEventListener('offline',off);
@@ -306,7 +312,9 @@ export default function LiveApp(){
     const latest=new Map(r.products.map(product=>[product.id,product]));
     setCart(current=>current.filter(item=>latest.has(item.productId)).map(item=>{
      const product=latest.get(item.productId);
-     return {...item,name:product.name,priceMinor:product.price_minor};
+     const options=(item.options||[]).map(old=>product.options?.find(option=>option.id===old.id)).filter(Boolean);
+     if(options.length!==(item.options||[]).length)return item;
+     return {...item,name:product.name,options,priceMinor:product.price_minor+optionPrice(options)};
     }));
    }
   }catch(e){if(request===menuRequest.current)setError(errorLabel(e))}
@@ -315,12 +323,17 @@ export default function LiveApp(){
   if(cart.length&&cartRestaurantId!==restaurantId){
    setReplaceCart({restaurantId,items});return;
   }
+  if(restaurantId!==cartRestaurantId){setAppliedCoupon(null);setCouponText('')}
   setCartRestaurantId(restaurantId);setCart(items);
  }
  function addProduct(p){
   if(pendingKey)return;
-  putCart(shoppingRestaurant,updateQuantity(cartRestaurantId===shoppingRestaurant?cart:[],
-   {productId:p.id,name:p.name,priceMinor:p.price_minor},1));
+  const current=cartRestaurantId===shoppingRestaurant?cart:[];
+  const selected=optionsByProduct[p.id]||[];
+  const existing=current.find(item=>item.productId===p.id);
+  const options=existing?.options||(existing?[]:(p.options||[]).filter(option=>selected.includes(option.id)));
+  putCart(shoppingRestaurant,updateQuantity(current,{productId:p.id,name:p.name,options,
+   priceMinor:p.price_minor+optionPrice(options)},1));
  }
  function removeProduct(id){
   if(!pendingKey)setCart(current=>{
@@ -331,7 +344,7 @@ export default function LiveApp(){
  function confirmCheckout(result){
   if(!sessionRef.current)return;
   writeCart(cartAccount,{items:[]});
-  setPendingKey(null);setCart([]);setCartRestaurantId('');setProducts([]);setShoppingRestaurant('');
+  setAppliedCoupon(null);setCouponText('');setPendingKey(null);setCart([]);setCartRestaurantId('');setProducts([]);setShoppingRestaurant('');
   setSelectedPin({id:result.order.id,pin:result.deliveryPin});
   setStatus('Pedido de prueba confirmado.');
   load().catch(e=>{if(!handleSessionError(e))setRefreshWarning('Actualizá la lista para ver el pedido.')});
@@ -342,17 +355,18 @@ export default function LiveApp(){
   if(!/^[0-9]{8}$/.test(phone))return setError('Ingresá los ocho dígitos del teléfono.');
   const key=pendingKey||newKey();
   checkoutInFlight.current=true;
-  writeCart(cartAccount,{restaurantId:cartRestaurantId,items:cart,pendingKey:key});
+  writeCart(cartAccount,{restaurantId:cartRestaurantId,items:cart,pendingKey:key,coupon:appliedCoupon});
   setPendingKey(key);
   const intent={restaurantId:cartRestaurantId,deliveryMethod,deliveryAddress,phone:'+504'+phone,
-   expectedTotalMinor:subtotal+fee,
-   items:cart.map(({productId,quantity})=>({productId,quantity}))};
+   expectedTotalMinor:subtotal+fee-discount,
+   ...(appliedCoupon?{coupon:appliedCoupon.code}:{}),
+   items:cart.map(({productId,quantity,options})=>({productId,quantity,...(options?.length?{optionIds:options.map(option=>option.id)}:{})}))};
   try{
    const result=await run(async()=>{
     try{return await api.createOrder(intent,key)}
     catch(error){
      if(!pendingKey&&error instanceof LiveApiError&&([400,403,422].includes(error.status)||
-        ['RESTAURANT_NOT_ACCEPTING','PRODUCT_UNAVAILABLE','CHECKOUT_TOTAL_CHANGED'].includes(error.code))){
+        ['RESTAURANT_NOT_ACCEPTING','PRODUCT_UNAVAILABLE','CHECKOUT_TOTAL_CHANGED','COUPON_UNAVAILABLE'].includes(error.code))){
       setPendingKey(null);
      }
      throw error;
@@ -371,8 +385,11 @@ export default function LiveApp(){
    const available=new Map(menu.products.map(product=>[product.id,product]));
    const items=receipt.order.items.filter(item=>available.has(item.product_id)).map(item=>{
     const product=available.get(item.product_id);
-    return {productId:product.id,name:product.name,priceMinor:product.price_minor,quantity:item.quantity};
-   });
+    const requested=optionsFromReceipt(item);
+    const options=requested.map(old=>product.options?.find(option=>option.id===old.id)).filter(Boolean);
+    if(options.length!==requested.length)return null;
+    return {productId:product.id,name:product.name,options,priceMinor:product.price_minor+optionPrice(options),quantity:item.quantity};
+   }).filter(Boolean);
    if(!items.length)throw new Error('Los productos de este pedido ya no están disponibles.');
    if(cart.length)setReplaceCart({restaurantId:order.restaurantId,items});
    else putCart(order.restaurantId,items);
@@ -383,7 +400,7 @@ export default function LiveApp(){
  async function showCustomerOrder(order){
   return run(async()=>{
    const data=await api.customerOrder(order.id);
-   setSelectedPin({id:order.id,pin:data.deliveryPin,status:data.order.status});
+   setSelectedPin({id:order.id,pin:data.deliveryPin,status:data.order.status,receipt:data.order});
   },{refresh:false})
  }
  async function showRestaurantOrder(order){
@@ -405,6 +422,7 @@ export default function LiveApp(){
  const selectedBusiness=session?.restaurants?.find(x=>x.restaurant_id===selectedRestaurantId);
  const subtotal=cart.reduce((sum,p)=>sum+p.priceMinor*p.quantity,0);
  const restaurant=restaurants.find(r=>r.id===cartRestaurantId);
+ const discount=Math.min(subtotal,appliedCoupon?.discountMinor||0);
  const fee=deliveryMethod==='delivery'?restaurant?.delivery_fee_minor??0:0;
  const canManage=['owner','manager'].includes(selectedBusiness?.staff_role);
  const formattedUserId=session?.user?.id||'';
@@ -456,7 +474,23 @@ export default function LiveApp(){
       {!restaurants.length&&<p>Próximamente encontrarás los restaurantes afiliados aquí.</p>}</div>:
       <><Action kind="text" onClick={()=>{menuRequest.current++;setShoppingRestaurant('');setProducts([])}}>Volver a restaurantes</Action>
        {cart.length>0&&<a className="dvl-cart-link" href="#carrito">Volver al carrito</a>}
-       <div className="dvl-stack">{products.map(p=><div className="dvl-row" key={p.id}><div><strong>{p.name}</strong><small>{price(p.price_minor)}</small></div>
+       <div className="dvl-stack">{products.map(p=><div className="dvl-row" key={p.id}><div><strong>{p.name}</strong><small>{price(p.price_minor)}</small>
+        {p.options?.length>0&&!(cartRestaurantId===shoppingRestaurant&&cart.some(item=>item.productId===p.id))&&
+         <fieldset className="dvl-options" disabled={offline||busy||Boolean(pendingKey)}><legend>Personalizá {p.name}</legend>
+          {p.options.some(option=>option.kind==='variant')&&<label>Variante<select
+           value={p.options.find(option=>option.kind==='variant'&&(optionsByProduct[p.id]||[]).includes(option.id))?.id||''}
+           onChange={event=>{const id=event.target.value;setOptionsByProduct(current=>({...current,[p.id]:[
+             ...(current[p.id]||[]).filter(selected=>p.options.some(option=>option.id===selected&&option.kind==='extra')),...(id?[id]:[])]}))}}>
+           <option value="">Presentación base</option>{p.options.filter(option=>option.kind==='variant').map(option=>
+            <option key={option.id} value={option.id}>{option.name} + {price(option.price_minor)}</option>)}
+          </select></label>}
+          {p.options.filter(option=>option.kind==='extra').map(option=><label key={option.id} className="dvl-favorite-filter">
+           <input type="checkbox" disabled={(optionsByProduct[p.id]||[]).length>=7&&!(optionsByProduct[p.id]||[]).includes(option.id)} checked={(optionsByProduct[p.id]||[]).includes(option.id)}
+            onChange={event=>{const checked=event.target.checked;setOptionsByProduct(current=>({...current,[p.id]:checked?
+             [...(current[p.id]||[]),option.id]:(current[p.id]||[]).filter(id=>id!==option.id)}))}}/>{option.name} + {price(option.price_minor)}
+          </label>)}
+         </fieldset>}
+       </div>
         <Action kind="secondary" disabled={offline||busy||Boolean(pendingKey)} onClick={()=>addProduct(p)}>Agregar</Action></div>)}
        {!products.length&&<p>Este local todavía no tiene productos disponibles.</p>}</div></>}
     </section>
@@ -464,7 +498,7 @@ export default function LiveApp(){
      {replaceCart&&<div className="dvl-cart-confirm" role="group" aria-label="Cambiar carrito">
       <p>Cada pedido corresponde a un solo restaurante. ¿Querés reemplazar el carrito actual?</p>
       <div className="dvl-inline">
-       <Action onClick={()=>{setCart(replaceCart.items);setCartRestaurantId(replaceCart.restaurantId);setReplaceCart(null)}}>Reemplazar</Action>
+       <Action onClick={()=>{setCart(replaceCart.items);setCartRestaurantId(replaceCart.restaurantId);setAppliedCoupon(null);setCouponText('');setReplaceCart(null)}}>Reemplazar</Action>
        <Action kind="secondary" onClick={()=>setReplaceCart(null)}>Conservar carrito</Action>
       </div>
      </div>}
@@ -473,11 +507,16 @@ export default function LiveApp(){
       if(draft.items.length){putCart(draft.restaurantId,draft.items);writeCart('guest',{items:[]})}
      }}>Usar carrito de invitado</Action>}
      {!cart.length?<p>Seleccioná un restaurante y agregá productos.</p>:<><div className="dvl-stack">
-      {cart.map(p=><div className="dvl-row" key={p.productId}><div><strong>{p.name}</strong><small>{p.quantity} × {price(p.priceMinor)}</small></div>
+      {cart.map(p=><div className="dvl-row" key={p.productId}><div><strong>{p.name}</strong><small>{p.quantity} × {price(p.priceMinor)}</small>{p.options?.length>0&&<small>{p.options.map(option=>option.name).join(' · ')}</small>}</div>
        <Action kind="secondary" disabled={busy||Boolean(pendingKey)} onClick={()=>removeProduct(p.productId)}>Quitar uno</Action></div>)}</div>
       <div className="dvl-row"><strong>Productos</strong><strong>{price(subtotal)}</strong></div>
       <div className="dvl-row"><strong>Envío estimado</strong><strong>{price(fee)}</strong></div>
-      <div className="dvl-row dvl-total"><strong>Total preliminar</strong><strong>{price(subtotal+fee)}</strong></div>
+      <label>Cupón<input value={couponText} maxLength={24} disabled={busy||Boolean(pendingKey)}
+       onChange={event=>{setCouponText(event.target.value);setAppliedCoupon(null)}}/></label>
+      <Action kind="secondary" disabled={busy||offline||Boolean(pendingKey)||couponText.trim().length<4}
+       onClick={async()=>{const result=await run(()=>api.coupon(cartRestaurantId,couponText),{refresh:false});if(result)setAppliedCoupon(result)}}>Aplicar cupón</Action>
+      {appliedCoupon&&<div className="dvl-row"><strong>Descuento {appliedCoupon.code}</strong><strong>−{price(discount)}</strong></div>}
+      <div className="dvl-row dvl-total"><strong>Total preliminar</strong><strong>{price(subtotal+fee-discount)}</strong></div>
       <label>Teléfono de Honduras (+504)<input inputMode="numeric" autoComplete="tel-national" value={phone}
        onChange={e=>setPhone(e.target.value.replace(/\D/g,'').slice(0,8))} /></label>
       <label>Modalidad<select value={deliveryMethod} onChange={e=>setDeliveryMethod(e.target.value)}>
@@ -501,7 +540,11 @@ export default function LiveApp(){
       {o.status==='Entregado'&&<Action kind="text" disabled={busy||offline||Boolean(pendingKey)} onClick={()=>reorder(o)}>Volvé a pedir</Action>}
       {o.status==='Pendiente'&&<Action kind="text" disabled={busy||offline} onClick={()=>action(()=>api.cancelOrder(o,newKey()))}>Cancelar pedido</Action>}
       </OrderCard>)}</div>:<p>Tus pedidos confirmados aparecerán aquí.</p>}
-      {selectedPin&&<div className="dvl-pin" role="status"><strong>Pedido {selectedPin.id.slice(0,8)}</strong><p>
+      {selectedPin&&<div className="dvl-pin" role="status"><strong>Pedido {selectedPin.receipt?.orderNumber||selectedPin.id.slice(0,8)}</strong>
+       {selectedPin.receipt&&<><ul>{selectedPin.receipt.items.map(item=><li key={item.product_id}>
+        {item.quantity} × {item.name_snapshot}{optionsFromReceipt(item).map(option=>' · '+option.name)}
+       </li>)}</ul><span>Total: {price(selectedPin.receipt.totalMinor)}</span></>}
+       <p>
        {selectedPin.pin?'PIN de entrega: '+selectedPin.pin:'Sin PIN de entrega disponible'}</p>
        <small>Compartí el PIN únicamente con tu repartidor cuando recibás el pedido.</small>
        <Action kind="text" onClick={()=>setSelectedPin(null)}>Ocultar</Action></div>}
@@ -546,11 +589,11 @@ export default function LiveApp(){
       <Action kind="secondary" disabled={busy||offline} onClick={()=>showRestaurantOrder(o)}>Ver comanda</Action>
       {canManage&&<Action kind="secondary" disabled={offline} onClick={()=>setSupport({id:o.id,mode:'restaurant'})}>Chat con cliente</Action>}
       {orderDetail?.orderId===o.id&&orderDetail.restaurantId===selectedRestaurantId&&<>
-       <ul aria-label="Artículos de la comanda">{orderDetail.items.map((item,index)=><li key={index}>{item.quantity} × {item.name_snapshot}</li>)}</ul>
+       <ul aria-label="Artículos de la comanda">{orderDetail.items.map((item,index)=><li key={index}>{item.quantity} × {item.name_snapshot}{optionsFromReceipt(item).map(option=>' · '+option.name)}</li>)}</ul>
        <Action kind="secondary" onClick={()=>window.print()}>Imprimir comanda</Action>
        {createPortal(<section className="dvl-print-sheet">
         <h1>{selectedBusiness?.name}</h1><h2>Comanda #{orderDetail.orderNumber}</h2>
-        <ul>{orderDetail.items.map((item,index)=><li key={index}>{item.quantity} × {item.name_snapshot}</li>)}</ul>
+        <ul>{orderDetail.items.map((item,index)=><li key={index}>{item.quantity} × {item.name_snapshot}{optionsFromReceipt(item).map(option=>' · '+option.name)}</li>)}</ul>
        </section>,document.body)}
       </>}
       <div className="dvl-inline">{(staffTransitions[o.status]||[]).filter(next=>canManage||

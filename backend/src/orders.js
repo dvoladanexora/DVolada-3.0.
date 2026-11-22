@@ -16,16 +16,16 @@ const courierMoves={
  'En camino':['En ubicación']
 };
 const dataOrder=`SELECT id,restaurant_id,customer_id,courier_id,order_number,delivery_method,
- delivery_address,status,version,courier_response,subtotal_minor,delivery_fee_minor,total_minor,pin_attempts,
+ delivery_address,status,version,courier_response,subtotal_minor,delivery_fee_minor,total_minor,discount_minor,pin_attempts,
  created_at,updated_at FROM online_orders`;
 const briefOrder=`SELECT id,restaurant_id,courier_id,order_number,delivery_method,status,version,courier_response,
- subtotal_minor,delivery_fee_minor,total_minor,created_at,updated_at FROM online_orders`;
+ subtotal_minor,delivery_fee_minor,total_minor,discount_minor,created_at,updated_at FROM online_orders`;
 function orderDto(order,{includeAddress=false}={}){
  if(!order)return null;
  const data={id:order.id,restaurantId:order.restaurant_id,orderNumber:order.order_number,
    status:order.status,version:order.version,courierResponse:order.courier_response,deliveryMethod:order.delivery_method,
    courierId:order.courier_id,subtotalMinor:order.subtotal_minor,
-   deliveryFeeMinor:order.delivery_fee_minor,totalMinor:order.total_minor,
+   deliveryFeeMinor:order.delivery_fee_minor,discountMinor:order.discount_minor||0,totalMinor:order.total_minor-(order.discount_minor||0),
    createdAt:order.created_at,updatedAt:order.updated_at};
  if(includeAddress)data.deliveryAddress=order.delivery_address;
  return data;
@@ -87,7 +87,7 @@ export async function restaurantOrder(env,access,orderId){
  const order=await env.DB.prepare(`${dataOrder} WHERE id=? AND restaurant_id=?`)
    .bind(requireUuid(orderId),access.restaurantId).first();
  if(!order)throw new ApiError(404,'ORDER_NOT_FOUND');
- const {results=[]}=await env.DB.prepare(`SELECT name_snapshot,quantity,unit_price_minor,line_total_minor
+ const {results=[]}=await env.DB.prepare(`SELECT name_snapshot,quantity,unit_price_minor,options_json,options_minor,line_total_minor+options_minor*quantity AS line_total_minor
    FROM online_order_items WHERE order_id=? ORDER BY id`).bind(order.id).all();
  return {order:{...orderDto(order,{includeAddress:true}),items:results}};
 }
@@ -227,11 +227,32 @@ export async function confirmDelivery(req,env,actor,orderId){
  // PIN is never stored in mutation records or logs.
  return transition(env,actor,{orderId:id,restaurantId:order.restaurant_id,expectedVersion:v,status:'Entregado',key});
 }
+function couponCode(code){
+ const normalized=typeof code==='string'?code.trim().toUpperCase():'';
+ if(!/^[A-Z0-9-]{4,24}$/.test(normalized))throw new ApiError(400,'INVALID_COUPON');
+ return normalized;
+}
+async function validCoupon(env,actor,restaurantId,code){
+ const row=await env.DB.prepare(`SELECT discount_minor FROM client_coupons c WHERE code=? AND restaurant_id=?
+  AND active=1 AND starts_at<=unixepoch() AND ends_at>unixepoch()
+  AND NOT EXISTS(SELECT 1 FROM online_orders WHERE customer_id=? AND coupon_code=c.code)`)
+  .bind(code,restaurantId,actor.userId).first();
+ if(!row)throw new ApiError(409,'COUPON_UNAVAILABLE');
+ return row.discount_minor;
+}
+export async function customerCoupon(req,env,actor){
+ requireRole(actor,'customer');
+ const body=await readJson(req);
+ requireKeys(body,['restaurantId','coupon']);
+ const code=couponCode(body.coupon);
+ const discountMinor=await validCoupon(env,actor,requireUuid(body.restaurantId),code);
+ return {code,discountMinor};
+}
 export async function customerCreate(req,env,actor){
  requireRole(actor,'customer');
  if(env.ORDER_CREATION_ENABLED!=='true')throw new ApiError(503,'ORDER_CREATION_DISABLED');
  const body=await readJson(req,16384);
- requireKeys(body,['restaurantId','items','deliveryMethod','deliveryAddress','phone','expectedTotalMinor']);
+ requireKeys(body,['restaurantId','items','deliveryMethod','deliveryAddress','phone','expectedTotalMinor','coupon']);
  const phone=typeof body.phone==='string'?body.phone.replace(/[\s()-]/g,''):'';
  if(!/^\+504[0-9]{8}$/.test(phone))throw new ApiError(400,'PHONE_REQUIRED');
  const restaurantId=requireUuid(body.restaurantId,'restaurantId');
@@ -241,14 +262,20 @@ export async function customerCreate(req,env,actor){
   ?requireText(body.deliveryAddress,8,300,'deliveryAddress'):'';
  if(!Array.isArray(body.items)||body.items.length<1||body.items.length>20)throw new ApiError(400,'INVALID_ITEMS');
  const items=body.items.map(x=>{
-  requireKeys(x,['productId','quantity']);
-  return {productId:requireUuid(x.productId,'productId'),quantity:requireInteger(x.quantity,1,25,'quantity')};
+  requireKeys(x,['productId','quantity','optionIds']);
+  if(x.optionIds!==undefined&&(!Array.isArray(x.optionIds)||x.optionIds.length>8))
+   throw new ApiError(400,'INVALID_OPTIONS');
+  const optionIds=x.optionIds?.map(id=>requireUuid(id)).sort();
+  if(optionIds&&new Set(optionIds).size!==optionIds.length)throw new ApiError(400,'INVALID_OPTIONS');
+  return {productId:requireUuid(x.productId,'productId'),quantity:requireInteger(x.quantity,1,25,'quantity'),
+   ...(optionIds?.length?{optionIds}:{})};
  });
  if(new Set(items.map(x=>x.productId)).size!==items.length)throw new ApiError(400,'DUPLICATE_PRODUCT');
  const key=idempotencyKey(req);
  const expectedTotalMinor=body.expectedTotalMinor===undefined?undefined:
   requireInteger(body.expectedTotalMinor,0,2000000000,'expectedTotalMinor');
- const intent={restaurantId,deliveryMethod,deliveryAddress,phone,items,expectedTotalMinor};
+ const coupon=body.coupon===undefined?undefined:couponCode(body.coupon);
+ const intent={restaurantId,deliveryMethod,deliveryAddress,phone,items,expectedTotalMinor,coupon};
  const hash=await sha256(JSON.stringify(intent));
  const replay=async()=>{
   const prev=await env.DB.prepare(`SELECT c.request_hash,o.* FROM order_create_requests c
@@ -268,25 +295,41 @@ export async function customerCreate(req,env,actor){
   WHERE restaurant_id=? AND available=1 AND id IN (${items.map(()=>'?').join(',')})`)
   .bind(restaurantId,...items.map(item=>item.productId)).all();
  const catalog=new Map(results.map(product=>[product.id,product]));
+ const productIds=items.filter(item=>item.optionIds).map(item=>item.productId);
+ const optionsById=new Map();
+ if(productIds.length){
+  const {results:options=[]}=await env.DB.prepare(`SELECT id,product_id,name,kind,price_minor FROM product_options
+   WHERE available=1 AND product_id IN (${productIds.map(()=>'?').join(',')})`).bind(...productIds).all();
+  options.forEach(option=>optionsById.set(option.id,option));
+ }
  const resolved=items.map(item=>{
   const p=catalog.get(item.productId);
   if(!p)throw new ApiError(409,'PRODUCT_UNAVAILABLE');
-  return {...p,quantity:item.quantity};
+  const options=(item.optionIds||[]).map(id=>{
+   const option=optionsById.get(id);
+   if(!option||option.product_id!==p.id)throw new ApiError(409,'PRODUCT_UNAVAILABLE');
+   return {id,name:option.name,kind:option.kind,price_minor:option.price_minor};
+  });
+  if(options.filter(option=>option.kind==='variant').length>1)throw new ApiError(400,'INVALID_OPTIONS');
+  return {...p,quantity:item.quantity,options,optionsMinor:options.reduce((total,option)=>total+option.price_minor,0)};
  });
- const subtotal=resolved.reduce((sum,p)=>sum+p.price_minor*p.quantity,0);
+ const subtotal=resolved.reduce((sum,p)=>sum+(p.price_minor+p.optionsMinor)*p.quantity,0);
  const fee=deliveryMethod==='delivery'?restaurant.delivery_fee_minor:0;
  if(!Number.isSafeInteger(subtotal)||subtotal+fee>2000000000)
   throw new ApiError(400,'INVALID_TOTAL');
- if(expectedTotalMinor!==undefined&&expectedTotalMinor!==subtotal+fee)
+ const discount=coupon?Math.min(subtotal,await validCoupon(env,actor,restaurantId,coupon)):0;
+ if(coupon&&!discount)throw new ApiError(409,'COUPON_UNAVAILABLE');
+ const total=subtotal+fee-discount;
+ if(expectedTotalMinor!==undefined&&expectedTotalMinor!==total)
   throw new ApiError(409,'CHECKOUT_TOTAL_CHANGED');
  const id=crypto.randomUUID(),orderNumber='DV-'+id.replaceAll('-','').slice(0,12).toUpperCase();
  const stmts=[
   env.DB.prepare(`INSERT INTO online_orders(id,restaurant_id,customer_id,order_number,delivery_method,
-   delivery_address,status,version,subtotal_minor,delivery_fee_minor,total_minor,customer_phone_e164) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`)
-   .bind(id,restaurantId,actor.userId,orderNumber,deliveryMethod,deliveryAddress,'Pendiente',1,subtotal,fee,subtotal+fee,phone),
+   delivery_address,status,version,subtotal_minor,delivery_fee_minor,total_minor,customer_phone_e164,coupon_code,discount_minor) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+   .bind(id,restaurantId,actor.userId,orderNumber,deliveryMethod,deliveryAddress,'Pendiente',1,subtotal,fee,subtotal+fee,phone,coupon??null,discount),
   ...resolved.map(p=>env.DB.prepare(`INSERT INTO online_order_items(id,order_id,product_id,name_snapshot,
-    unit_price_minor,quantity,line_total_minor) VALUES(?,?,?,?,?,?,?)`)
-    .bind(crypto.randomUUID(),id,p.id,p.name,p.price_minor,p.quantity,p.price_minor*p.quantity)),
+    unit_price_minor,quantity,line_total_minor,options_json,options_minor) VALUES(?,?,?,?,?,?,?,?,?)`)
+    .bind(crypto.randomUUID(),id,p.id,p.name,p.price_minor,p.quantity,p.price_minor*p.quantity,JSON.stringify(p.options),p.optionsMinor)),
   env.DB.prepare(`INSERT INTO online_order_events(order_id,restaurant_id,actor_id,event_kind,to_status,version)
    VALUES(?,?,?,'created','Pendiente',1)`).bind(id,restaurantId,actor.userId),
   env.DB.prepare(`INSERT INTO order_create_requests(user_id,request_key,request_hash,order_id)
@@ -295,7 +338,7 @@ export async function customerCreate(req,env,actor){
  try{await env.DB.batch(stmts)}
  catch(error){const duplicated=await replay();if(duplicated)return duplicated;throw sqlConflict(error)}
  return {order:{id,restaurantId,orderNumber,status:'Pendiente',version:1,deliveryMethod,
-  subtotalMinor:subtotal,deliveryFeeMinor:fee,totalMinor:subtotal+fee},
+  subtotalMinor:subtotal,deliveryFeeMinor:fee,discountMinor:discount,totalMinor:total},
   deliveryPin:deliveryMethod==='delivery'?await deliveryPin(env.PIN_SECRET,id):null,replayed:false};
 }
 export async function customerOrders(env,actor){
@@ -318,7 +361,7 @@ export async function customerOrder(env,actor,orderId){
  const order=await env.DB.prepare(`${dataOrder} WHERE customer_id=? AND id=?`)
    .bind(actor.userId,requireUuid(orderId)).first();
  if(!order)throw new ApiError(404,'ORDER_NOT_FOUND');
- const {results=[]}=await env.DB.prepare(`SELECT product_id,name_snapshot,unit_price_minor,quantity,line_total_minor
+ const {results=[]}=await env.DB.prepare(`SELECT product_id,name_snapshot,unit_price_minor,quantity,options_json,options_minor,line_total_minor+options_minor*quantity AS line_total_minor
     FROM online_order_items WHERE order_id=? ORDER BY id`).bind(order.id).all();
  return {order:{...orderDto(order,{includeAddress:true}),items:results},
   deliveryPin:order.delivery_method==='delivery'&&!CLOSED.includes(order.status)

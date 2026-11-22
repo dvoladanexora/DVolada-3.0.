@@ -54,6 +54,7 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
   logout:()=>request('/api/v1/auth/logout',{method:'POST'}),
   customerOrders:()=>request('/api/v1/customer/orders'),
   customerOrder:id=>request('/api/v1/customer/orders/'+s(id)),
+  coupon:(restaurantId,coupon)=>request('/api/v1/customer/coupon',{method:'POST',body:{restaurantId,coupon}}),
   createOrder:(body,key)=>request('/api/v1/customer/orders',{method:'POST',body,key}),
   checkoutStatus:key=>request('/api/v1/customer/orders/checkout',{key}),
   cancelOrder:(order,key)=>request('/api/v1/customer/orders/'+s(order.id)+'/cancel',{method:'POST',

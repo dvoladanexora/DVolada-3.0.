@@ -135,6 +135,7 @@ export function sqlConflict(error){
   if(/STALE_ORDER|STALE_ASSIGNMENT|OFFER_CHANGED/.test(message))return new ApiError(409,'ORDER_CHANGED');
   if(/RESTAURANT_CLOSED/.test(message))return new ApiError(409,'RESTAURANT_NOT_ACCEPTING');
   if(/PRODUCT_CHANGED/.test(message))return new ApiError(409,'PRODUCT_UNAVAILABLE');
+  if(/COUPON_UNAVAILABLE|online_orders.customer_id, online_orders.coupon_code/.test(message))return new ApiError(409,'COUPON_UNAVAILABLE');
   if(/CHECKOUT_TOTAL_CHANGED/.test(message))return new ApiError(409,'CHECKOUT_TOTAL_CHANGED');
   if(/PHONE_REQUIRED/.test(message))return new ApiError(400,'PHONE_REQUIRED');
   if(/PHONE_NOT_VERIFIED/.test(message))return new ApiError(403,'PHONE_NOT_VERIFIED');

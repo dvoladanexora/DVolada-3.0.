@@ -5,7 +5,7 @@ import {
 import {
  restaurantOrders,restaurantOrder,changes,restaurantStatus,assignCourier,
  courierOrders,courierStatus,courierOffer,confirmDelivery,customerCreate,customerOrders,
- customerOrder,customerCancel,customerCheckoutStatus
+ customerOrder,customerCancel,customerCheckoutStatus,customerCoupon
 } from './orders.js';
 import { issueQaPushIdentity } from './qa-push-identity.js';
 import {createRestaurant,updateRestaurant,assignMember,enrollCourier,createProduct,
@@ -51,7 +51,15 @@ async function route(req,env){
   if(!rest)throw new ApiError(404,'RESTAURANT_NOT_FOUND');
   const {results=[]}=await env.DB.prepare(`SELECT id,name,price_minor
     FROM products WHERE restaurant_id=? AND available=1 ORDER BY name,id LIMIT 150`).bind(id).all();
-  return respond(req,env,200,{restaurant:rest,products:results});
+  const {results:options=[]}=await env.DB.prepare(`SELECT o.id,o.product_id,o.name,o.kind,o.price_minor
+   FROM product_options o JOIN products p ON p.id=o.product_id WHERE p.restaurant_id=? AND p.available=1 AND o.available=1
+   ORDER BY o.name,o.id LIMIT 500`).bind(id).all();
+  const byProduct=new Map();
+  for(const option of options){
+   if(!byProduct.has(option.product_id))byProduct.set(option.product_id,[]);
+   byProduct.get(option.product_id).push(option);
+  }
+  return respond(req,env,200,{restaurant:rest,products:results.map(product=>({...product,options:byProduct.get(product.id)||[]}))});
  }
  const access=/^\/api\/v1\/auth\/client\/(register|login|recover)$/.exec(path);
  if(method==='POST'&&access)return clientAuth(req,env,access[1]);
@@ -189,6 +197,8 @@ async function route(req,env){
   return respond(req,env,200,await customerOrders(env,actor));
  if(method==='GET'&&path==='/api/v1/customer/orders/checkout')
   return respond(req,env,200,await customerCheckoutStatus(req,env,actor));
+ if(method==='POST'&&path==='/api/v1/customer/coupon')
+  return respond(req,env,200,await customerCoupon(req,env,actor));
  if(method==='POST'&&path==='/api/v1/customer/orders')
   return respond(req,env,201,await customerCreate(req,env,actor));
  const customerDetail=/^\/api\/v1\/customer\/orders\/([0-9a-f-]+)$/i.exec(path);

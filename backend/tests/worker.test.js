@@ -8,7 +8,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -734,4 +734,54 @@ test('favorites are private and support follows the customer and authorised orde
  assert.equal((await f.call(claim,{method:'PATCH',body:{status:'review'}})).status,403);
  assert.equal((await f.call(claim,{by:'platformAdmin',method:'PATCH',body:{status:'resolved',resolution:'Resolución ficticia'}})).body.claim.status,'resolved');
  assert.equal((await f.call(claim)).body.claim.status,'resolved');
+});
+
+test('checkout snapshots variants and extras and applies one scoped coupon per customer',async()=>{
+ const f=await fixture();
+ const [restaurantId,wrongRestaurant]=f.restaurants;
+ const [productId,otherProduct]=f.productIds;
+ const extra=randomUUID(),variant=randomUUID(),wrongExtra=randomUUID();
+ const option=f.DB.db.prepare('INSERT INTO product_options(id,product_id,name,kind,price_minor) VALUES(?,?,?,?,?)');
+ option.run(extra,productId,'Extra QA','extra',500);
+ option.run(variant,productId,'Presentación QA','variant',750);
+ option.run(wrongExtra,otherProduct,'Ajeno QA','extra',2);
+ f.DB.db.prepare("INSERT INTO client_coupons(code,restaurant_id,discount_minor,starts_at,ends_at) VALUES(?,?,?,unixepoch()-10,unixepoch()+3600)").run('QA-TEST',restaurantId,1000);
+ f.DB.db.prepare("INSERT INTO client_coupons(code,restaurant_id,discount_minor,starts_at,ends_at) VALUES(?,?,?,unixepoch()-20,unixepoch()-10)").run('QA-OLD',restaurantId,1000);
+ const coupon=(restaurantId,coupon)=>f.call('/api/v1/customer/coupon',{method:'POST',body:{restaurantId,coupon}});
+ assert.equal((await coupon(wrongRestaurant,'QA-TEST')).status,409);
+ assert.equal((await coupon(restaurantId,'QA-OLD')).status,409);
+ assert.equal((await coupon(restaurantId,'qa-test')).body.discountMinor,1000);
+ const menu=await f.call('/api/v1/catalog/restaurants/'+restaurantId+'/products');
+ assert.equal(menu.body.products[0].options.length,2);
+ const checkout={restaurantId,items:[{productId,quantity:2,optionIds:[extra,variant]}],
+  deliveryMethod:'pickup',phone:'+50400000003',coupon:'QA-TEST',expectedTotalMinor:21600};
+ const send=(key,body=checkout)=>f.call('/api/v1/customer/orders',{method:'POST',key,body});
+ assert.equal((await send(randomUUID(),{...checkout,items:[{productId,quantity:2,optionIds:[wrongExtra]}]})).status,409);
+ assert.equal((await send(randomUUID(),{...checkout,expectedTotalMinor:1})).body.error,'CHECKOUT_TOTAL_CHANGED');
+ const key=randomUUID(),created=await send(key);
+ assert.equal(created.status,201);
+ assert.equal(created.body.order.discountMinor,1000);
+ assert.equal(created.body.order.totalMinor,21600);
+ const repeat=await send(key);
+ assert.equal(repeat.body.order.totalMinor,21600);
+ assert.equal(repeat.body.order.id,created.body.order.id);
+ assert.equal((await send(randomUUID())).body.error,'COUPON_UNAVAILABLE');
+ const receipt=await f.call('/api/v1/customer/orders/'+created.body.order.id);
+ assert.equal(receipt.body.order.totalMinor,21600);
+ assert.equal(receipt.body.order.items[0].line_total_minor,22600);
+ assert.equal(JSON.parse(receipt.body.order.items[0].options_json).length,2);
+});
+
+test('changing an extra price between quote and write rejects the full order batch',async()=>{
+ const f=await fixture();
+ const [restaurantId]=f.restaurants,[productId]=f.productIds,extra=randomUUID();
+ f.DB.db.prepare('INSERT INTO product_options(id,product_id,name,kind,price_minor) VALUES(?,?,?,?,?)').run(extra,productId,'Extra QA','extra',500);
+ const write=f.DB.batch;
+ f.DB.batch=async statements=>{
+  f.DB.db.prepare('UPDATE product_options SET price_minor=700 WHERE id=?').run(extra);
+  return write(statements);
+ };
+ const created=await f.create({restaurantId,items:[{productId,quantity:1,optionIds:[extra]}]});
+ assert.equal(created.body.error,'PRODUCT_UNAVAILABLE');
+ assert.equal(f.DB.db.prepare('SELECT COUNT(*) AS count FROM online_orders').get().count,0);
 });

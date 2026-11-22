@@ -8,7 +8,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -22,14 +22,14 @@ function sqliteD1(){
    bind(...args){return statement(sql,args)},
    async first(){return db.prepare(sql).get(...values)??null},
    async all(){return {results:db.prepare(sql).all(...values)}},
-   async run(){const r=db.prepare(sql).run(...values);return {success:true,meta:{changes:Number(r.changes)}}}
+   run(){const r=db.prepare(sql).run(...values);return {success:true,meta:{changes:Number(r.changes)}}}
   };
  }
  return {
   db,prepare(sql){return statement(sql)},
   async batch(stmts){
    db.exec('BEGIN IMMEDIATE');
-   try{const out=[];for(const s of stmts)out.push(await s.run());db.exec('COMMIT');return out}
+   try{const out=[];for(const s of stmts)out.push(s.run());db.exec('COMMIT');return out}
    catch(e){db.exec('ROLLBACK');throw e}
   }
  };
@@ -938,4 +938,139 @@ test('cash closes against recorded sales, preserves discounts and isolates order
  assert.equal(report.body.sales[0].total_minor,10050);
  assert.equal((await ops('report?from='+(now-120)+'&until='+(now+120),undefined,'staffB',other)).body.sales.length,0);
  assert.equal((await ops('cash')).body.history[0].id,shiftId);
+});
+
+test('owner issues one scoped staff credential and can revoke, disable, reset and audit it',async()=>{
+ const f=await fixture(),[rid,other]=f.restaurants;
+ const origin='https://dvolada-qa.dvoladanexora.workers.dev';
+ Object.assign(f.env,{CORS_ORIGINS:origin,QA_CLIENT_ACCESS:'true',QA_RESTAURANT_COMMERCIAL:'true'});
+ await f.user('ownerA','customer',[rid,'owner']);
+ await f.user('ownerB','customer',[other,'owner']);
+ const staff=(suffix,body,by='ownerA',restaurantId=rid,key=randomUUID())=>f.call('/api/v1/restaurant/staff-access'+suffix,
+  {by,restaurantId,method:body?'POST':'GET',body,key});
+ const request=async(path,{cookie,account,restaurantId=rid,body}={})=>{
+  const headers={Origin:origin,'X-Restaurant-ID':restaurantId};
+  if(body)headers['Content-Type']='application/json';
+  if(cookie)headers.Cookie=cookie;
+  if(account)headers['X-Client-Account']=account;
+  return worker.fetch(new Request(origin+'/api/v1/'+path,{headers,method:body?'POST':'GET',body:body&&JSON.stringify(body)}),f.env);
+ };
+ const auth=(action,code)=>request('auth/staff/'+action,{body:{code}});
+ assert.equal((await staff('',{displayName:'Acceso QA',role:'platform_admin'})).status,400);
+ assert.equal((await staff('',{displayName:'Acceso QA',role:'kitchen'},'staffA')).status,403);
+ const pending=await staff('',{displayName:'Acceso QA',role:'kitchen'});
+ assert.equal(pending.status,200);
+ const {userId,invitation}=pending.body;
+ const roster=await staff('');
+ assert.equal(roster.body.staff[0].active,0);
+ assert.ok(!JSON.stringify(roster.body).includes(invitation));
+ assert.equal((await staff('/'+userId+'/reset',{},'ownerB',other)).status,404);
+ assert.equal((await f.call('/api/v1/restaurant/staff',{by:'ownerB',restaurantId:other,method:'PATCH',
+  body:{userId,role:'manager',active:true}})).status,409);
+ const claims=await Promise.all([auth('claim',invitation),auth('claim',invitation)]);
+ assert.deepEqual(claims.map(claim=>claim.status).sort(),[200,401]);
+ const redeemed=claims.find(claim=>claim.status===200);
+ const {credential}=await redeemed.json();
+ assert.notEqual(credential,invitation);
+ const cookie=redeemed.headers.get('set-cookie').split(';')[0],account=userId;
+ assert.match(redeemed.headers.get('set-cookie'),/Secure; HttpOnly; SameSite=Strict/);
+ const me=await request('auth/me',{cookie}).then(x=>x.json());
+ assert.deepEqual(me.restaurants.map(x=>[x.restaurant_id,x.staff_role]),[[rid,'kitchen']]);
+ assert.equal((await request('restaurant/orders',{cookie,account})).status,200);
+ assert.equal((await request('restaurant/orders',{cookie,account,restaurantId:other})).status,403);
+ assert.equal((await request('restaurant/profile',{cookie,account})).status,403);
+ assert.equal((await request('customer/orders',{cookie,account})).status,403);
+ assert.equal((await request('admin/overview',{cookie,account})).status,403);
+ assert.equal((await staff('/'+userId+'/revoke',{})).status,200);
+ assert.equal((await request('auth/me',{cookie})).status,401);
+ assert.equal((await auth('login',credential)).status,204);
+ assert.equal((await staff('/'+userId+'/role',{role:'cashier'})).status,200);
+ const cashier=(await auth('login',credential)).headers.get('set-cookie').split(';')[0];
+ assert.equal((await request('restaurant/cash',{cookie:cashier,account})).status,200);
+ assert.equal((await staff('/'+userId+'/state',{active:false})).status,200);
+ assert.equal((await request('auth/me',{cookie:cashier})).status,401);
+ assert.equal((await auth('login',credential)).status,401);
+ assert.equal((await staff('/'+userId+'/state',{active:true})).status,200);
+ assert.equal((await auth('login',credential)).status,204);
+ const reset=await staff('/'+userId+'/reset',{});
+ assert.equal(reset.status,200);
+ assert.equal((await auth('login',credential)).status,401);
+ assert.equal((await auth('claim',reset.body.invitation)).status,200);
+ const events=(await staff('')).body.history.map(x=>x.action);
+ assert.deepEqual(new Set(events),new Set(['staff_invited','staff_claimed','staff_revoked','staff_role_changed','staff_disabled','staff_enabled','staff_reset']));
+ assert.deepEqual((await staff('',undefined,'ownerB',other)).body.staff,[]);
+});
+
+test('settlements reconcile cash and transfer, apply historical rules, serialize retries and audit refunds',async()=>{
+ const f=await fixture(),[rid,other]=f.restaurants,[productId]=f.productIds;
+ f.env.QA_RESTAURANT_COMMERCIAL='true';
+ await f.user('cashierA','customer',[rid,'cashier']);
+ const api=(path,body,{by='staffA',restaurantId=rid,key=randomUUID(),method=body?'POST':'GET'}={})=>
+  f.call('/api/v1/'+path,{by,restaurantId,method,body,key});
+ const ops=(path,body,options)=>api('restaurant/'+path,body,options);
+ const central=(suffix,body,restaurant=rid)=>api('admin/settlements/'+restaurant+suffix,body,{by:'platformAdmin'});
+ assert.equal((await ops('profile',{description:'QA',address:'QA',latitude:null,longitude:null,hours:Array(7).fill(null),paymentMethods:['cash','transfer']},{method:'PATCH'})).status,200);
+ const shift=(await ops('cash/open',{openingMinor:1000})).body.shift.id;
+ const give=async(by,method,deliveryMethod)=>{
+  const created=(await f.create({by,deliveryMethod})).body;
+  const order=created.order;
+  for(const [index,status] of ['Aceptado','Preparando','Listo'].entries())
+   assert.equal((await f.status(order.id,'staffA',status,index+1)).status,200);
+  if(deliveryMethod==='delivery'){
+   assert.equal((await ops('orders/'+order.id+'/assign',{courierId:f.tokens.courier.id,expectedVersion:4},{method:'PATCH'})).status,200);
+   const courier=(action,body,method)=>api('courier/orders/'+order.id+'/'+action,body,{by:'courier',method});
+   assert.equal((await courier('offer',{action:'accept',expectedVersion:5})).status,200);
+   for(const [index,status] of ['Recogido','En camino','En ubicación'].entries())
+    assert.equal((await courier('status',{status,expectedVersion:6+index},'PATCH')).status,200);
+   assert.equal((await courier('deliver',{expectedVersion:9,pin:created.deliveryPin})).status,200);
+  }else assert.equal((await f.status(order.id,'staffA','Entregado',4)).status,200);
+  assert.equal((await ops('cash/sale',{shiftId:shift,orderId:order.id,method})).body.sale.total_minor,deliveryMethod==='delivery'?10550:10050);
+  return order.id;
+ };
+ const cash=await give('customer','cash','pickup'), transfer=await give('customer2','transfer','delivery');
+ const canceled=(await f.create({deliveryMethod:'pickup',items:[{productId,quantity:1}]})).body.order;
+ assert.equal((await api('customer/orders/'+canceled.id+'/cancel',{expectedVersion:1},{by:'customer'})).status,200);
+ assert.equal((await ops('cash/sale',{shiftId:shift,orderId:canceled.id,method:'cash'})).status,409);
+ const at=Math.floor(Date.now()/1000);
+ f.DB.db.prepare('UPDATE restaurant_sales SET paid_at=? WHERE order_id IN (?,?)').run(at-60,cash,transfer);
+ const interval={from:at-120,until:at-5};
+ const retry=await Promise.all([ops('settlements',interval),ops('settlements',interval)]);
+ const id=retry[0].body.settlement.id;
+ assert.equal(retry[1].body.settlement.id,id);
+ assert.equal((await ops('settlements',{from:at-150,until:at-15})).body.error,'SETTLEMENT_OVERLAP');
+ assert.equal((await ops('settlements/'+id+'/calculate',{})).body.error,'SETTLEMENT_SHIFT_OPEN');
+ assert.equal((await ops('cash/close',{shiftId:shift,countedMinor:11050})).body.shift.expected_cash_minor,11050);
+ assert.equal((await ops('settlements/'+id+'/calculate',{})).body.error,'SETTLEMENT_RULE_MISSING');
+ assert.equal((await ops('settlements/'+id)).body.settlement.status,'pending');
+ const path='admin/settlement-rules/'+rid;
+ const rule={effectiveAt:at-100,commissionBps:500,courierBps:8000};
+ assert.equal((await api(path,rule)).status,403);
+ assert.equal((await api(path,rule,{by:'platformAdmin'})).status,200);
+ assert.equal((await api(path,{...rule,effectiveAt:at-30,commissionBps:900},{by:'platformAdmin'})).status,200);
+ const results=await Promise.all([ops('settlements/'+id+'/calculate',{}),central('/'+id+'/calculate',{})]);
+ assert.deepEqual(results.map(row=>row.body.settlement.status),['calculated','calculated']);
+ const ledger=(await ops('settlements/'+id)).body;
+ assert.deepEqual(ledger.byMethod.map(x=>[x.method,x.total_minor]),[['cash',10050],['transfer',10550]]);
+ assert.equal(ledger.lines.length,2);
+ assert.deepEqual(ledger.lines.map(x=>x.commission_minor),[503,503]);
+ assert.equal(ledger.shifts[0].expected_cash_minor,11050);
+ assert.equal(ledger.shifts[0].counted_minor,11050);
+ assert.deepEqual(ledger.split,{restaurant_minor:19094,courier_minor:400,dvolada_minor:1106});
+ assert.equal((await ops('settlements/'+id,undefined,{by:'cashierA'})).status,403);
+ assert.equal((await ops('settlements/'+id,undefined,{by:'staffB',restaurantId:other})).status,404);
+ assert.equal((await api('admin/settlements/'+rid+'/'+id+'/approve',{})).status,403);
+ const body={orderId:cash,kind:'refund',reason:'Devolución ficticia',restaurantMinor:-250,courierMinor:0,dvoladaMinor:-25};
+ const key=randomUUID();
+ const ref=()=>api('admin/settlements/'+rid+'/'+id+'/adjust',body,{by:'platformAdmin',key});
+ const refunds=await Promise.all([ref(),ref()]);
+ assert.deepEqual(refunds.map(result=>result.status),[200,200]);
+ assert.equal((await central('/'+id)).body.adjustments.length,1);
+ const adjust={...body,kind:'adjustment',reason:'Ajuste de conciliación',restaurantMinor:30,dvoladaMinor:-30};
+ assert.equal((await central('/'+id+'/adjust',adjust)).status,200);
+ assert.equal((await central('/'+id+'/adjust',{...body,restaurantMinor:-90000})).status,409);
+ assert.equal((await central('/'+id+'/approve',{})).body.settlement.status,'approved');
+ assert.equal((await central('/'+id+'/adjust',adjust)).status,409);
+ assert.equal((await central('/'+id+'/markPaid',{reference:'REGISTRO QA'})).body.settlement.status,'paid');
+ assert.equal((await central('/'+id+'/markPaid',{reference:'REEMPLAZO QA'})).status,409);
+ assert.deepEqual((await central('/'+id)).body.split,{restaurant_minor:18874,courier_minor:400,dvolada_minor:1051});
 });

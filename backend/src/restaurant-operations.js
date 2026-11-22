@@ -108,21 +108,19 @@ export async function staffRoster(req,env,actor,access){
   const user=requireUuid(body.userId);
   if(!['manager','kitchen','cashier'].includes(body.role)||typeof body.active!=='boolean'||user===actor.userId)
    throw new ApiError(400,'INVALID_STAFF_ROLE');
-  const [adjusted]=await env.DB.batch([env.DB.prepare(`INSERT INTO restaurant_memberships(restaurant_id,user_id,staff_role,active)
-   SELECT ?,u.id,?,? FROM users u WHERE u.id=? AND u.status='active' AND u.account_role='customer'
-   AND EXISTS(SELECT 1 FROM restaurant_memberships current WHERE current.restaurant_id=? AND current.user_id=?
-    AND current.staff_role='owner' AND current.active=1)
-   ON CONFLICT(restaurant_id,user_id) DO UPDATE SET staff_role=excluded.staff_role,active=excluded.active
-   WHERE restaurant_memberships.staff_role!='owner' AND EXISTS(SELECT 1 FROM restaurant_memberships me
-    WHERE me.restaurant_id=excluded.restaurant_id AND me.user_id=? AND me.staff_role='owner' AND me.active=1)`)
-   .bind(id,body.role,+body.active,user,id,actor.userId,actor.userId),
+  const [adjusted]=await env.DB.batch([env.DB.prepare(`UPDATE restaurant_memberships SET staff_role=?,active=?
+   WHERE restaurant_id=? AND user_id=? AND staff_role!='owner'
+   AND NOT EXISTS(SELECT 1 FROM restaurant_staff_access a WHERE a.user_id=restaurant_memberships.user_id)
+   AND EXISTS(SELECT 1 FROM restaurant_memberships me WHERE me.restaurant_id=? AND me.user_id=?
+     AND me.staff_role='owner' AND me.active=1)`).bind(body.role,+body.active,id,user,id,actor.userId),
    env.DB.prepare(`INSERT INTO restaurant_operation_log(restaurant_id,actor_id,action,subject_id)
     SELECT ?,?,?,? WHERE changes()>0`).bind(id,actor.userId,body.active?'staff_enabled':'staff_disabled',user)
   ]);
   if(!adjusted.meta.changes)throw new ApiError(409,'STAFF_CHANGE_FORBIDDEN');
 
  }
- return {staff:await resultRows(env.DB.prepare(`SELECT m.user_id,u.display_name,m.staff_role,m.active
+ return {staff:await resultRows(env.DB.prepare(`SELECT m.user_id,u.display_name,m.staff_role,m.active,
+  EXISTS(SELECT 1 FROM restaurant_staff_access a WHERE a.user_id=m.user_id AND a.restaurant_id=m.restaurant_id) AS managed
   FROM restaurant_memberships m JOIN users u ON u.id=m.user_id
   WHERE restaurant_id=? ORDER BY m.active DESC,u.display_name LIMIT 100`).bind(id))};
 }

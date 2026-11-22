@@ -1,3 +1,4 @@
+import {StaffSignIn,StaffSecret,ManageStaffAccess,SettlementPanel} from './RestaurantCommercial.jsx';
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {ShoppingBag,Store,Bike,ShieldCheck,LogOut,RefreshCw,WifiOff,LockKeyhole,ArrowRight,Package,CheckCircle2} from 'lucide-react';
@@ -33,6 +34,14 @@ function errorLabel(error){
   ORDER_CHANGED:'Otro usuario modificó el pedido. Actualizá la lista antes de actuar.',
   SESSION_REQUIRED:'No hay una sesión válida. Iniciá sesión nuevamente.',
   SESSION_INVALID:'La sesión venció o fue revocada. Volvé a iniciar sesión.',
+  SETTLEMENT_RULE_MISSING:'Falta una regla comercial vigente para una o más ventas del período.',
+  SETTLEMENT_SHIFT_OPEN:'Cerrá las jornadas de caja incluidas en este período.',
+  SETTLEMENT_OVERLAP:'El período se cruza con una liquidación existente.',
+  SETTLEMENT_STATE:'Revisá el estado actual. La transición requiere un período con movimientos.',
+  SETTLEMENT_ADJUSTMENT_INVALID:'El ajuste no corresponde a este período o excede el saldo del pedido.',
+  SETTLEMENT_RULE_EXISTS:'Ya hay otra regla registrada con esa fecha de vigencia.',
+  STAFF_CODE_INVALID:'El código es incorrecto, venció o fue revocado.',
+  STAFF_ACTIVATION_REQUIRES_CLAIM:'El acceso requiere una invitación válida antes de activarse.',
   ROLE_FORBIDDEN:'Tu cuenta no tiene permiso para esta acción.',
   RESTAURANT_FORBIDDEN:'No tenés acceso a ese restaurante.',
   ORDER_CREATION_DISABLED:'Los pedidos reales siguen bloqueados hasta aprobar el lanzamiento.',
@@ -77,6 +86,7 @@ function OrderCard({order,children,kitchen=false}){
 export default function LiveApp(){
  const sessionRef=useRef(null),alive=useRef(true),checkoutInFlight=useRef(false),menuRequest=useRef(0);
  const [pushConfig,setPushConfig]=useState(null),[pushEnabled,setPushEnabled]=useState(false);
+ const [commercial,setCommercial]=useState(false),[staffCredential,setStaffCredential]=useState(null);
  const [accountEnabled,setAccountEnabled]=useState(false),[accessReady,setAccessReady]=useState(false);
  const [newCodes,setNewCodes]=useState(null),[support,setSupport]=useState(null);
  const [flashEnabled,setFlashEnabled]=useState(false),[flashOffers,setFlashOffers]=useState([]),[flashSelection,setFlashSelection]=useState(null);
@@ -136,7 +146,7 @@ export default function LiveApp(){
   setOptionsByProduct({});setAppliedCoupon(null);setCouponText('');
   setPendingKey(null);setReplaceCart(null);setDeliveryMethod('delivery');
   setSelectedPin(null);setPinEntry('');setPhone('');setDeliveryAddress('');setOrderNote('');
-  setPushEnabled(false);setRefreshWarning('');setStatus('');
+  setStaffCredential(null);setPushEnabled(false);setRefreshWarning('');setStatus('');
  },[]);
  const openSession=useCallback((me,clientAccount=false)=>{
   if(clientAccount)sessionRef.current={clientAccount:me.user.id};
@@ -156,7 +166,7 @@ export default function LiveApp(){
    try{
     const config=await api.clientAccess();
     if(!active)return;
-    setAccountEnabled(config.enabled);
+    setAccountEnabled(config.enabled);setCommercial(Boolean(config.commercial));
     if(config.enabled){
      const me=await api.me(true);
      if(active&&!sessionRef.current)openSession(me,true);
@@ -254,6 +264,16 @@ export default function LiveApp(){
  async function toggleFavorite(id){
   const result=await run(()=>api.setFavorite(id,!favoriteIds.includes(id)),{refresh:false});
   if(result)setFavoriteIds(ids=>result.favorite?[...new Set([...ids,id])]:ids.filter(item=>item!==id));
+ }
+ async function authenticateStaff(mode,code){
+  if(busy||offline||!accessReady)return;
+  setBusy(true);setError('');
+  try{
+   const result=await api.staffAuthenticate(mode,code);
+   if(result.credential)setStaffCredential(result.credential);
+   openSession(await api.me(true),true);
+  }catch(error){setError(errorLabel(error))}
+  finally{setBusy(false)}
  }
  async function authenticateClient(mode,body){
   if(busy||offline||!accessReady)return;
@@ -488,6 +508,8 @@ export default function LiveApp(){
   <WaitOrError message={refreshWarning}/>
   {session&&<div className="dvl-id-note"><span>ID de vinculación: <code>{formattedUserId}</code></span><Action kind="text"
    onClick={()=>navigator.clipboard?.writeText(formattedUserId).catch(()=>{})}>Copiar</Action></div>}
+  {staffCredential&&<StaffSecret code={staffCredential} close={()=>setStaffCredential(null)} issued/>}
+  {!session&&commercial&&accountEnabled&&<StaffSignIn authenticate={authenticateStaff} disabled={busy||offline}/>}
   <ClientCodes codes={newCodes} close={()=>setNewCodes(null)}/>
   {!session&&!accessReady&&!offline&&<p role="status">Verificando acceso…</p>}
   {!session&&accountEnabled&&<ClientAccess authenticate={authenticateClient} busy={busy} offline={offline}/>}
@@ -613,7 +635,7 @@ export default function LiveApp(){
     <section className="dvl-panel"><div className="dvl-row"><h2>{kitchenRole?'Pantalla de cocina':cashRole?'Caja del restaurante':'Centro de pedidos'}</h2><label>Negocio<select value={selectedRestaurantId}
      onChange={e=>{setBoard('active');setOrderDetail(null);setSupport(null);setOrders([]);setManageProducts([]);setRestaurantCapabilities(null);setCouriers([]);setEditPrices({});setCourierChoice({});setSelectedRestaurantId(e.target.value)}}>{session.restaurants?.map(r=><option key={r.restaurant_id} value={r.restaurant_id}>{r.name}</option>)}</select></label></div>
      {canManage&&<nav className="dvl-inline dvl-client-modes" aria-label="Secciones de Restaurante Cloud">
-      {Object.entries({active:'Pedidos activos',history:'Historial',menu:'Menú',settings:'Perfil y personal',cash:'Caja y ventas'}).map(([tab,label])=>
+      {Object.entries({active:'Pedidos activos',history:'Historial',menu:'Menú',settings:'Perfil y personal',cash:'Caja y ventas',...(commercial?{settlements:'Liquidaciones'}:{})}).map(([tab,label])=>
        <button type="button" key={tab} aria-pressed={restaurantTab===tab} disabled={busy} className={'dvl-action '+(restaurantTab===tab?'':'secondary')}
         onClick={()=>setBoard(tab)}>{label}</button>)}
      </nav>}
@@ -623,7 +645,11 @@ export default function LiveApp(){
      <RestaurantProfile key={selectedRestaurantId} api={api} id={selectedRestaurantId} run={run} busy={busy} offline={offline}/>
      <RestaurantStaff key={'staff-'+selectedRestaurantId} api={api} id={selectedRestaurantId} owner={selectedBusiness.staff_role==='owner'}
       run={run} busy={busy} offline={offline}/>
+     {commercial&&selectedBusiness.staff_role==='owner'&&<ManageStaffAccess key={'access-'+selectedRestaurantId}
+      api={api} restaurant={selectedRestaurantId} run={run} busy={busy} offline={offline} errorLabel={errorLabel}/>}
     </>}
+    {commercial&&canManage&&restaurantTab==='settlements'&&<SettlementPanel key={selectedRestaurantId}
+     api={api} restaurant={selectedRestaurantId} run={run} busy={busy} offline={offline} money={price} errorLabel={errorLabel}/>}
     {(cashRole||(canManage&&restaurantTab==='cash'))&&<RestaurantCash key={'cash-'+selectedRestaurantId}
      api={api} id={selectedRestaurantId} orders={orders} offline={offline} busy={busy} run={run} money={price} refreshOrders={load}/>}
     {canManage&&['active','menu'].includes(restaurantTab)&&<section className="dvl-panel">
@@ -765,6 +791,9 @@ export default function LiveApp(){
      </div>
     </section>
     {flashEnabled&&<FlashAdmin api={api} restaurants={adminRestaurants} busy={busy} offline={offline} run={run}/>}
+    {commercial&&adminRestaurants.some(r=>r.id===adminSelectedId&&r.plan!=='LOCAL')&&
+     <SettlementPanel key={'central-'+adminSelectedId} api={api} restaurant={adminSelectedId} central
+      run={run} busy={busy} offline={offline} money={price} errorLabel={errorLabel}/>}
     <section className="dvl-panel"><h2>Actividad administrativa</h2>
      <Action kind="secondary" disabled={busy||offline}
       onClick={()=>run(async()=>{const data=await api.adminAudit();setAudit(data.events)},{refresh:false})}>Consultar actividad</Action>

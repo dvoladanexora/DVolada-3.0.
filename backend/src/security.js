@@ -93,15 +93,20 @@ export async function identity(req,env){
   const match=/^Bearer ([A-Za-z0-9_-]{43})$/.exec(header);
   if(!match)throw new ApiError(401,'SESSION_REQUIRED');
   const hash=await hmacHex(env.SESSION_PEPPER,'session:v1:'+match[1]);
-  const s=await env.DB.prepare(`SELECT s.id AS session_id,s.user_id,u.display_name,u.account_role
+  const s=await env.DB.prepare(`SELECT s.id AS session_id,s.user_id,s.staff_restaurant_id,u.display_name,u.account_role
     FROM auth_sessions s JOIN users u ON u.id=s.user_id
-    WHERE s.token_hash=? AND s.expires_at>? AND s.revoked_at IS NULL AND u.status='active'`)
+    WHERE s.token_hash=? AND s.expires_at>? AND s.revoked_at IS NULL AND u.status='active'
+    AND (s.staff_restaurant_id IS NULL OR EXISTS(
+     SELECT 1 FROM restaurant_memberships m WHERE m.user_id=s.user_id AND m.restaurant_id=s.staff_restaurant_id
+      AND m.active=1 AND m.staff_role IN ('manager','kitchen','cashier')
+    ))`)
     .bind(hash,Math.floor(Date.now()/1000)).first();
   if(!s)throw new ApiError(401,'SESSION_INVALID');
-  return {sessionId:s.session_id,userId:s.user_id,displayName:s.display_name,role:s.account_role};
+  return {sessionId:s.session_id,userId:s.user_id,displayName:s.display_name,role:s.account_role,staffRestaurantId:s.staff_restaurant_id};
 }
 export async function restaurantAccess(req,env,actor){
   const restaurantId=requireUuid(req.headers.get('x-restaurant-id'),'X-Restaurant-ID');
+  if(actor.staffRestaurantId&&actor.staffRestaurantId!==restaurantId)throw new ApiError(403,'RESTAURANT_FORBIDDEN');
   const member=await env.DB.prepare(`SELECT m.staff_role,r.plan,r.subscription_status,r.online_state,r.name
     FROM restaurant_memberships m JOIN restaurants r ON r.id=m.restaurant_id
     WHERE m.user_id=? AND m.restaurant_id=? AND m.active=1`)

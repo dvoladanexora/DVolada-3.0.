@@ -49,7 +49,7 @@ export function RestaurantProfile({api,id,run,busy,offline}){
 }
 
 export function RestaurantStaff({api,id,owner,run,busy,offline}){
- const [staff,setStaff]=useState([]),[userId,setUser]=useState(''),[role,setRole]=useState('kitchen'),[error,setError]=useState('');
+ const [staff,setStaff]=useState([]),[error,setError]=useState('');
  const roles={owner:'Propietario',manager:'Gerencia',kitchen:'Cocina',cashier:'Caja'};
  useEffect(()=>{
   if(offline)return;
@@ -60,19 +60,12 @@ export function RestaurantStaff({api,id,owner,run,busy,offline}){
  },[api,id,offline]);
  async function update(idUser,staffRole,active){
   const data=await run(()=>api.saveStaff(id,{userId:idUser,role:staffRole,active}),{refresh:false});
-  if(data){setStaff(data.staff);setUser('')}
+  if(data)setStaff(data.staff)
  }
  return <section className="dvl-panel"><h2>Personal y permisos</h2>
-  <p>Usá el ID de vinculación de la cuenta que recibió su acceso autorizado.</p>
+  <p>Accesos vinculados al negocio desde el Centro de Control.</p>
   {error&&<p role="alert">{error}</p>}
-  {owner&&<form className="dvl-grid" onSubmit={event=>{event.preventDefault();update(userId.trim(),role,true)}}>
-   <label>ID de vinculación<input value={userId} onChange={event=>setUser(event.target.value)} required minLength={36} maxLength={36}/></label>
-   <label>Rol<select value={role} onChange={event=>setRole(event.target.value)}>
-    {Object.entries(roles).filter(([value])=>value!=='owner').map(([value,label])=><option key={value} value={value}>{label}</option>)}
-   </select></label>
-   <button className="dvl-action" disabled={busy||offline||userId.trim().length!==36}>Vincular personal</button>
-  </form>}
-  <ul>{staff.map(row=><li key={row.user_id} className="dvl-row">
+  <ul>{staff.filter(row=>!row.managed).map(row=><li key={row.user_id} className="dvl-row">
    <span>{row.display_name} · {roles[row.staff_role]} · {row.active?'Activo':'Inactivo'}</span>
    {owner&&row.staff_role!=='owner'&&<button type="button" className="dvl-action secondary" disabled={busy||offline}
     onClick={()=>update(row.user_id,row.staff_role,!row.active)}>{row.active?'Retirar acceso':'Restaurar acceso'}</button>}

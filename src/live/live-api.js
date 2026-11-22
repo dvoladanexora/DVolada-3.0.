@@ -67,6 +67,14 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
    body:{expectedVersion:order.version},key}),
   restaurantProfile:id=>request('/api/v1/restaurant/profile',{restaurantId:id}),
   saveRestaurantProfile:(id,body)=>request('/api/v1/restaurant/profile',{restaurantId:id,method:'PATCH',body}),
+  staffAuthenticate:(action,code)=>request('/api/v1/auth/staff/'+s(action),{auth:false,method:'POST',body:{code}}),
+  staffAccess:(restaurantId,user,action,body,key)=>request('/api/v1/restaurant/staff-access'+(user?'/'+s(user)+'/'+s(action):''),
+   {restaurantId,method:body?'POST':'GET',body,key}),
+  settlements:(restaurantId,central,id,action,body,key)=>request(
+   (central?'/api/v1/admin/settlements/'+s(restaurantId):'/api/v1/restaurant/settlements')+
+   (id?'/'+s(id):'')+(action?'/'+s(action):''),{restaurantId,method:body?'POST':'GET',body,key}),
+  settlementRules:(restaurantId,body)=>request('/api/v1/admin/settlement-rules/'+s(restaurantId),
+   {method:body?'POST':'GET',body}),
   staffRoster:id=>request('/api/v1/restaurant/staff',{restaurantId:id}),
   saveStaff:(id,body)=>request('/api/v1/restaurant/staff',{restaurantId:id,method:'PATCH',body}),
   menuOptions:(id,product)=>request('/api/v1/restaurant/products/'+s(product)+'/options',{restaurantId:id}),

@@ -15,13 +15,14 @@ const queries=(path,fields)=>path+'?'+new URLSearchParams(fields);
 const esc=value=>'"'+String(value??'').replace(/^[\s]*[=+@-]/,"'$&").replaceAll('"','""')+'"';
 function exportReport(data){
  const amount=value=>value==null?'':(value/100).toFixed(2);
- const records=[['Tipo','Entidad','Estado o método','Cantidad','Total','Descuentos','Restaurante','Repartidor','Dvolada','Comisión','Ajustes'],
+ const header=['Tipo','Entidad','Estado o método','Cantidad','Total','Descuentos','Restaurante','Repartidor','Dvolada','Comisión','Ajustes'];
+ const records=[header,
   ...data.orders.map(row=>['Pedidos','',row.status,row.orders]),
   ...data.sales.map(row=>['Ventas',row.name,row.method,row.sales,amount(row.total_minor),amount(row.discount_minor)]),
   ...data.allocations.map(row=>['Liquidación '+row.id,row.name,periodStates[row.status],'','','',
    amount(row.restaurant_minor),amount(row.courier_minor),amount(row.dvolada_minor),amount(row.commission_minor),amount(row.adjustment_minor)]),
   ...data.balances.map(row=>['Repartidor',row.display_name,periodStates[row.status],'','','','',amount(row.courier_minor)])];
- const csv=records.map(row=>row.map((value,index)=>index>=3?String(value??''):esc(value)).join(',')).join('\r\n');
+ const csv=records.map(row=>header.map((_,index)=>index>=3?String(row[index]??''):esc(row[index])).join(',')).join('\r\n');
  const url=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
  const a=document.createElement('a');a.href=url;a.download='dvolada-reporte-operativo.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
@@ -43,7 +44,7 @@ const emptyFilters={operations:{q:'',status:'',restaurant:''},accounts:{q:'',rol
 const endpoints={operations:'orders',accounts:'accounts',claims:'claims',coupons:'coupons',audit:'audit'};
 
 export function ControlNavigation({section,setSection,flash,commercial}){
- return <nav className="dvl-panel dvl-inline" aria-label="Secciones del Centro de Control">
+ return <nav className="dvl-panel dvl-inline dvl-control-nav" aria-label="Secciones del Centro de Control">
   {Object.entries(tabs).filter(([key])=>key!=='flash'||flash).filter(([key])=>key!=='settlements'||commercial)
    .map(([key,label])=><button type="button" className={'dvl-action '+(section===key?'':'secondary')}
     key={key} aria-pressed={section===key} onClick={()=>setSection(key)}>{label}</button>)}
@@ -88,7 +89,7 @@ export function ControlWorkspace({section,api,restaurants,offline,busy,run,money
      {statuses.map(state=><option key={state}>{state}</option>)}</select></label>
     <RestaurantSelect restaurants={restaurants}/>
    </Form>
-   {data&&<><div className="dvl-inline">{data.counts.map(row=><span key={row.status}>{row.status} {row.total}</span>)}</div>
+   {data&&<><div className="dvl-inline dvl-control-counts">{data.counts.map(row=><span key={row.status}>{row.status} {row.total}</span>)}</div>
     {data.orders.length===0&&<p>No hay pedidos para estos filtros.</p>}
     <ul className="dvl-stack">{data.orders.map(order=><li key={order.id} className="dvl-row">
      <div><strong>{order.order_number}</strong><small>{order.restaurant_name} · {time(order.created_at)}</small></div>

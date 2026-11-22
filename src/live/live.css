@@ -102,3 +102,6 @@
 .dvl-menu-photo{display:block;width:6rem;height:4rem;object-fit:cover;border-radius:.65rem;margin-bottom:.4rem}
 .dvl-manage-menu details{min-width:0;border-bottom:1px solid var(--line,#ddd);padding:.5rem 0}
 .dvl-manage-menu summary{cursor:pointer;padding:.6rem 0;overflow-wrap:anywhere}
+
+.dvl-control-nav,.dvl-control-counts{flex-wrap:wrap}
+.dvl-control-nav .dvl-action{max-width:100%;justify-content:center}

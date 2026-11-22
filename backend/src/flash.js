@@ -1,4 +1,5 @@
-import {ApiError,readJson,requireInteger,requireKeys,requireRole,requireText,requireUuid} from './security.js';
+import {controlAudit} from './control-center.js';
+import {ApiError,idempotencyKey,readJson,requireInteger,requireKeys,requireRole,requireText,requireUuid} from './security.js';
 
 const columns=`f.*,r.name AS restaurant_name,product.name AS product_name,gift.name AS gift_name`;
 const catalogue=`FROM flash_campaigns f JOIN restaurants r ON r.id=f.restaurant_id
@@ -45,9 +46,17 @@ export async function adminFlash(req,env,actor,id){
  }
  if(req.method==='PATCH'){
   requireUuid(id);
-  const updated=await env.DB.prepare('UPDATE flash_campaigns SET active=0 WHERE id=?').bind(id).run();
-  if(!updated.meta.changes)throw new ApiError(404,'NOT_FOUND');
-  return {id,active:false};
+  const input=req.body?await readJson(req):{active:false};
+  requireKeys(input,['active']);
+  if(typeof input.active!=='boolean')throw new ApiError(400,'INVALID_INPUT');
+  const row=await env.DB.prepare('SELECT restaurant_id,ends_at FROM flash_campaigns WHERE id=?').bind(id).first();
+  if(!row)throw new ApiError(404,'NOT_FOUND');
+  if(input.active&&row.ends_at<=Math.floor(Date.now()/1000))throw new ApiError(409,'FLASH_UNAVAILABLE');
+  await env.DB.batch([
+   env.DB.prepare('UPDATE flash_campaigns SET active=? WHERE id=? AND active!=?').bind(+input.active,id,+input.active),
+   controlAudit(env,actor,'flash_state',id,{active:input.active},row.restaurant_id)
+  ]);
+  return {id,active:input.active};
  }
  const input=await readJson(req);
  requireKeys(input,['restaurantId','productId','giftProductId','title','discountMinor','startsAt','endsAt','perCustomer','globalLimit']);
@@ -59,13 +68,25 @@ export async function adminFlash(req,env,actor,id){
  const perCustomer=requireInteger(input.perCustomer,1,100,'perCustomer');
  const globalLimit=requireInteger(input.globalLimit,perCustomer,100000,'globalLimit');
  if(Boolean(giftProductId)===Boolean(discount))throw new ApiError(400,'INVALID_FLASH_REWARD');
- const campaignId=crypto.randomUUID();
- const result=await env.DB.prepare(`INSERT INTO flash_campaigns(id,restaurant_id,product_id,gift_product_id,title,discount_minor,starts_at,ends_at,per_customer,global_limit,created_by)
+ const campaignId=req.headers.has('idempotency-key')?idempotencyKey(req):crypto.randomUUID();
+ const [result]=await env.DB.batch([env.DB.prepare(`INSERT INTO flash_campaigns(id,restaurant_id,product_id,gift_product_id,title,discount_minor,starts_at,ends_at,per_customer,global_limit,created_by)
   SELECT ?,id,?,?,?,?,?,?,?,?,? FROM restaurants r WHERE r.id=? AND r.plan IN ('ONLINE','PLUS')
   AND (? IS NULL OR EXISTS(SELECT 1 FROM products WHERE restaurant_id=r.id AND id=?))
-  AND (? IS NULL OR EXISTS(SELECT 1 FROM products WHERE restaurant_id=r.id AND id=?))`)
+  AND (? IS NULL OR EXISTS(SELECT 1 FROM products WHERE restaurant_id=r.id AND id=?))
+  ON CONFLICT(id) DO NOTHING`)
   .bind(campaignId,productId,giftProductId,title,discount,startsAt,endsAt,perCustomer,globalLimit,actor.userId,restaurantId,
-   productId,productId,giftProductId,giftProductId).run();
- if(!result.meta.changes)throw new ApiError(400,'INVALID_FLASH_CATALOG');
+   productId,productId,giftProductId,giftProductId),
+  controlAudit(env,actor,'flash_created',campaignId,{title,startsAt,endsAt,perCustomer,globalLimit},restaurantId)
+ ]);
+ if(!result.meta.changes){
+  const existing=await env.DB.prepare(`SELECT 1 FROM flash_campaigns WHERE id=? AND restaurant_id=? AND product_id IS ?
+   AND gift_product_id IS ? AND title=? AND discount_minor=? AND starts_at=? AND ends_at=? AND per_customer=?
+   AND global_limit=? AND created_by=?`).bind(campaignId,restaurantId,productId,giftProductId,title,discount,startsAt,endsAt,perCustomer,globalLimit,actor.userId).first();
+  if(!existing){
+   if(await env.DB.prepare('SELECT 1 FROM flash_campaigns WHERE id=?').bind(campaignId).first())
+    throw new ApiError(409,'IDEMPOTENCY_KEY_REUSED');
+   throw new ApiError(400,'INVALID_FLASH_CATALOG');
+  }
+ }
  return {id:campaignId};
 }

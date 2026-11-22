@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 
 const initial={restaurantId:'',productId:'',giftProductId:'',title:'',discount:'',starts:'',ends:'',perCustomer:'1',globalLimit:'10'};
 const showDate=seconds=>new Date(seconds*1000).toLocaleString('es-HN',{timeZone:'America/Tegucigalpa'});
@@ -19,6 +19,7 @@ export function FlashOffers({campaigns,money,open}) {
 }
 
 export function FlashAdmin({api,restaurants,busy,offline,run}) {
+ const retry=useRef(null);
  const [form,setForm]=useState(initial),[products,setProducts]=useState([]),[campaigns,setCampaigns]=useState([]),[error,setError]=useState('');
  const value=field=>({value:form[field],onChange:event=>{
   const next=event.target.value;
@@ -46,11 +47,14 @@ export function FlashAdmin({api,restaurants,busy,offline,run}) {
    setError('Revisá el horario y el importe o regalo de la promoción.');return;
   }
   setError('');
-  const result=await run(()=>api.createFlash({
+  const body={
    restaurantId:form.restaurantId,productId:form.productId,giftProductId:form.giftProductId,title:form.title,discountMinor,
    startsAt,endsAt,perCustomer:Number(form.perCustomer),globalLimit:Number(form.globalLimit),
-  }),{refresh:false});
-  if(result){setForm(initial);setCampaigns((await api.adminFlash().catch(()=>({campaigns:[]}))).campaigns)}
+  };
+  const intent=JSON.stringify(body);
+  if(retry.current?.intent!==intent)retry.current={intent,key:crypto.randomUUID()};
+  const result=await run(()=>api.createFlash(body,retry.current.key),{refresh:false});
+  if(result){retry.current=null;setForm(initial);setCampaigns((await api.adminFlash().catch(()=>({campaigns:[]}))).campaigns)}
  }
  return <section className="dvl-panel">
   <h2>Promociones Flash</h2>
@@ -71,8 +75,8 @@ export function FlashAdmin({api,restaurants,busy,offline,run}) {
    <button className="dvl-action" type="submit" disabled={busy||offline}>Guardar campaña</button>
   </form>
   <ul className="dvl-stack">{campaigns.map(item=><li key={item.id}><strong>{item.title}</strong> · {item.restaurantName} · {showDate(item.endsAt)}
-   {item.active&&<button className="dvl-action secondary" type="button" disabled={busy||offline} onClick={async()=>{
-    if(await run(()=>api.stopFlash(item.id),{refresh:false}))setCampaigns(rows=>rows.map(row=>row.id===item.id?{...row,active:false}:row));
-   }}>Desactivar</button>}</li>)}</ul>
+   {(item.active||item.endsAt>Date.now()/1000)&&<button className="dvl-action secondary" type="button" disabled={busy||offline} onClick={async()=>{
+    if(await run(()=>api.setFlashActive(item.id,!item.active),{refresh:false}))setCampaigns(rows=>rows.map(row=>row.id===item.id?{...row,active:!item.active}:row));
+   }}>{item.active?'Desactivar':'Activar'}</button>}</li>)}</ul>
  </section>;
 }

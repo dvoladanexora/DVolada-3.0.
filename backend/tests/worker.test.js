@@ -8,7 +8,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -1031,9 +1031,14 @@ test('settlements reconcile cash and transfer, apply historical rules, serialize
  const canceled=(await f.create({deliveryMethod:'pickup',items:[{productId,quantity:1}]})).body.order;
  assert.equal((await api('customer/orders/'+canceled.id+'/cancel',{expectedVersion:1},{by:'customer'})).status,200);
  assert.equal((await ops('cash/sale',{shiftId:shift,orderId:canceled.id,method:'cash'})).status,409);
+ const effectiveAt=Math.floor(Date.now()/1000)+2;
+ const courierRule=(await api('admin/control/courier-rules',{restaurantId:rid,courierId:f.tokens.courier.id,
+  effectiveAt,courierBps:6000},{by:'platformAdmin'})).body.id;
+ assert.ok(courierRule);
+ await new Promise(resolve=>setTimeout(resolve,(effectiveAt+1)*1000-Date.now()+100));
  const at=Math.floor(Date.now()/1000);
- f.DB.db.prepare('UPDATE restaurant_sales SET paid_at=? WHERE order_id IN (?,?)').run(at-60,cash,transfer);
- const interval={from:at-120,until:at-5};
+ f.DB.db.prepare('UPDATE restaurant_sales SET paid_at=? WHERE order_id IN (?,?)').run(effectiveAt,cash,transfer);
+ const interval={from:at-120,until:at};
  const retry=await Promise.all([ops('settlements',interval),ops('settlements',interval)]);
  const id=retry[0].body.settlement.id;
  assert.equal(retry[1].body.settlement.id,id);
@@ -1046,16 +1051,17 @@ test('settlements reconcile cash and transfer, apply historical rules, serialize
  const rule={effectiveAt:at-100,commissionBps:500,courierBps:8000};
  assert.equal((await api(path,rule)).status,403);
  assert.equal((await api(path,rule,{by:'platformAdmin'})).status,200);
- assert.equal((await api(path,{...rule,effectiveAt:at-30,commissionBps:900},{by:'platformAdmin'})).status,200);
+ assert.equal((await api(path,{...rule,effectiveAt:at+30,commissionBps:900},{by:'platformAdmin'})).status,200);
  const results=await Promise.all([ops('settlements/'+id+'/calculate',{}),central('/'+id+'/calculate',{})]);
  assert.deepEqual(results.map(row=>row.body.settlement.status),['calculated','calculated']);
  const ledger=(await ops('settlements/'+id)).body;
  assert.deepEqual(ledger.byMethod.map(x=>[x.method,x.total_minor]),[['cash',10050],['transfer',10550]]);
  assert.equal(ledger.lines.length,2);
+ assert.equal(ledger.lines.find(line=>line.order_id===transfer).courier_rule_id,courierRule);
  assert.deepEqual(ledger.lines.map(x=>x.commission_minor),[503,503]);
  assert.equal(ledger.shifts[0].expected_cash_minor,11050);
  assert.equal(ledger.shifts[0].counted_minor,11050);
- assert.deepEqual(ledger.split,{restaurant_minor:19094,courier_minor:400,dvolada_minor:1106});
+ assert.deepEqual(ledger.split,{restaurant_minor:19094,courier_minor:300,dvolada_minor:1206});
  assert.equal((await ops('settlements/'+id,undefined,{by:'cashierA'})).status,403);
  assert.equal((await ops('settlements/'+id,undefined,{by:'staffB',restaurantId:other})).status,404);
  assert.equal((await api('admin/settlements/'+rid+'/'+id+'/approve',{})).status,403);
@@ -1072,10 +1078,10 @@ test('settlements reconcile cash and transfer, apply historical rules, serialize
  assert.equal((await central('/'+id+'/adjust',adjust)).status,409);
  assert.equal((await central('/'+id+'/markPaid',{reference:'REGISTRO QA'})).body.settlement.status,'paid');
  assert.equal((await central('/'+id+'/markPaid',{reference:'REEMPLAZO QA'})).status,409);
- assert.deepEqual((await central('/'+id)).body.split,{restaurant_minor:18874,courier_minor:400,dvolada_minor:1051});
+ assert.deepEqual((await central('/'+id)).body.split,{restaurant_minor:18874,courier_minor:300,dvolada_minor:1151});
  const courier=(await api('courier/history',undefined,{by:'courier'})).body;
- assert.deepEqual(courier.orders.map(o=>[o.id,o.earningsMinor,o.settlementStatus]),[[transfer,400,'paid']]);
- assert.deepEqual(courier.periods.map(p=>[p.id,p.earningsMinor,p.adjustmentMinor]),[[id,400,0]]);
+ assert.deepEqual(courier.orders.map(o=>[o.id,o.earningsMinor,o.settlementStatus]),[[transfer,300,'paid']]);
+ assert.deepEqual(courier.periods.map(p=>[p.id,p.earningsMinor,p.adjustmentMinor]),[[id,300,0]]);
  assert.equal(courier.orders[0].restaurantMinor,undefined);
 });
 
@@ -1178,4 +1184,70 @@ test('courier offer timeout protects addresses, dispatch conversation and idempo
  assert.equal(history.orders[0].deliveryAddress,undefined);
  assert.equal((await call('courier/history',undefined,'courierB')).body.orders.length,0);
  assert.equal((await call(dispatch)).body.writable,false);
+});
+
+test('Control Center protects customer accounts, operational views and auditable claim assignment',async()=>{
+ const f=await fixture(),[rid]=f.restaurants;
+ const api=(path,body,method=body?'POST':'GET',by='platformAdmin')=>f.call('/api/v1/admin/control/'+path,{method,body,by,key:randomUUID()});
+ for(const by of ['customer','staffA','courier'])assert.equal((await api('accounts',undefined,'GET',by)).status,403);
+ const target=f.tokens.customer.id;
+ const snapshot=(await api('accounts?q='+target)).body.accounts[0];
+ assert.equal(snapshot.sessions,1);
+ assert.equal(snapshot.token_hash,undefined);
+ const made=(await f.create()).body.order;
+ assert.equal((await f.call('/api/v1/orders/'+made.id+'/claim',{method:'POST',body:{category:'entrega',message:'Reclamo ficticio de prueba'}})).status,200);
+ const orders=(await api('orders?status=active&restaurant='+rid+'&q='+made.orderNumber)).body.orders;
+ assert.equal(orders[0].claim_status,'open');
+ assert.equal(orders[0].delivery_address,undefined);
+ const patch={status:'review',assigneeId:f.tokens.platformAdmin.id,version:1};
+ assert.equal((await api('claims/'+made.id,{...patch,assigneeId:target},'PATCH')).status,409);
+ const assigned=await Promise.all([api('claims/'+made.id,patch,'PATCH'),api('claims/'+made.id,patch,'PATCH')]);
+ assert.deepEqual(assigned.map(r=>r.status).sort(),[200,409]);
+ assert.equal((await api('claims/'+made.id,{...patch,version:2,status:'resolved',resolution:'Incidencia ficticia resuelta'},'PATCH')).status,200);
+ assert.equal((await api('claims?status=resolved&q='+made.orderNumber)).body.claims[0].assignee_id,f.tokens.platformAdmin.id);
+ assert.equal((await f.call('/api/v1/orders/'+made.id+'/claim')).body.claim.status,'resolved');
+ assert.equal((await api('audit?subject='+made.id)).body.events.length,2);
+ const lock={state:'locked',version:snapshot.admin_version,reason:'Bloqueo ficticio QA'};
+ assert.equal((await api('accounts/'+target,lock,'PATCH')).status,200);
+ assert.equal((await f.call('/api/v1/auth/me')).status,401);
+ assert.equal((await api('accounts/'+target,lock,'PATCH')).status,409);
+ assert.equal((await api('accounts/'+target,{...lock,version:2,state:'suspended'},'PATCH')).status,409);
+ assert.equal((await api('accounts/'+target,{...lock,version:2,state:'active'},'PATCH')).status,200);
+ assert.equal((await f.call('/api/v1/auth/me')).status,401);
+ assert.equal((await api('accounts/'+f.tokens.platformAdmin.id,{...lock,version:1},'PATCH')).status,409);
+ assert.equal((await api('audit?subject='+target)).body.events.length,2);
+});
+
+test('Control Center limits coupons at checkout and records auditable future rates and campaigns',async()=>{
+ const f=await fixture(),[rid]=f.restaurants,[productId]=f.productIds;
+ f.env.QA_FLASH='true';
+ const now=Math.floor(Date.now()/1000);
+ const api=(path,body,method=body?'POST':'GET',key=randomUUID())=>f.call('/api/v1/admin/'+path,{method,body,by:'platformAdmin',key});
+ const cp={code:'QATEST',restaurantId:rid,discountMinor:250,globalLimit:1,startsAt:now-20,endsAt:now+500};
+ assert.equal((await api('control/coupons',cp)).status,200);
+ assert.equal((await api('control/coupons',cp)).status,409);
+ const buy=by=>f.call('/api/v1/customer/orders',{by,method:'POST',key:randomUUID(),
+  body:{restaurantId:rid,items:[{productId,quantity:1}],deliveryMethod:'pickup',phone:'+50400000004',coupon:cp.code}});
+ const purchased=await Promise.all([buy('customer'),buy('customer2')]);
+ assert.deepEqual(purchased.map(r=>r.status).sort(),[201,409]);
+ assert.equal((await api('control/coupons')).body.coupons[0].used,1);
+ assert.equal((await api('control/coupons/QATEST',{active:false},'PATCH')).status,200);
+ assert.equal((await api('control/coupons/QATEST',{active:true},'PATCH')).status,200);
+ const campaign={restaurantId:rid,productId,title:'Descuento QA',discountMinor:500,startsAt:now-10,endsAt:now+600,perCustomer:1,globalLimit:2};
+ const key=randomUUID(),first=await api('flash',campaign,'POST',key);
+ assert.equal(first.status,201);
+ assert.equal((await api('flash',campaign,'POST',key)).body.id,first.body.id);
+ assert.equal((await api('flash/'+first.body.id,{active:false},'PATCH')).status,200);
+ assert.equal((await api('flash/'+first.body.id,{active:true},'PATCH')).status,200);
+ assert.equal((await api('control/audit?subject='+first.body.id)).body.events.length,3);
+ const rules={restaurantId:rid,zone:'qa-centro',effectiveAt:now+100,baseMinor:1200,zoneMinor:250,kmMinor:350};
+ assert.equal((await api('control/rates',{...rules,effectiveAt:now-10})).status,400);
+ assert.equal((await api('control/rates',rules)).status,200);
+ assert.equal((await api('control/rates',{...rules,baseMinor:500})).status,409);
+ const simulation={restaurantId:rid,zone:rules.zone,at:rules.effectiveAt,meters:1500};
+ assert.equal((await api('control/rates/simulate',{...simulation,at:now})).status,409);
+ assert.equal((await api('control/rates/simulate',simulation)).body.totalMinor,1975);
+ assert.equal((await api('control/courier-rules',{restaurantId:rid,courierId:f.tokens.courier.id,effectiveAt:now+100,courierBps:5000})).status,200);
+ assert.equal((await api('control/courier-rules?restaurant='+rid)).body.courierRules[0].courier_bps,5000);
+ assert.deepEqual((await api('control/reports?from='+(now-60)+'&until='+(now+60)+'&restaurant='+rid)).body.orders,[{status:'Pendiente',orders:1}]);
 });

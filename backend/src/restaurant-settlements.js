@@ -1,3 +1,4 @@
+import {controlAudit} from './control-center.js';
 import {ApiError,idempotencyKey,readJson,requireInteger,requireKeys,requireRole,requireStaff,requireText,requireUuid} from './security.js';
 
 const step={calculate:['pending','calculated','calculated'],approve:['calculated','approved','approved'],
@@ -22,10 +23,17 @@ export async function settlementRule(req,env,actor,restaurant){
  const courier=requireInteger(data.courierBps,0,10000,'courierBps');
  const present=await env.DB.prepare("SELECT 1 FROM restaurants WHERE id=? AND plan IN ('ONLINE','PLUS')").bind(id).first();
  if(!present)throw new ApiError(404,'RESTAURANT_NOT_FOUND');
- await env.DB.prepare(`INSERT INTO restaurant_settlement_rules(id,restaurant_id,effective_at,commission_bps,courier_bps,author_id)
-  VALUES(?,?,?,?,?,?) ON CONFLICT(restaurant_id,effective_at) DO NOTHING`).bind(crypto.randomUUID(),id,start,commission,courier,actor.userId).run();
+ const proposed=crypto.randomUUID();
+ await env.DB.batch([
+  env.DB.prepare(`INSERT INTO restaurant_settlement_rules(id,restaurant_id,effective_at,commission_bps,courier_bps,author_id)
+   SELECT ?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM restaurant_settlements
+    WHERE restaurant_id=? AND status!='pending' AND until_at>?)
+   ON CONFLICT(restaurant_id,effective_at) DO NOTHING`).bind(proposed,id,start,commission,courier,actor.userId,id,start),
+  controlAudit(env,actor,'settlement_rule_created',proposed,{start,commission,courier},id)
+ ]);
  const existing=await env.DB.prepare('SELECT id,commission_bps,courier_bps FROM restaurant_settlement_rules WHERE restaurant_id=? AND effective_at=?')
   .bind(id,start).first();
+ if(!existing)throw new ApiError(409,'ADMIN_RATE_RETROACTIVE');
  if(existing.commission_bps!==commission||existing.courier_bps!==courier)throw new ApiError(409,'SETTLEMENT_RULE_EXISTS');
  return {id:existing.id};
 }

@@ -262,6 +262,7 @@ function couponCode(code){
 async function validCoupon(env,actor,restaurantId,code){
  const row=await env.DB.prepare(`SELECT discount_minor FROM client_coupons c WHERE code=? AND restaurant_id=?
   AND active=1 AND starts_at<=unixepoch() AND ends_at>unixepoch()
+  AND (global_limit IS NULL OR global_limit>(SELECT COUNT(*) FROM online_orders WHERE coupon_code=c.code))
   AND NOT EXISTS(SELECT 1 FROM online_orders WHERE customer_id=? AND coupon_code=c.code)`)
   .bind(code,restaurantId,actor.userId).first();
  if(!row)throw new ApiError(409,'COUPON_UNAVAILABLE');

@@ -56,7 +56,7 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
   customerFlash:()=>request('/api/v1/customer/flash'),
   adminFlash:()=>request('/api/v1/admin/flash'),
   flashProducts:id=>request('/api/v1/admin/flash?restaurant='+s(id)),
-  createFlash:body=>request('/api/v1/admin/flash',{method:'POST',body}),
+  createFlash:(body,key)=>request('/api/v1/admin/flash',{method:'POST',body,key}),
   stopFlash:id=>request('/api/v1/admin/flash/'+s(id),{method:'PATCH'}),
   customerOrders:()=>request('/api/v1/customer/orders'),
   customerOrder:id=>request('/api/v1/customer/orders/'+s(id)),
@@ -119,6 +119,8 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
   adminCreateRestaurant:body=>request('/api/v1/admin/restaurants',{method:'POST',body}),
   adminUpdateRestaurant:(id,body)=>request('/api/v1/admin/restaurants/'+s(id),{method:'PATCH',body}),
   adminAssignMember:(id,body)=>request('/api/v1/admin/restaurants/'+s(id)+'/members',{method:'POST',body}),
+  control:(path,options)=>request('/api/v1/admin/control/'+path,options),
+  setFlashActive:(id,active)=>request('/api/v1/admin/flash/'+s(id),{method:'PATCH',body:{active}}),
   adminEnrollCourier:userId=>request('/api/v1/admin/couriers',{method:'POST',body:{userId}})
  };
 }

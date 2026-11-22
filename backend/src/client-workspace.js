@@ -1,3 +1,4 @@
+import {controlAudit} from './control-center.js';
 import {ApiError,idempotencyKey,readJson,requireKeys,requireRole,requireText,requireUuid,respond} from './security.js';
 
 export async function favorites(req,env,actor,restaurantId) {
@@ -92,8 +93,11 @@ export async function orderClaim(req,env,actor,orderId) {
   requireKeys(body,['status','resolution']);
   if(!['review','resolved'].includes(body.status))throw new ApiError(400,'INVALID_INPUT');
   const resolution=body.status==='resolved'?requireText(body.resolution,8,800,'resolution'):null;
-  const result=await env.DB.prepare(`UPDATE order_claims SET status=?,resolution=?,updated_at=unixepoch()
-   WHERE order_id=? AND status IN ('open','review')`).bind(body.status,resolution,id).run();
+  const [result]=await env.DB.batch([
+   env.DB.prepare(`UPDATE order_claims SET status=?,resolution=?,updated_at=unixepoch(),version=version+1
+    WHERE order_id=? AND status IN ('open','review')`).bind(body.status,resolution,id),
+   controlAudit(env,actor,'claim_'+body.status,id,{resolution})
+  ]);
   if(!result.meta.changes)throw new ApiError(409,'CLAIM_CLOSED');
  }
  const claim=await env.DB.prepare('SELECT category,body,status,resolution,created_at,updated_at FROM order_claims WHERE order_id=?').bind(id).first();

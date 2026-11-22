@@ -1,3 +1,4 @@
+import {controlRoute} from './control-center.js';
 import {courierProfile,courierAvailability,courierApplication,pendingCouriers,revokeCourierSessions,courierHistory,courierRestaurantChat} from './courier-workspace.js';
 import {restaurantProfile,menuOption,savePhoto,publicPhoto,staffRoster,restaurantCash,restaurantReport} from './restaurant-operations.js';
 import {
@@ -102,6 +103,7 @@ async function route(req,env){
  }else if(token&&path.startsWith('/api/v1/restaurant/'))throw new ApiError(403,'ROLE_FORBIDDEN');
 
  if(['POST','PATCH'].includes(method))await mutationRateLimit(env,actor);
+ if(path.startsWith('/api/v1/admin/control/'))return controlRoute(req,env,actor,path.slice('/api/v1/admin/control/'.length));
  if(method==='POST'&&path==='/api/v1/push/identity'){
   return respond(req,env,200,await issueQaPushIdentity(req,env,actor));
  }

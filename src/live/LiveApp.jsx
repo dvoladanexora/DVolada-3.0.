@@ -1,3 +1,4 @@
+import {ControlNavigation,ControlWorkspace} from './ControlWorkspace.jsx';
 import {CourierConsole,CourierApplication,CourierApplications} from './CourierWorkspace.jsx';
 import {StaffSignIn,StaffSecret,ManageStaffAccess,SettlementPanel} from './RestaurantCommercial.jsx';
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
@@ -54,6 +55,12 @@ function errorLabel(error){
   OFFER_EXPIRED:'La oferta venció. Actualizá la lista de pedidos.',
   COURIER_UNAVAILABLE:'El repartidor ya no está disponible.',
   COURIER_INACTIVE:'Esta cuenta de repartidor está inactiva.',
+  ADMIN_ACCOUNT_CHANGED:'La cuenta cambió o la acción está restringida. Actualizá la lista.',
+  ADMIN_CLAIM_CHANGED:'El reclamo cambió, ya está resuelto o el responsable no puede atenderlo.',
+  ADMIN_COUPON_EXISTS:'El código ya existe o el restaurante no admite cupones.',
+  ADMIN_RATE_EXISTS:'Ya hay una regla para esa zona y vigencia o el restaurante no admite esa tarifa.',
+  ADMIN_RATE_MISSING:'No existe una tarifa para la zona y fecha indicadas.',
+  ADMIN_RATE_RETROACTIVE:'La vigencia no puede alterar períodos ya calculados.',
   COURIER_LIMIT:'Este repartidor ya tiene dos pedidos activos.',
   PIN_INVALID:'El PIN no coincide. Confirmalo con el cliente.',
   PIN_LOCKED:'Demasiados intentos. Se requiere intervención autorizada.',
@@ -112,6 +119,7 @@ export default function LiveApp(){
  const [manageProducts,setManageProducts]=useState([]),[newProductName,setNewProductName]=useState(''),[newProductPrice,setNewProductPrice]=useState('');
  const [editPrices,setEditPrices]=useState({}),[restaurantCapabilities,setRestaurantCapabilities]=useState(null);
  const [newRestaurantName,setNewRestaurantName]=useState(''),[newRestaurantPlan,setNewRestaurantPlan]=useState('ONLINE');
+ const [controlSection,setControlSection]=useState('operations');
  const [adminSelectedId,setAdminSelectedId]=useState(''),[adminMemberId,setAdminMemberId]=useState(''),[adminStaffRole,setAdminStaffRole]=useState('owner');
  const [adminCourierId,setAdminCourierId]=useState('');
  const [adminFee,setAdminFee]=useState(''),[audit,setAudit]=useState(null);
@@ -143,7 +151,7 @@ export default function LiveApp(){
   setSession(null);setScope('customer');setSelectedRestaurantId('');
   setOrders([]);setOrderDetail(null);setPrintReceipt(false);setRestaurantTab('active');setHistoryCursor(null);setNextHistory(null);setManageProducts([]);setRestaurantCapabilities(null);
   setCouriers([]);setCourierChoice({});setAdminStats(null);setAdminRestaurants([]);
-  setAdminFee('');setAdminSelectedId('');setAdminCourierId('');setAdminMemberId('');setAudit(null);
+  setControlSection('operations');setAdminFee('');setAdminSelectedId('');setAdminCourierId('');setAdminMemberId('');setAudit(null);
   setNewRestaurantName('');setNewRestaurantPlan('ONLINE');setAdminStaffRole('owner');
   setNewProductName('');setNewProductPrice('');setEditPrices({});
   setCart([]);setCartRestaurantId('');setShoppingRestaurant('');setProducts([]);setCatalogTerm('');
@@ -736,6 +744,10 @@ export default function LiveApp(){
      <div><strong>{adminStats?.orders?.active??'—'}</strong><span>Pedidos activos</span></div>
      <div><strong>{adminStats?.orders?.delivered??'—'}</strong><span>Entregados</span></div>
      <div><strong>{adminStats?.couriers?.active??'—'}</strong><span>Repartidores habilitados</span></div></div></section>
+    <ControlNavigation section={controlSection} setSection={setControlSection} flash={flashEnabled} commercial={commercial}/>
+    {!['business','flash','settlements'].includes(controlSection)&&<ControlWorkspace key={controlSection} section={controlSection}
+     api={api} restaurants={adminRestaurants} offline={offline} busy={busy} run={run} money={price} errorLabel={errorLabel}/>}
+    {controlSection==='business'&&<>
     <section className="dvl-panel"><h2>Negocios afiliados</h2><div className="dvl-stack">{adminRestaurants.map(r=><div className="dvl-row" key={r.id}>
      <strong>{r.name}</strong><span>{r.plan} · {r.subscription_status} · {r.online_state} · {r.order_count} pedidos</span></div>)}</div></section>
     <section className="dvl-panel">
@@ -781,11 +793,16 @@ export default function LiveApp(){
      </div>
     </section>
     <CourierApplications api={api} run={run} busy={busy} offline={offline} errorLabel={errorLabel}/>
-    {flashEnabled&&<FlashAdmin api={api} restaurants={adminRestaurants} busy={busy} offline={offline} run={run}/>}
-    {commercial&&adminRestaurants.some(r=>r.id===adminSelectedId&&r.plan!=='LOCAL')&&
+    </>}
+    {controlSection==='flash'&&flashEnabled&&<FlashAdmin api={api} restaurants={adminRestaurants} busy={busy} offline={offline} run={run}/>}
+    {controlSection==='settlements'&&commercial&&<section className="dvl-panel"><label>Restaurante para liquidaciones
+     <select value={adminSelectedId} onChange={event=>setAdminSelectedId(event.target.value)}><option value="">Seleccionar</option>
+      {adminRestaurants.filter(r=>r.plan!=='LOCAL').map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
+     </select></label></section>}
+    {controlSection==='settlements'&&commercial&&adminRestaurants.some(r=>r.id===adminSelectedId&&r.plan!=='LOCAL')&&
      <SettlementPanel key={'central-'+adminSelectedId} api={api} restaurant={adminSelectedId} central
       run={run} busy={busy} offline={offline} money={price} errorLabel={errorLabel}/>}
-    <section className="dvl-panel"><h2>Actividad administrativa</h2>
+    {controlSection==='audit'&&<section className="dvl-panel"><h2>Actividad de afiliación</h2>
      <Action kind="secondary" disabled={busy||offline}
       onClick={()=>run(async()=>{const data=await api.adminAudit();setAudit(data.events)},{refresh:false})}>Consultar actividad</Action>
      {audit&&<ul className="dvl-search-results">{audit.map(event=><li className="dvl-row" key={event.id}>
@@ -793,7 +810,7 @@ export default function LiveApp(){
       <time dateTime={new Date(event.created_at*1000).toISOString()}>{new Date(event.created_at*1000).toLocaleString('es-HN')}</time>
      </li>)}</ul>}
      {audit?.length===0&&<p>Aún no hay actividad administrativa.</p>}
-    </section>
+    </section>}
     </div>}
    <footer className="dvl-footer"><span className="dvl-powered">Powered by <img src={import.meta.env.BASE_URL+'file_00000000e77081fd8cf8ee8349e461b6.png'} alt="Nexora Systems" /></span><span>Acceso seguro · Dvolada Online</span></footer>
   </>}

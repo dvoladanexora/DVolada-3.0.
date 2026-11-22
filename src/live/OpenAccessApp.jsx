@@ -116,6 +116,8 @@ export default function OpenAccessApp(){
     <FlashOffers campaigns={offline?[]:flashOffers} money={money} open={openRestaurant}/>
     <section className="dvl-panel">
      <h2><Store size={20}/> {selected?selected.name:'Restaurantes afiliados'}</h2>
+     {selected?.description&&<p>{selected.description}</p>}
+     {selected?.address&&<p>{selected.address}</p>}
      {selected&&<button className="dvl-action secondary" onClick={()=>{menuRequest.current++;setSelected(null);setProducts([])}}>Volver a restaurantes</button>}
      {!selected&&<><CatalogSearch api={api} offline={offline} term={search} onChange={setSearch} openRestaurant={openRestaurant} money={money}/>
       <div className="dvl-stack" style={{marginTop:18}}>{visible.map(r=><div className="dvl-row" key={r.id}><div>
@@ -124,7 +126,7 @@ export default function OpenAccessApp(){
       </div>)}
       {!visible.length&&<p>No hay negocios disponibles todavía.</p>}</div></>}
      {selected&&<div className="dvl-stack" style={{marginTop:18}}>{products.map(p=><div key={p.id} className="dvl-row"><div>
-       <strong>{p.name}</strong><small>{money(p.price_minor)}</small></div>
+       <> {p.photoUrl&&<img className="dvl-menu-photo" src={p.photoUrl} alt={p.name} loading="lazy"/>}<strong>{p.name}</strong><small>{p.category&&p.category+' · '}{money(p.price_minor)}</small></></div>
        <button className="dvl-action secondary" disabled={offline||selected.online_state!=='open'} onClick={()=>add(p)}>Agregar</button>
       </div>)}{!products.length&&<p>Este negocio todavía no tiene productos.</p>}</div>}
     </section>

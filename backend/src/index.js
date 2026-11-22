@@ -1,3 +1,4 @@
+import {restaurantProfile,menuOption,savePhoto,publicPhoto,staffRoster,restaurantCash,restaurantReport} from './restaurant-operations.js';
 import {
  ApiError,requireUuid,identity,assertConfiguration,assertAllowedOrigin,respond,preflight,
  restaurantAccess,requireStaff,mutationRateLimit
@@ -43,10 +44,16 @@ async function route(req,env){
    ORDER BY p.name,p.id LIMIT 25`).bind(term).all();
   return respond(req,env,200,{products:results});
  }
+ const photo=/^\/api\/v1\/catalog\/photos\/([0-9a-f-]+)$/i.exec(path);
+ if(method==='GET'&&photo)return publicPhoto(env,photo[1]);
  const catalog=/^\/api\/v1\/catalog\/restaurants\/([0-9a-f-]+)\/products$/i.exec(path);
  if(method==='GET'&&catalog){
   const id=requireUuid(catalog[1]);
-  const rest=await env.DB.prepare(`SELECT id,name,online_state,delivery_fee_minor FROM restaurants WHERE id=?
+  const rest=await env.DB.prepare(`SELECT id,name,online_state,delivery_fee_minor,
+    (SELECT address FROM restaurant_profiles WHERE restaurant_id=restaurants.id) AS address,
+    (SELECT description FROM restaurant_profiles WHERE restaurant_id=restaurants.id) AS description,
+    (SELECT hours FROM restaurant_profiles WHERE restaurant_id=restaurants.id) AS hours
+    FROM restaurants WHERE id=?
     AND plan IN ('ONLINE','PLUS') AND subscription_status='active'
     AND online_state IN ('open','paused')`).bind(id).first();
   if(!rest)throw new ApiError(404,'RESTAURANT_NOT_FOUND');
@@ -60,7 +67,7 @@ async function route(req,env){
    if(!byProduct.has(option.product_id))byProduct.set(option.product_id,[]);
    byProduct.get(option.product_id).push(option);
   }
-  return respond(req,env,200,{restaurant:rest,products:results.map(product=>({...product,options:byProduct.get(product.id)||[]}))});
+  return respond(req,env,200,{restaurant:rest,products:results.map(product=>({...product,photoUrl:product.has_photo?'/api/v1/catalog/photos/'+product.id:null,options:byProduct.get(product.id)||[]}))});
  }
  const access=/^\/api\/v1\/auth\/client\/(register|login|recover)$/.exec(path);
  if(method==='POST'&&access)return clientAuth(req,env,access[1]);
@@ -153,6 +160,20 @@ async function route(req,env){
   if(method==='GET'&&path==='/api/v1/restaurant/capabilities')
    return respond(req,env,200,{online:true,local:access.plan==='PLUS',
      restaurantId:access.restaurantId,staffRole:access.staff_role,onlineState:access.online_state});
+  if(['GET','PATCH'].includes(method)&&path==='/api/v1/restaurant/profile')
+   return respond(req,env,200,await restaurantProfile(req,env,actor,access));
+  if(['GET','PATCH'].includes(method)&&path==='/api/v1/restaurant/staff')
+   return respond(req,env,200,await staffRoster(req,env,actor,access));
+  if(method==='GET'&&path==='/api/v1/restaurant/report')
+   return respond(req,env,200,await restaurantReport(env,access,url));
+  const cash=/^\/api\/v1\/restaurant\/cash(?:\/(open|close|sale))?$/.exec(path);
+  if(cash&&(cash[1]?method==='POST':method==='GET'))
+   return respond(req,env,200,await restaurantCash(req,env,actor,access,cash[1]));
+  const options=/^\/api\/v1\/restaurant\/products\/([0-9a-f-]+)\/options(?:\/([0-9a-f-]+))?$/i.exec(path);
+  if(options&&(options[2]?method==='PATCH':['GET','POST'].includes(method)))
+   return respond(req,env,200,await menuOption(req,env,actor,access,options[1],options[2]));
+  const managePhoto=/^\/api\/v1\/restaurant\/products\/([0-9a-f-]+)\/photo$/i.exec(path);
+  if(method==='POST'&&managePhoto)return respond(req,env,200,await savePhoto(req,env,actor,access,managePhoto[1]));
   if(method==='GET'&&path==='/api/v1/restaurant/orders')
    return respond(req,env,200,await restaurantOrders(req,env,access,url));
   if(method==='GET'&&path==='/api/v1/restaurant/orders/changes')
@@ -176,7 +197,9 @@ async function route(req,env){
   if(method==='PATCH'&&path==='/api/v1/restaurant/availability')
    return respond(req,env,200,await updateAvailability(req,env,actor,access));
   if(method==='GET'&&path==='/api/v1/restaurant/products'){
-   const {results=[]}=await env.DB.prepare(`SELECT id,name,price_minor,available
+   requireStaff(access.staff_role,['owner','manager']);
+   const {results=[]}=await env.DB.prepare(`SELECT id,name,price_minor,available,category,
+    CASE WHEN EXISTS(SELECT 1 FROM restaurant_product_photos WHERE product_id=products.id) THEN '/api/v1/catalog/photos/'||products.id END AS photoUrl
      FROM products WHERE restaurant_id=? ORDER BY name,id LIMIT 150`).bind(access.restaurantId).all();
    return respond(req,env,200,{products:results});
   }

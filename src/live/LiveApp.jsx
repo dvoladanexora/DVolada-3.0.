@@ -7,6 +7,8 @@ import { enableQaPush, disableQaPush } from './onesignal-push.js';
 import {applyDvoladaTheme} from '../theme-policy.js';
 import ClientAccess,{ClientCodes} from './ClientAccess.jsx';
 import {FlashAdmin,FlashOffers} from './FlashCampaigns.jsx';
+import RestaurantCash from './RestaurantCash.jsx';
+import {RestaurantProfile,RestaurantStaff,ProductDetails} from './RestaurantSettings.jsx';
 import ClientSupport from './ClientSupport.jsx';
 import CatalogSearch from './CatalogSearch.jsx';
 import {readCart,writeCart,updateQuantity} from './cart-draft.js';
@@ -48,6 +50,15 @@ function errorLabel(error){
   PROMOTIONS_EXCLUSIVE:'Elegí un cupón o una promoción Flash.',
   INVALID_FLASH_REWARD:'Elegí un regalo o un descuento.',
   INVALID_FLASH_CATALOG:'Revisá los productos elegidos para el restaurante.',
+  INVALID_LOCATION:'Ingresá ambas coordenadas válidas o dejá las dos vacías.',
+  INVALID_HOURS:'Revisá que cada cierre sea posterior a su apertura.',
+  INVALID_PAYMENT_METHOD:'Elegí un método de pago habilitado.',
+  INVALID_PHOTO:'Elegí una imagen JPG, PNG o WebP de hasta 120 KB.',
+  SHIFT_ALREADY_OPEN:'Ya existe una jornada abierta en este negocio.',
+  SHIFT_NOT_OPEN:'La jornada ya se cerró o pertenece a otro negocio.',
+  SALE_NOT_ALLOWED:'La venta requiere un pedido entregado, jornada abierta y método habilitado.',
+  SALE_ALREADY_RECORDED:'El pedido ya tiene una venta registrada.',
+  STAFF_CHANGE_FORBIDDEN:'No se puede cambiar el rol o acceso de esa cuenta.',
   INVALID_COUPON:'Revisá el formato del cupón.',
   COUPON_UNAVAILABLE:'Cupón vencido, ya utilizado o ajeno a este restaurante.',
   CLIENT_CODE_INVALID:'La clave o el código no es válido.',
@@ -59,9 +70,9 @@ function errorLabel(error){
 }
 function Action({children,onClick,disabled=false,kind='primary'}){return <button type="button" className={'dvl-action '+kind} disabled={disabled} onClick={onClick}>{children}</button>}
 function WaitOrError({message,warning=false}){return message?<div role={warning?'alert':'status'} className={'dvl-notice '+(warning?'warn':'')}>{message}</div>:null}
-function OrderCard({order,children}){
+function OrderCard({order,children,kitchen=false}){
  return <article className="dvl-order"><div className="dvl-order-head"><strong>#{order.orderNumber||order.id?.slice(0,8)}</strong><span>{orderLabel[order.status]||order.status}</span></div>
- <div className="dvl-order-foot"><span>{price(order.totalMinor)}</span><span>Versión {order.version}</span><span>{order.deliveryMethod==='delivery'?'Envío':'Recoger'}</span></div>{children}</article>
+ <div className="dvl-order-foot">{!kitchen&&<span>{price(order.totalMinor)}</span>}<span>Versión {order.version}</span><span>{order.deliveryMethod==='delivery'?'Envío':'Recoger'}</span></div>{children}</article>
 }
 export default function LiveApp(){
  const sessionRef=useRef(null),alive=useRef(true),checkoutInFlight=useRef(false),menuRequest=useRef(0);
@@ -77,6 +88,8 @@ export default function LiveApp(){
  const [optionsByProduct,setOptionsByProduct]=useState({}),[appliedCoupon,setAppliedCoupon]=useState(null),[couponText,setCouponText]=useState('');
  const [pendingKey,setPendingKey]=useState(null),[replaceCart,setReplaceCart]=useState(null);
  const [cartRestaurantId,setCartRestaurantId]=useState('');
+ const [restaurantTab,setRestaurantTab]=useState('active'),[historyCursor,setHistoryCursor]=useState(null),[nextHistory,setNextHistory]=useState(null);
+ const [orderNote,setOrderNote]=useState(''),[printReceipt,setPrintReceipt]=useState(false);
  const [phone,setPhone]=useState('');
  const [deliveryAddress,setDeliveryAddress]=useState(''),[deliveryMethod,setDeliveryMethod]=useState('delivery');
  const [orders,setOrders]=useState([]),[selectedRestaurantId,setSelectedRestaurantId]=useState('');
@@ -114,7 +127,7 @@ export default function LiveApp(){
   sessionRef.current=null;menuRequest.current++;
   setNewCodes(null);setSupport(null);setFlashOffers([]);setFlashSelection(null);setFavoriteIds([]);setOnlyFavorites(false);
   setSession(null);setScope('customer');setSelectedRestaurantId('');
-  setOrders([]);setOrderDetail(null);setManageProducts([]);setRestaurantCapabilities(null);
+  setOrders([]);setOrderDetail(null);setPrintReceipt(false);setRestaurantTab('active');setHistoryCursor(null);setNextHistory(null);setManageProducts([]);setRestaurantCapabilities(null);
   setCouriers([]);setCourierChoice({});setAdminStats(null);setAdminRestaurants([]);
   setAdminFee('');setAdminSelectedId('');setAdminCourierId('');setAdminMemberId('');setAudit(null);
   setNewRestaurantName('');setNewRestaurantPlan('ONLINE');setAdminStaffRole('owner');
@@ -122,7 +135,7 @@ export default function LiveApp(){
   setCart([]);setCartRestaurantId('');setShoppingRestaurant('');setProducts([]);setCatalogTerm('');
   setOptionsByProduct({});setAppliedCoupon(null);setCouponText('');
   setPendingKey(null);setReplaceCart(null);setDeliveryMethod('delivery');
-  setSelectedPin(null);setPinEntry('');setPhone('');setDeliveryAddress('');
+  setSelectedPin(null);setPinEntry('');setPhone('');setDeliveryAddress('');setOrderNote('');
   setPushEnabled(false);setRefreshWarning('');setStatus('');
  },[]);
  const openSession=useCallback((me,clientAccount=false)=>{
@@ -176,19 +189,23 @@ export default function LiveApp(){
   const canApply=()=>alive.current&&sessionRef.current===activeSession&&panelRef.current===panel&&latestRead.current===request;
   if(view==='customer'){const result=await api.customerOrders();if(canApply())setOrders(result.orders||[])}
   if(view==='restaurant'&&restaurantId){
+   const assignment=session?.restaurants?.find(item=>item.restaurant_id===restaurantId)?.staff_role;
+   const manages=['owner','manager'].includes(assignment);
+   const board=assignment==='cashier'||restaurantTab==='cash'?'unrecorded':restaurantTab==='history'?'history':'active';
    const [result,eligible,menu,capabilities]=await Promise.all([
-    api.restaurantOrders(restaurantId),api.eligibleCouriers(restaurantId).catch(()=>({couriers:[]})),
-    api.restaurantProducts(restaurantId),api.restaurantCapabilities(restaurantId)
+    api.restaurantOrders(restaurantId,board==='history'&&restaurantTab==='history'?historyCursor:undefined,board),
+    manages?api.eligibleCouriers(restaurantId):{couriers:[]},manages?api.restaurantProducts(restaurantId):{products:[]},
+    api.restaurantCapabilities(restaurantId)
    ]);
    if(canApply()){setOrders(result.orders||[]);setCouriers(eligible.couriers||[]);
-    setManageProducts(menu.products||[]);setRestaurantCapabilities(capabilities)}
+    setManageProducts(menu.products||[]);setRestaurantCapabilities(capabilities);setNextHistory(result.nextCursor||null)}
   }
   if(view==='courier'){const r=await api.courierOrders();if(canApply())setOrders(r.orders||[])}
   if(view==='admin'){
    const [overview,managed]=await Promise.all([api.adminOverview(),api.adminRestaurants()]);
    if(canApply()){setAdminStats(overview);setAdminRestaurants(managed.restaurants||[])}
   }
- },[api,scope,selectedRestaurantId]);
+ },[api,scope,selectedRestaurantId,session,restaurantTab,historyCursor]);
  useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
  const cartAccount=session?.user?.role==='customer'&&!session.restaurants?.length?session.user.id:null;
  useEffect(()=>{
@@ -363,7 +380,7 @@ export default function LiveApp(){
   if(!sessionRef.current)return;
   writeCart(cartAccount,{items:[]});
   setAppliedCoupon(null);setCouponText('');setFlashSelection(null);setPendingKey(null);setCart([]);setCartRestaurantId('');setProducts([]);setShoppingRestaurant('');
-  setSelectedPin({id:result.order.id,pin:result.deliveryPin});
+  setOrderNote('');setSelectedPin({id:result.order.id,pin:result.deliveryPin});
   setStatus('Pedido de prueba confirmado.');
   load().catch(e=>{if(!handleSessionError(e))setRefreshWarning('Actualizá la lista para ver el pedido.')});
  }
@@ -378,6 +395,7 @@ export default function LiveApp(){
   setPendingKey(key);
   const intent={restaurantId:cartRestaurantId,deliveryMethod,deliveryAddress,phone:'+504'+phone,
    expectedTotalMinor:subtotal+fee-discount,
+   ...(orderNote.trim()?{note:orderNote.trim()}:{}),
    ...(appliedCoupon?{coupon:appliedCoupon.code}:{}),
    ...(activeFlash?{flashId:activeFlash.id}:{}),
    items:cart.map(({productId,quantity,options})=>({productId,quantity,...(options?.length?{optionIds:options.map(option=>option.id)}:{})}))};
@@ -427,7 +445,8 @@ export default function LiveApp(){
   return run(async()=>{
    const result=await api.restaurantOrder(selectedRestaurantId,order.id);
    setOrderDetail({restaurantId:selectedRestaurantId,orderId:order.id,orderNumber:result.order.orderNumber,
-    items:result.order.items});
+    items:result.order.items,note:result.order.note,receipt:result.order});
+   setPrintReceipt(false);
   },{refresh:false});
  }
  async function action(fn){const result=await run(fn);if(result)setStatus('Cambio confirmado en el servidor.');return result}
@@ -451,6 +470,10 @@ export default function LiveApp(){
  const discount=activeFlash?Math.min(eligibleSubtotal,activeFlash.discountMinor):Math.min(subtotal,appliedCoupon?.discountMinor||0);
  const fee=deliveryMethod==='delivery'?restaurant?.delivery_fee_minor??0:0;
  const canManage=['owner','manager'].includes(selectedBusiness?.staff_role);
+ const kitchenRole=selectedBusiness?.staff_role==='kitchen';
+ const cashRole=selectedBusiness?.staff_role==='cashier';
+ const boardOrders=kitchenRole?[...orders].sort((a,b)=>a.createdAt-b.createdAt||a.orderNumber.localeCompare(b.orderNumber)):orders;
+ const setBoard=tab=>{setRestaurantTab(tab);setHistoryCursor(null);setNextHistory(null);setOrderDetail(null);setSupport(null);setOrders([])};
  const formattedUserId=session?.user?.id||'';
  return <div className="dvl-app">
   <header className="dvl-header"><div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada" /><div><strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
@@ -501,7 +524,7 @@ export default function LiveApp(){
       {!restaurants.length&&<p>Próximamente encontrarás los restaurantes afiliados aquí.</p>}</div>:
       <><Action kind="text" onClick={()=>{menuRequest.current++;setShoppingRestaurant('');setProducts([])}}>Volver a restaurantes</Action>
        {cart.length>0&&<a className="dvl-cart-link" href="#carrito">Volver al carrito</a>}
-       <div className="dvl-stack">{products.map(p=><div className="dvl-row" key={p.id}><div><strong>{p.name}</strong><small>{price(p.price_minor)}</small>
+       <div className="dvl-stack">{products.map(p=><div className="dvl-row" key={p.id}><div>{p.photoUrl&&<img className="dvl-menu-photo" src={p.photoUrl} alt={p.name} loading="lazy"/>}<strong>{p.name}</strong><small>{p.category&&p.category+' · '}{price(p.price_minor)}</small>
         {p.options?.length>0&&!(cartRestaurantId===shoppingRestaurant&&cart.some(item=>item.productId===p.id))&&
          <fieldset className="dvl-options" disabled={offline||busy||Boolean(pendingKey)}><legend>Personalizá {p.name}</legend>
           {p.options.some(option=>option.kind==='variant')&&<label>Variante<select
@@ -557,6 +580,8 @@ export default function LiveApp(){
        <option value="delivery">Entrega a domicilio</option><option value="pickup">Recoger en restaurante</option></select></label>
       {deliveryMethod==='delivery'&&<label>Dirección completa<textarea rows={3} value={deliveryAddress}
        maxLength={300} onChange={e=>setDeliveryAddress(e.target.value)} placeholder="Barrio, calle, casa y referencia"/></label>}
+      <label>Observaciones para el restaurante<textarea value={orderNote} maxLength={300} rows={2}
+       onChange={event=>setOrderNote(event.target.value)} placeholder="Instrucciones para preparar tu pedido"/></label>
       <p className="dvl-muted">El servidor verificará precios y disponibilidad. Los cobros por tarjeta todavía no están habilitados.</p>
       {pendingKey&&<><p>Hay un intento pendiente. Buscá su confirmación o reintentá con los mismos datos.</p>
        <Action kind="secondary" disabled={busy||offline} onClick={recoverCheckout}>Buscar confirmación</Action></>}
@@ -576,7 +601,7 @@ export default function LiveApp(){
       </OrderCard>)}</div>:<p>Tus pedidos confirmados aparecerán aquí.</p>}
       {selectedPin&&<div className="dvl-pin" role="status"><strong>Pedido {selectedPin.receipt?.orderNumber||selectedPin.id.slice(0,8)}</strong>
        {selectedPin.receipt&&<>{selectedPin.receipt.flashGiftName&&<p>Regalo: {selectedPin.receipt.flashGiftName}</p>}<ul>{selectedPin.receipt.items.map(item=><li key={item.product_id}>
-        {item.quantity} × {item.name_snapshot}{optionsFromReceipt(item).map(option=>' · '+option.name)}
+        {item.quantity} × {item.name_snapshot}{(item.optionNames||optionsFromReceipt(item).map(option=>option.name)).map(name=>' · '+name)}
        </li>)}</ul><span>Total: {price(selectedPin.receipt.totalMinor)}</span></>}
        <p>
        {selectedPin.pin?'PIN de entrega: '+selectedPin.pin:'Sin PIN de entrega disponible'}</p>
@@ -585,19 +610,32 @@ export default function LiveApp(){
     </section>
    </div>}
    {scope==='restaurant'&&<div className="dvl-stack">
-    <section className="dvl-panel"><div className="dvl-row"><h2>Centro de pedidos</h2><label>Negocio<select value={selectedRestaurantId}
-     onChange={e=>{setOrderDetail(null);setSupport(null);setOrders([]);setManageProducts([]);setRestaurantCapabilities(null);setCouriers([]);setEditPrices({});setCourierChoice({});setSelectedRestaurantId(e.target.value)}}>{session.restaurants?.map(r=><option key={r.restaurant_id} value={r.restaurant_id}>{r.name}</option>)}</select></label></div>
-     <p className="dvl-muted">Solo los empleados autorizados pueden cambiar estados; los cambios simultáneos generan conflicto.</p>
+    <section className="dvl-panel"><div className="dvl-row"><h2>{kitchenRole?'Pantalla de cocina':cashRole?'Caja del restaurante':'Centro de pedidos'}</h2><label>Negocio<select value={selectedRestaurantId}
+     onChange={e=>{setBoard('active');setOrderDetail(null);setSupport(null);setOrders([]);setManageProducts([]);setRestaurantCapabilities(null);setCouriers([]);setEditPrices({});setCourierChoice({});setSelectedRestaurantId(e.target.value)}}>{session.restaurants?.map(r=><option key={r.restaurant_id} value={r.restaurant_id}>{r.name}</option>)}</select></label></div>
+     {canManage&&<nav className="dvl-inline dvl-client-modes" aria-label="Secciones de Restaurante Cloud">
+      {Object.entries({active:'Pedidos activos',history:'Historial',menu:'Menú',settings:'Perfil y personal',cash:'Caja y ventas'}).map(([tab,label])=>
+       <button type="button" key={tab} aria-pressed={restaurantTab===tab} disabled={busy} className={'dvl-action '+(restaurantTab===tab?'':'secondary')}
+        onClick={()=>setBoard(tab)}>{label}</button>)}
+     </nav>}
+     {kitchenRole&&<p>Comandas aceptadas, de la más antigua a la reciente.</p>}
     </section>
-    {canManage&&<section className="dvl-panel"><h2>Menú y disponibilidad</h2>
-     <p className="dvl-muted">El estado y los precios se guardan en el servidor, no en este dispositivo.</p>
-     <div className="dvl-inline dvl-control-actions">
+    {canManage&&restaurantTab==='settings'&&<>
+     <RestaurantProfile key={selectedRestaurantId} api={api} id={selectedRestaurantId} run={run} busy={busy} offline={offline}/>
+     <RestaurantStaff key={'staff-'+selectedRestaurantId} api={api} id={selectedRestaurantId} owner={selectedBusiness.staff_role==='owner'}
+      run={run} busy={busy} offline={offline}/>
+    </>}
+    {(cashRole||(canManage&&restaurantTab==='cash'))&&<RestaurantCash key={'cash-'+selectedRestaurantId}
+     api={api} id={selectedRestaurantId} orders={orders} offline={offline} busy={busy} run={run} money={price} refreshOrders={load}/>}
+    {canManage&&['active','menu'].includes(restaurantTab)&&<section className="dvl-panel">
+     <h2>Disponibilidad del restaurante</h2><div className="dvl-inline dvl-control-actions">
       <span>Estado: <strong>{restaurantCapabilities?.onlineState||'Desconocido'}</strong></span>
       {['open','paused','closed'].map(state=><Action key={state} kind="secondary"
        disabled={busy||offline||restaurantCapabilities?.onlineState===state}
        onClick={()=>action(()=>api.updateAvailability(selectedRestaurantId,state))}>
        {state==='open'?'Abrir':state==='paused'?'Pausar':'Cerrar'}</Action>)}
      </div>
+    </section>}
+    {canManage&&restaurantTab==='menu'&&<section className="dvl-panel"><h2>Menú del restaurante</h2>
      <div className="dvl-grid dvl-editor">
       <label>Nuevo producto<input value={newProductName} maxLength={150} onChange={e=>setNewProductName(e.target.value)} placeholder="Nombre del producto"/></label>
       <label>Precio (L)<input type="number" min="0" step=".01" value={newProductPrice} onChange={e=>setNewProductPrice(e.target.value)} placeholder="95.00"/></label>
@@ -606,7 +644,7 @@ export default function LiveApp(){
         priceMinor:Math.round(Number(newProductPrice)*100),available:true}));
         if(saved){setNewProductName('');setNewProductPrice('')}}}>Añadir al menú</Action>
      </div>
-     <div className="dvl-stack dvl-manage-menu">{manageProducts.map(p=><div className="dvl-row" key={p.id}>
+     <div className="dvl-stack dvl-manage-menu">{manageProducts.map(p=><div className="dvl-stack" key={p.id}><div className="dvl-row">
       <div><strong>{p.name}</strong><small>{p.available?'Disponible':'Agotado'} · {price(p.price_minor)}</small></div>
       <div className="dvl-inline">
        <input aria-label={'Nuevo precio '+p.name} type="number" min="0" step=".01" placeholder="Nuevo precio" className="dvl-price-input"
@@ -617,18 +655,27 @@ export default function LiveApp(){
        <Action kind="secondary" disabled={busy||offline} onClick={()=>action(()=>api.updateProduct(selectedRestaurantId,p.id,{available:!Boolean(p.available)}))}>
         {p.available?'Agotar':'Habilitar'}</Action>
       </div>
+     </div>
+     <ProductDetails api={api} id={selectedRestaurantId} product={p} run={run} busy={busy} offline={offline}
+      onSaved={()=>load().catch(error=>setError(errorLabel(error)))}/>
      </div>)}</div>
     </section>}
-    <div className="dvl-grid">{orders.map(o=><OrderCard key={o.id} order={o}>
+    {!cashRole&&(kitchenRole||['active','history'].includes(restaurantTab))&&<>
+    <div className="dvl-grid">{boardOrders.map(o=><OrderCard key={o.id} order={o} kitchen={kitchenRole}>
       {o.flashGiftName&&<p>Regalo: {o.flashGiftName}</p>}
       <Action kind="secondary" disabled={busy||offline} onClick={()=>showRestaurantOrder(o)}>Ver comanda</Action>
       {canManage&&<Action kind="secondary" disabled={offline} onClick={()=>setSupport({id:o.id,mode:'restaurant'})}>Chat con cliente</Action>}
       {orderDetail?.orderId===o.id&&orderDetail.restaurantId===selectedRestaurantId&&<>
-       <ul aria-label="Artículos de la comanda">{orderDetail.items.map((item,index)=><li key={index}>{item.quantity} × {item.name_snapshot}{optionsFromReceipt(item).map(option=>' · '+option.name)}</li>)}</ul>
-       <Action kind="secondary" onClick={()=>window.print()}>Imprimir comanda</Action>
+       <ul aria-label="Artículos de la comanda">{orderDetail.items.map((item,index)=><li key={index}>{item.quantity} × {item.name_snapshot}{(item.optionNames||optionsFromReceipt(item).map(option=>option.name)).map(name=>' · '+name)}</li>)}</ul>
+       {orderDetail.note&&<p>Observaciones: {orderDetail.note}</p>}
+       <Action kind="secondary" onClick={()=>{setPrintReceipt(false);setTimeout(()=>window.print(),0)}}>Imprimir comanda</Action>
+       {canManage&&o.status==='Entregado'&&<Action kind="secondary" onClick={()=>{setPrintReceipt(true);setTimeout(()=>window.print(),0)}}>Imprimir comprobante</Action>}
        {createPortal(<section className="dvl-print-sheet">
-        <h1>{selectedBusiness?.name}</h1><h2>Comanda #{orderDetail.orderNumber}</h2>{o.flashGiftName&&<p>Regalo: {o.flashGiftName}</p>}
-        <ul>{orderDetail.items.map((item,index)=><li key={index}>{item.quantity} × {item.name_snapshot}{optionsFromReceipt(item).map(option=>' · '+option.name)}</li>)}</ul>
+        <h1>{selectedBusiness?.name}</h1><h2>{printReceipt?'Comprobante':'Comanda'} #{orderDetail.orderNumber}</h2>{o.flashGiftName&&<p>Regalo: {o.flashGiftName}</p>}
+        <ul>{orderDetail.items.map((item,index)=><li key={index}>{item.quantity} × {item.name_snapshot}{(item.optionNames||optionsFromReceipt(item).map(option=>option.name)).map(name=>' · '+name)}</li>)}</ul>
+        {orderDetail.note&&<p>Observaciones: {orderDetail.note}</p>}
+        {printReceipt&&<dl><dt>Productos</dt><dd>{price(o.subtotalMinor)}</dd><dt>Descuento</dt><dd>{price(o.discountMinor)}</dd>
+         <dt>Envío</dt><dd>{price(o.deliveryFeeMinor)}</dd><dt>Total</dt><dd>{price(o.totalMinor)}</dd></dl>}
        </section>,document.body)}
       </>}
       <div className="dvl-inline">{(staffTransitions[o.status]||[]).filter(next=>canManage||
@@ -639,7 +686,12 @@ export default function LiveApp(){
        <div className="dvl-assign"><label>Repartidor<select value={courierChoice[o.id]||''} onChange={e=>setCourierChoice(x=>({...x,[o.id]:e.target.value}))}>
         <option value="">Seleccioná repartidor</option>{couriers.map(c=><option key={c.id} value={c.id}>{c.name} ({c.active_orders}/{c.max_orders})</option>)}</select></label>
        <Action kind="secondary" disabled={busy||offline||!courierChoice[o.id]} onClick={()=>action(()=>api.assignCourier(selectedRestaurantId,o,courierChoice[o.id],newKey()))}>Asignar</Action></div>}
-    </OrderCard>)}{!orders.length&&<div className="dvl-panel"><Package size={27}/><p>Aún no hay pedidos del restaurante.</p></div>}</div>
+    </OrderCard>)}{!orders.length&&<div className="dvl-panel"><Package size={27}/><p>{kitchenRole?'Sin comandas pendientes.':'Aún no hay pedidos en esta vista.'}</p></div>}</div>
+    {restaurantTab==='history'&&<div className="dvl-inline">
+     {historyCursor&&<Action kind="secondary" disabled={busy||offline} onClick={()=>{setHistoryCursor(null);setOrderDetail(null)}}>Más recientes</Action>}
+     {nextHistory&&<Action kind="secondary" disabled={busy||offline} onClick={()=>{setHistoryCursor(nextHistory);setOrderDetail(null)}}>Pedidos anteriores</Action>}
+    </div>}
+    </>}
     </div>}
    {scope==='courier'&&<div className="dvl-stack"><section className="dvl-panel"><h2>Mis entregas</h2>
     <p className="dvl-muted">Máximo dos pedidos activos. La confirmación final exige el PIN del cliente.</p></section>

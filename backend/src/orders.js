@@ -17,7 +17,7 @@ const courierMoves={
  'En camino':['En ubicación']
 };
 const dataOrder=`SELECT id,restaurant_id,customer_id,courier_id,order_number,delivery_method,
- delivery_address,status,version,courier_response,subtotal_minor,delivery_fee_minor,total_minor,discount_minor,flash_gift_name,pin_attempts,
+ delivery_address,customer_note,status,version,courier_response,subtotal_minor,delivery_fee_minor,total_minor,discount_minor,flash_gift_name,pin_attempts,
  created_at,updated_at FROM online_orders`;
 const briefOrder=`SELECT id,restaurant_id,courier_id,order_number,delivery_method,status,version,courier_response,
  subtotal_minor,delivery_fee_minor,total_minor,discount_minor,flash_gift_name,created_at,updated_at FROM online_orders`;
@@ -68,6 +68,15 @@ export async function transition(env,actor,{orderId,restaurantId,expectedVersion
 export async function restaurantOrders(req,env,access,url){
  const cursor=url.searchParams.get('cursor');
  let where='restaurant_id=?',args=[access.restaurantId];
+ const view=url.searchParams.get('view');
+ if(view&&!['active','history','unrecorded'].includes(view))throw new ApiError(400,'INVALID_INPUT');
+ if(access.staff_role==='kitchen')where+=" AND status IN ('Aceptado','Preparando','Listo')";
+ else if(view==='active')where+=" AND status NOT IN ('Entregado','Cancelado','Rechazado')";
+ else if(view==='unrecorded'){
+  requireStaff(access.staff_role,['owner','manager','cashier']);
+  where+=" AND status='Entregado' AND NOT EXISTS(SELECT 1 FROM restaurant_sales s WHERE s.order_id=online_orders.id)";
+ }
+ else if(view==='history')where+=" AND status IN ('Entregado','Cancelado','Rechazado')";
  if(cursor){
   const found=/^([1-9]\d{0,11}):([0-9a-f-]{36})$/i.exec(cursor);
   if(!found)throw new ApiError(400,'INVALID_CURSOR');
@@ -80,7 +89,10 @@ export async function restaurantOrders(req,env,access,url){
    ORDER BY updated_at DESC,id DESC LIMIT 51`).bind(...args).all();
  const orders=results.slice(0,50);
  const end=orders.at(-1);
- return {orders:orders.map(x=>orderDto(x)),hasMore:results.length>50,
+ const publicOrders=access.staff_role==='kitchen'?orders.map(order=>({id:order.id,orderNumber:order.order_number,
+  status:order.status,version:order.version,deliveryMethod:order.delivery_method,flashGiftName:order.flash_gift_name,
+  createdAt:order.created_at,updatedAt:order.updated_at})):orders.map(order=>orderDto(order));
+ return {orders:publicOrders,hasMore:results.length>50,
    nextCursor:results.length>50&&end?`${end.updated_at}:${end.id}`:null,
    serverTime:new Date().toISOString()};
 }
@@ -90,7 +102,14 @@ export async function restaurantOrder(env,access,orderId){
  if(!order)throw new ApiError(404,'ORDER_NOT_FOUND');
  const {results=[]}=await env.DB.prepare(`SELECT name_snapshot,quantity,unit_price_minor,options_json,options_minor,line_total_minor+options_minor*quantity AS line_total_minor
    FROM online_order_items WHERE order_id=? ORDER BY id`).bind(order.id).all();
- return {order:{...orderDto(order,{includeAddress:true}),items:results}};
+ if(access.staff_role==='kitchen'){
+  if(!['Aceptado','Preparando','Listo'].includes(order.status))throw new ApiError(404,'ORDER_NOT_FOUND');
+  return {order:{id:order.id,orderNumber:order.order_number,status:order.status,
+   flashGiftName:order.flash_gift_name,note:order.customer_note,
+   items:results.map(({name_snapshot,quantity,options_json})=>({name_snapshot,quantity,
+    optionNames:JSON.parse(options_json).map(option=>option.name)}))}};
+ }
+ return {order:{...orderDto(order,{includeAddress:true}),note:order.customer_note,items:results}};
 }
 export async function changes(env,access,url){
  const since=url.searchParams.get('since')??'0';
@@ -253,7 +272,7 @@ export async function customerCreate(req,env,actor){
  requireRole(actor,'customer');
  if(env.ORDER_CREATION_ENABLED!=='true')throw new ApiError(503,'ORDER_CREATION_DISABLED');
  const body=await readJson(req,16384);
- requireKeys(body,['restaurantId','items','deliveryMethod','deliveryAddress','phone','expectedTotalMinor','coupon','flashId']);
+ requireKeys(body,['restaurantId','items','deliveryMethod','deliveryAddress','phone','expectedTotalMinor','coupon','flashId','note']);
  const phone=typeof body.phone==='string'?body.phone.replace(/[\s()-]/g,''):'';
  if(!/^\+504[0-9]{8}$/.test(phone))throw new ApiError(400,'PHONE_REQUIRED');
  const restaurantId=requireUuid(body.restaurantId,'restaurantId');
@@ -279,7 +298,8 @@ export async function customerCreate(req,env,actor){
  const flashId=body.flashId===undefined?undefined:requireUuid(body.flashId,'flashId');
  if(flashId&&coupon)throw new ApiError(400,'PROMOTIONS_EXCLUSIVE');
  if(flashId&&env.QA_FLASH!=='true')throw new ApiError(409,'FLASH_UNAVAILABLE');
- const intent={restaurantId,deliveryMethod,deliveryAddress,phone,items,expectedTotalMinor,coupon,flashId};
+ const note=body.note===undefined?undefined:requireText(body.note,0,300,'note')||undefined;
+ const intent={restaurantId,deliveryMethod,deliveryAddress,phone,items,expectedTotalMinor,coupon,flashId,note};
  const hash=await sha256(JSON.stringify(intent));
  const replay=async()=>{
   const prev=await env.DB.prepare(`SELECT c.request_hash,o.* FROM order_create_requests c
@@ -330,8 +350,8 @@ export async function customerCreate(req,env,actor){
  const id=crypto.randomUUID(),orderNumber='DV-'+id.replaceAll('-','').slice(0,12).toUpperCase();
  const stmts=[
   env.DB.prepare(`INSERT INTO online_orders(id,restaurant_id,customer_id,order_number,delivery_method,
-   delivery_address,status,version,subtotal_minor,delivery_fee_minor,total_minor,customer_phone_e164,coupon_code,discount_minor,flash_id,flash_gift_name) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-   .bind(id,restaurantId,actor.userId,orderNumber,deliveryMethod,deliveryAddress,'Pendiente',1,subtotal,fee,subtotal+fee,phone,coupon??null,discount,flashId??null,flash?.giftName??null),
+   delivery_address,status,version,subtotal_minor,delivery_fee_minor,total_minor,customer_phone_e164,coupon_code,discount_minor,flash_id,flash_gift_name,customer_note) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+   .bind(id,restaurantId,actor.userId,orderNumber,deliveryMethod,deliveryAddress,'Pendiente',1,subtotal,fee,subtotal+fee,phone,coupon??null,discount,flashId??null,flash?.giftName??null,note??''),
   ...resolved.map(p=>env.DB.prepare(`INSERT INTO online_order_items(id,order_id,product_id,name_snapshot,
     unit_price_minor,quantity,line_total_minor,options_json,options_minor) VALUES(?,?,?,?,?,?,?,?,?)`)
     .bind(crypto.randomUUID(),id,p.id,p.name,p.price_minor,p.quantity,p.price_minor*p.quantity,JSON.stringify(p.options),p.optionsMinor)),

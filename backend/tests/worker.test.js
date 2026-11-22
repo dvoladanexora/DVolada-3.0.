@@ -8,7 +8,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -856,4 +856,86 @@ test('Flash checkout enforces access, time, eligible product and limits, and rel
  assert.equal((await f.call('/api/v1/customer/orders/'+gifted.body.order.id)).body.order.flashGiftName,'Baleada');
  assert.equal((await f.call('/api/v1/admin/flash/'+gift.body.id,{by:'platformAdmin',method:'PATCH'})).status,200);
  assert.equal((await send('customer2',gift.body.id)).status,409);
+});
+
+test('restaurant settings, menu options, photos and staffing stay within the tenant',async()=>{
+ const f=await fixture(),[rid,other]=f.restaurants,[pid,otherProduct]=f.productIds;
+ const owner=await f.user('ownerA','customer',[rid,'owner']);
+ const kitchen=await f.user('kitchenA','customer',[rid,'kitchen']);
+ const workerName='kitchenA';
+ const ops=(path,method='GET',body,by='staffA',restaurantId=rid)=>
+  f.call('/api/v1/restaurant/'+path,{method,body,by,restaurantId});
+ const profile={description:'Menú de pruebas',address:'Dirección ficticia',latitude:14.1,longitude:-88.0,
+  hours:[['08:00','18:00'],null,null,null,null,null,null],paymentMethods:['cash','transfer']};
+ assert.equal((await ops('profile','PATCH',profile,workerName)).status,403);
+ assert.equal((await ops('profile','PATCH',profile,'staffA',other)).status,403);
+ assert.equal((await ops('profile','PATCH',profile)).status,200);
+ assert.deepEqual((await ops('profile')).body.profile,profile);
+ const publicMenu=await f.call('/api/v1/catalog/restaurants/'+rid+'/products');
+ assert.equal(publicMenu.body.restaurant.address,profile.address);
+ assert.equal((await ops('products','GET',undefined,workerName)).status,403);
+ assert.equal((await ops('products/'+pid,'PATCH',{category:'Bebidas'})).status,200);
+ const option={name:'Extra ficticio',kind:'extra',priceMinor:300,available:true};
+ assert.equal((await ops('products/'+otherProduct+'/options','POST',option)).status,404);
+ const extra=await ops('products/'+pid+'/options','POST',option);
+ assert.equal(extra.status,200);
+ assert.equal((await ops('products/'+pid+'/options/'+extra.body.id,'PATCH',{...option,available:false})).status,200);
+ assert.equal((await ops('products/'+pid+'/photo','POST',{base64:btoa('<svg>test</svg>')})).status,400);
+ const image='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aQ/cAAAAASUVORK5CYII=';
+ const photo=await ops('products/'+pid+'/photo','POST',{base64:image});
+ assert.equal(photo.status,200);
+ const res=await worker.fetch(new Request('https://api.example.test'+photo.body.photoUrl),f.env);
+ assert.equal(res.status,200);
+ assert.equal(res.headers.get('content-type'),'image/png');
+ assert.equal(Buffer.from(await res.arrayBuffer()).toString('base64'),image);
+ assert.equal((await ops('staff','PATCH',{userId:kitchen.id,role:'cashier',active:true})).status,403);
+ assert.equal((await ops('staff','PATCH',{userId:owner.id,role:'cashier',active:true},'ownerA')).status,400);
+ assert.equal((await ops('staff','PATCH',{userId:kitchen.id,role:'cashier',active:true},'ownerA')).status,200);
+ assert.equal((await ops('staff','PATCH',{userId:kitchen.id,role:'cashier',active:false},'ownerA')).status,200);
+ assert.equal((await ops('orders','GET',undefined,workerName)).status,403);
+});
+
+test('cash closes against recorded sales, preserves discounts and isolates orders and staff',async()=>{
+ const f=await fixture(),[rid,other]=f.restaurants;
+ await f.user('cashierA','customer',[rid,'cashier']);
+ await f.user('kitchenA','customer',[rid,'kitchen']);
+ const ops=(path,body,by='cashierA',restaurantId=rid,key=randomUUID())=>
+  f.call('/api/v1/restaurant/'+path,{method:body?'POST':'GET',body,key,by,restaurantId});
+ const openKey=randomUUID();
+ const start=await ops('cash/open',{openingMinor:1000},'cashierA',rid,openKey);
+ assert.equal(start.status,200);
+ const shiftId=start.body.shift.id;
+ assert.equal((await ops('cash/open',{openingMinor:1000},'cashierA',rid,openKey)).body.shift.id,shiftId);
+ assert.equal((await ops('cash/open',{openingMinor:1000})).status,409);
+ assert.equal((await ops('cash/open',{openingMinor:1000},'kitchenA')).status,403);
+ const [productId]=f.productIds;
+ const order=(await f.call('/api/v1/customer/orders',{method:'POST',key:randomUUID(),body:{restaurantId:rid,items:[{productId,quantity:1}],
+  deliveryMethod:'pickup',phone:'+50400000003',note:'Sin hielo, prueba QA'}})).body.order;
+ assert.equal((await ops('orders/'+order.id,undefined,'kitchenA')).status,404);
+ const charge={shiftId,orderId:order.id,method:'cash'};
+ assert.equal((await ops('cash/sale',charge)).status,409);
+ assert.equal((await f.status(order.id,'staffA','Aceptado',1)).status,200);
+ const ticket=(await ops('orders/'+order.id,undefined,'kitchenA')).body.order;
+ assert.equal(ticket.note,'Sin hielo, prueba QA');
+ assert.equal(ticket.deliveryAddress,undefined);
+ assert.equal(ticket.totalMinor,undefined);
+ assert.equal((await f.status(order.id,'kitchenA','Preparando',2)).status,200);
+ assert.equal((await f.status(order.id,'kitchenA','Listo',3)).status,200);
+ assert.equal((await f.status(order.id,'staffA','Entregado',4)).status,200);
+ assert.equal((await ops('cash/sale',charge,'staffB',other)).status,409);
+ assert.equal((await ops('cash/sale',{...charge,method:'transfer'})).status,409);
+ const first=await ops('cash/sale',charge);
+ assert.equal(first.status,200);
+ assert.equal(first.body.sale.total_minor,10050);
+ assert.equal((await ops('cash/sale',charge)).body.sale.order_id,order.id);
+ const closeKey=randomUUID(),close={shiftId,countedMinor:11050};
+ assert.equal((await ops('cash/close',close,'cashierA',rid,closeKey)).body.shift.expected_cash_minor,11050);
+ assert.equal((await ops('cash/close',close,'cashierA',rid,closeKey)).status,200);
+ assert.equal((await ops('cash/close',close)).status,409);
+ const now=Math.floor(Date.now()/1000);
+ const report=await ops('report?from='+(now-120)+'&until='+(now+120));
+ assert.equal(report.body.totals[0].orders,1);
+ assert.equal(report.body.sales[0].total_minor,10050);
+ assert.equal((await ops('report?from='+(now-120)+'&until='+(now+120),undefined,'staffB',other)).body.sales.length,0);
+ assert.equal((await ops('cash')).body.history[0].id,shiftId);
 });

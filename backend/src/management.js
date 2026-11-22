@@ -82,14 +82,14 @@ export async function enrollCourier(req,env,actor){
 }
 export async function createProduct(req,env,actor,access){
  requireStaff(access.staff_role,['owner','manager']);
- const body=await readJson(req);requireKeys(body,['name','priceMinor','available']);
+ const body=await readJson(req);requireKeys(body,['name','priceMinor','available','category']);
  const name=requireText(body.name,2,150,'name'),price=countMinor(body.priceMinor);
  if(body.available!==undefined&&typeof body.available!=='boolean')throw new ApiError(400,'INVALID_INPUT');
  const available=body.available===false?0:1;
- const id=crypto.randomUUID();
+ const id=crypto.randomUUID(),category=body.category===undefined?'':requireText(body.category,0,60,'category');
  await env.DB.batch([
-  env.DB.prepare('INSERT INTO products(id,restaurant_id,name,price_minor,available) VALUES(?,?,?,?,?)')
-   .bind(id,access.restaurantId,name,price,available),
+  env.DB.prepare('INSERT INTO products(id,restaurant_id,name,price_minor,available,category) VALUES(?,?,?,?,?,?)')
+   .bind(id,access.restaurantId,name,price,available,category),
   env.DB.prepare(`INSERT INTO restaurant_audit(restaurant_id,actor_id,product_id,action)
    VALUES(?,?,?,'product_created')`).bind(access.restaurantId,actor.userId,id)
  ]);
@@ -101,16 +101,17 @@ export async function updateProduct(req,env,actor,access,productId){
  const current=await env.DB.prepare('SELECT id,name,price_minor,available FROM products WHERE id=? AND restaurant_id=?')
   .bind(id,access.restaurantId).first();
  if(!current)throw new ApiError(404,'PRODUCT_NOT_FOUND');
- const body=await readJson(req);requireKeys(body,['name','priceMinor','available']);
+ const body=await readJson(req);requireKeys(body,['name','priceMinor','available','category']);
  if(!Object.keys(body).length)throw new ApiError(400,'INVALID_BODY');
  const name=body.name===undefined?null:requireText(body.name,2,150,'name');
  const price=body.priceMinor===undefined?null:countMinor(body.priceMinor);
  if(body.available!==undefined&&typeof body.available!=='boolean')throw new ApiError(400,'INVALID_INPUT');
  const available=body.available===undefined?null:body.available?1:0;
+ const category=body.category===undefined?null:requireText(body.category,0,60,'category');
  await env.DB.batch([
   env.DB.prepare(`UPDATE products SET name=COALESCE(?,name),price_minor=COALESCE(?,price_minor),
-   available=COALESCE(?,available) WHERE id=? AND restaurant_id=?`)
-   .bind(name,price,available,id,access.restaurantId),
+   available=COALESCE(?,available),category=COALESCE(?,category) WHERE id=? AND restaurant_id=?`)
+   .bind(name,price,available,category,id,access.restaurantId),
   env.DB.prepare(`INSERT INTO restaurant_audit(restaurant_id,actor_id,product_id,action)
    VALUES(?,?,?,'product_updated')`).bind(access.restaurantId,actor.userId,id)
  ]);

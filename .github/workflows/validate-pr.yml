@@ -126,7 +126,7 @@ jobs:
         run: node --experimental-sqlite --test backend/tests/worker.test.js
       - name: Construir artefacto canónico de Dvolada Online
         env:
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          DVOLADA_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: bash scripts/build-online-release.sh
       - name: Conservar el artefacto probado y su huella
         uses: actions/upload-artifact@v4

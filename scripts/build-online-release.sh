@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 release_sha="$(git rev-parse HEAD)"
-if [[ -n "${GITHUB_SHA:-}" && "$GITHUB_SHA" != "$release_sha" ]]; then
+if [[ -n "${DVOLADA_RELEASE_SHA:-}" && "$DVOLADA_RELEASE_SHA" != "$release_sha" ]]; then
   echo "Checkout SHA does not match the requested release" >&2
   exit 1
 fi

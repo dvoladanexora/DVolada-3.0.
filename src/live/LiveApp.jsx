@@ -5,6 +5,8 @@ import {createLiveApi,LiveApiError} from './live-api.js';
 import './live.css';
 import { enableQaPush, disableQaPush } from './onesignal-push.js';
 import {applyDvoladaTheme} from '../theme-policy.js';
+import ClientAccess,{ClientCodes} from './ClientAccess.jsx';
+import ClientSupport from './ClientSupport.jsx';
 import CatalogSearch from './CatalogSearch.jsx';
 import {readCart,writeCart,updateQuantity} from './cart-draft.js';
 
@@ -39,6 +41,7 @@ function errorLabel(error){
   PIN_LOCKED:'Demasiados intentos. Se requiere intervención autorizada.',
   FIREBASE_IDENTITY_UNVERIFIED:'Verificá tu correo antes de ingresar.',
   FIREBASE_NOT_CONFIGURED:'Todavía no se configuró Firebase para Dvolada.',
+  CLIENT_CODE_INVALID:'La clave o el código no es válido.',
   LOGIN_RATE_LIMITED:'Demasiados intentos de acceso. Intentá más tarde.'
  };
  return lookup[error.code]||error.code||'Error de conexión';
@@ -52,6 +55,9 @@ function OrderCard({order,children}){
 export default function LiveApp(){
  const sessionRef=useRef(null),alive=useRef(true),checkoutInFlight=useRef(false),menuRequest=useRef(0);
  const [pushConfig,setPushConfig]=useState(null),[pushEnabled,setPushEnabled]=useState(false);
+ const [accountEnabled,setAccountEnabled]=useState(false),[accessReady,setAccessReady]=useState(false);
+ const [newCodes,setNewCodes]=useState(null),[support,setSupport]=useState(null);
+ const [favoriteIds,setFavoriteIds]=useState([]),[onlyFavorites,setOnlyFavorites]=useState(false);
  const [session,setSession]=useState(null),[accessCode,setAccessCode]=useState('');
  const [status,setStatus]=useState(''),[error,setError]=useState(''),[refreshWarning,setRefreshWarning]=useState('');
  const [scope,setScope]=useState('customer'),[restaurants,setRestaurants]=useState([]),[products,setProducts]=useState([]);
@@ -86,12 +92,14 @@ export default function LiveApp(){
  const configured=Boolean(apiOrigin);
  const api=useMemo(()=>{
   if(!configured)return null;
-  try{return createLiveApi({baseUrl:apiOrigin,getSessionToken:()=>sessionRef.current?.sessionToken})}
+  try{return createLiveApi({baseUrl:apiOrigin,getSessionToken:()=>sessionRef.current?.sessionToken,
+   getClientAccount:()=>sessionRef.current?.clientAccount})}
   catch{return null}
  },[configured]);
 
  const endLocalSession=useCallback(()=>{
   sessionRef.current=null;menuRequest.current++;
+  setNewCodes(null);setSupport(null);setFavoriteIds([]);setOnlyFavorites(false);
   setSession(null);setScope('customer');setSelectedRestaurantId('');
   setOrders([]);setOrderDetail(null);setManageProducts([]);setRestaurantCapabilities(null);
   setCouriers([]);setCourierChoice({});setAdminStats(null);setAdminRestaurants([]);
@@ -103,6 +111,36 @@ export default function LiveApp(){
   setSelectedPin(null);setPinEntry('');setPhone('');setDeliveryAddress('');
   setPushEnabled(false);setRefreshWarning('');setStatus('');
  },[]);
+ const openSession=useCallback((me,clientAccount=false)=>{
+  if(clientAccount)sessionRef.current={clientAccount:me.user.id};
+  const first=me.restaurants?.[0]?.restaurant_id||'';
+  setSelectedRestaurantId(first);
+  setScope(me.user.role==='platform_admin'?'admin':me.user.role==='courier'?'courier':first?'restaurant':'customer');
+  if(me.user.role==='customer'&&!first){
+   const draft=readCart(me.user.id);
+   setCart(draft.items);setCartRestaurantId(draft.restaurantId);setPendingKey(draft.pendingKey);
+  }
+  setSession(me);
+ },[]);
+ useEffect(()=>{
+  if(!api||offline||accessReady)return;
+  let active=true;
+  async function restore(){
+   try{
+    const config=await api.clientAccess();
+    if(!active)return;
+    setAccountEnabled(config.enabled);
+    if(config.enabled){
+     const me=await api.me(true);
+     if(active&&!sessionRef.current)openSession(me,true);
+    }
+   }catch(error){
+    if(active&&error.status!==401)setError(errorLabel(error));
+   }finally{if(active)setAccessReady(true)}
+  }
+  restore();
+  return()=>{active=false};
+ },[api,offline,accessReady,openSession]);
  const handleSessionError=useCallback(error=>{
   if(!(error instanceof LiveApiError)||error.status!==401)return false;
   endLocalSession();
@@ -164,6 +202,29 @@ export default function LiveApp(){
   return()=>{live=false;clearInterval(timer)};
  },[session,api,scope,selectedRestaurantId,load,busy,offline,handleSessionError]);
 
+ useEffect(()=>{
+  if(!cartAccount||offline)return;
+  let active=true;
+  api.favorites().then(data=>{if(active)setFavoriteIds(data.ids)})
+   .catch(error=>{if(active&&!handleSessionError(error))setError(errorLabel(error))});
+  return()=>{active=false};
+ },[api,cartAccount,offline,handleSessionError]);
+
+ async function toggleFavorite(id){
+  const result=await run(()=>api.setFavorite(id,!favoriteIds.includes(id)),{refresh:false});
+  if(result)setFavoriteIds(ids=>result.favorite?[...new Set([...ids,id])]:ids.filter(item=>item!==id));
+ }
+ async function authenticateClient(mode,body){
+  if(busy||offline||!accessReady)return;
+  setBusy(true);setError('');
+  try{
+   const codes=await api.clientAuthenticate(mode,body);
+   if(codes.access)setNewCodes(codes);
+   const me=await api.me(true);
+   openSession(me,true);
+  }catch(error){setError(errorLabel(error))}
+  finally{setBusy(false)}
+ }
  async function run(fn,{refresh=true}={}){
   if(busy||offline)return;
   setBusy(true);setError('');setRefreshWarning('');
@@ -187,14 +248,7 @@ export default function LiveApp(){
   try{
    sessionRef.current={sessionToken:token};
    const me=await api.me();
-   const first=me.restaurants?.[0]?.restaurant_id||'';
-   setSelectedRestaurantId(first);
-   setScope(me.user.role==='platform_admin'?'admin':me.user.role==='courier'?'courier':first?'restaurant':'customer');
-   if(me.user.role==='customer'&&!first){
-    const draft=readCart(me.user.id);
-    setCart(draft.items);setCartRestaurantId(draft.restaurantId);setPendingKey(draft.pendingKey);
-   }
-   setSession(me);
+   openSession(me);
   }catch(error){
    sessionRef.current=null;
    setError(errorLabel(error));
@@ -232,10 +286,10 @@ export default function LiveApp(){
     try{await disableQaPush(pushConfig)}catch{pushFailure=true}
     setPushEnabled(false);
    }
-   if(sessionRef.current)await api.logout().catch(()=>{});
+   if(sessionRef.current)await api.logout();
    endLocalSession();
    if(pushFailure)setStatus('Sesión cerrada. Revisá el permiso de notificaciones de este sitio en el navegador.');
-  }catch(e){setError(errorLabel(e))}
+  }catch(e){if(!handleSessionError(e))setError(errorLabel(e))}
   finally{setBusy(false)}
  }
  async function viewProducts(restaurantId){
@@ -356,7 +410,7 @@ export default function LiveApp(){
  const formattedUserId=session?.user?.id||'';
  return <div className="dvl-app">
   <header className="dvl-header"><div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada" /><div><strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
-   <div className="dvl-head-actions"><label className="dvl-theme">Tema<select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy} onClick={logout}><LogOut size={15}/> Salir</Action>}</div></header>
+   <div className="dvl-head-actions"><label className="dvl-theme">Tema<select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy||offline} onClick={logout}><LogOut size={15}/> Salir</Action>}</div></header>
   <main className="dvl-main">
   <div className="dvl-intro"><span className="dvl-kicker">NEXORA SYSTEMS · DVOLADA ONLINE</span>
    <h1>{session?(scope==='restaurant'&&selectedBusiness?.staff_role==='kitchen'?'Cocina':roles[scope]):'Dvolada · Entorno de pruebas'}</h1>
@@ -367,7 +421,10 @@ export default function LiveApp(){
   <WaitOrError message={refreshWarning}/>
   {session&&<div className="dvl-id-note"><span>ID de vinculación: <code>{formattedUserId}</code></span><Action kind="text"
    onClick={()=>navigator.clipboard?.writeText(formattedUserId).catch(()=>{})}>Copiar</Action></div>}
-  {!session&&<form className="dvl-panel dvl-login" onSubmit={signIn}>
+  <ClientCodes codes={newCodes} close={()=>setNewCodes(null)}/>
+  {!session&&!accessReady&&!offline&&<p role="status">Verificando acceso…</p>}
+  {!session&&accountEnabled&&<ClientAccess authenticate={authenticateClient} busy={busy} offline={offline}/>}
+  {!session&&(accessReady||offline)&&<form className="dvl-panel dvl-login" onSubmit={signIn}>
    <h2>Ingresá con tu acceso de pruebas</h2>
    <label>Código de acceso<input type="password" autoComplete="off" value={accessCode}
     onChange={e=>setAccessCode(e.target.value)} required /></label>
@@ -383,12 +440,19 @@ export default function LiveApp(){
      <Action kind="secondary" disabled={busy||offline} onClick={()=>setQaPush(false)}>Desactivar notificaciones</Action>
     </>}
    </nav>
+    {support&&orders.some(order=>order.id===support.id)&&<ClientSupport key={support.id+support.mode}
+     mode={support.mode} counterpart={scope!=='customer'} order={orders.find(order=>order.id===support.id)} api={api} offline={offline}
+     close={()=>setSupport(null)} onSessionError={handleSessionError}/>}
    {scope==='customer'&&<div className="dvl-columns">
     <section className="dvl-panel"><h2>Restaurantes afiliados</h2>
      {!shoppingRestaurant?<div className="dvl-stack">
+      <label className="dvl-favorite-filter"><input type="checkbox" checked={onlyFavorites} onChange={event=>setOnlyFavorites(event.target.checked)}/> Solo mis favoritos</label>
       <CatalogSearch api={api} offline={offline} term={catalogTerm} onChange={setCatalogTerm} openRestaurant={viewProducts} money={price}/>
-      {restaurants.filter(r=>r.name.toLowerCase().includes(catalogTerm.trim().toLowerCase())).map(r=><div className="dvl-row" key={r.id}><div><strong>{r.name}</strong><small>{r.online_state==='open'?'Aceptando pedidos':'En pausa'}</small></div>
-      <Action disabled={offline||r.online_state!=='open'} kind="secondary" onClick={()=>viewProducts(r.id)}>Ver menú</Action></div>)}
+      {restaurants.filter(r=>(!onlyFavorites||favoriteIds.includes(r.id))&&r.name.toLowerCase().includes(catalogTerm.trim().toLowerCase())).map(r=><div className="dvl-row" key={r.id}><div><strong>{r.name}</strong><small>{r.online_state==='open'?'Aceptando pedidos':'En pausa'}</small></div>
+      <div className="dvl-inline dvl-client-modes">
+      <button className="dvl-action secondary" type="button" disabled={busy||offline} aria-pressed={favoriteIds.includes(r.id)}
+       onClick={()=>toggleFavorite(r.id)}>{favoriteIds.includes(r.id)?'Quitar favorito':'Guardar favorito'}</button>
+      <Action disabled={offline||r.online_state!=='open'} kind="secondary" onClick={()=>viewProducts(r.id)}>Ver menú</Action></div></div>)}
       {!restaurants.length&&<p>Próximamente encontrarás los restaurantes afiliados aquí.</p>}</div>:
       <><Action kind="text" onClick={()=>{menuRequest.current++;setShoppingRestaurant('');setProducts([])}}>Volver a restaurantes</Action>
        {cart.length>0&&<a className="dvl-cart-link" href="#carrito">Volver al carrito</a>}
@@ -404,6 +468,10 @@ export default function LiveApp(){
        <Action kind="secondary" onClick={()=>setReplaceCart(null)}>Conservar carrito</Action>
       </div>
      </div>}
+     {!cart.length&&readCart('guest').items.length>0&&<Action kind="secondary" disabled={busy||offline} onClick={()=>{
+      const draft=readCart('guest');
+      if(draft.items.length){putCart(draft.restaurantId,draft.items);writeCart('guest',{items:[]})}
+     }}>Usar carrito de invitado</Action>}
      {!cart.length?<p>Seleccioná un restaurante y agregá productos.</p>:<><div className="dvl-stack">
       {cart.map(p=><div className="dvl-row" key={p.productId}><div><strong>{p.name}</strong><small>{p.quantity} × {price(p.priceMinor)}</small></div>
        <Action kind="secondary" disabled={busy||Boolean(pendingKey)} onClick={()=>removeProduct(p.productId)}>Quitar uno</Action></div>)}</div>
@@ -426,6 +494,10 @@ export default function LiveApp(){
     <section className="dvl-panel dvl-span"><h2>Mis pedidos</h2>
       {orders.length?<div className="dvl-grid">{orders.map(o=><OrderCard key={o.id} order={o}>
       <Action kind="secondary" disabled={busy||offline} onClick={()=>showCustomerOrder(o)}>Ver detalle / PIN</Action>
+      <Action kind="secondary" disabled={offline} onClick={()=>setSupport({id:o.id,mode:'restaurant'})}>Chat con restaurante</Action>
+      {o.courierResponse==='accepted'&&<Action kind="secondary" disabled={offline}
+       onClick={()=>setSupport({id:o.id,mode:'courier'})}>Chat con repartidor</Action>}
+      <Action kind="text" disabled={offline} onClick={()=>setSupport({id:o.id,mode:'claim'})}>Reclamo</Action>
       {o.status==='Entregado'&&<Action kind="text" disabled={busy||offline||Boolean(pendingKey)} onClick={()=>reorder(o)}>Volvé a pedir</Action>}
       {o.status==='Pendiente'&&<Action kind="text" disabled={busy||offline} onClick={()=>action(()=>api.cancelOrder(o,newKey()))}>Cancelar pedido</Action>}
       </OrderCard>)}</div>:<p>Tus pedidos confirmados aparecerán aquí.</p>}
@@ -437,7 +509,7 @@ export default function LiveApp(){
    </div>}
    {scope==='restaurant'&&<div className="dvl-stack">
     <section className="dvl-panel"><div className="dvl-row"><h2>Centro de pedidos</h2><label>Negocio<select value={selectedRestaurantId}
-     onChange={e=>{setOrderDetail(null);setOrders([]);setManageProducts([]);setRestaurantCapabilities(null);setCouriers([]);setEditPrices({});setCourierChoice({});setSelectedRestaurantId(e.target.value)}}>{session.restaurants?.map(r=><option key={r.restaurant_id} value={r.restaurant_id}>{r.name}</option>)}</select></label></div>
+     onChange={e=>{setOrderDetail(null);setSupport(null);setOrders([]);setManageProducts([]);setRestaurantCapabilities(null);setCouriers([]);setEditPrices({});setCourierChoice({});setSelectedRestaurantId(e.target.value)}}>{session.restaurants?.map(r=><option key={r.restaurant_id} value={r.restaurant_id}>{r.name}</option>)}</select></label></div>
      <p className="dvl-muted">Solo los empleados autorizados pueden cambiar estados; los cambios simultáneos generan conflicto.</p>
     </section>
     {canManage&&<section className="dvl-panel"><h2>Menú y disponibilidad</h2>
@@ -472,6 +544,7 @@ export default function LiveApp(){
     </section>}
     <div className="dvl-grid">{orders.map(o=><OrderCard key={o.id} order={o}>
       <Action kind="secondary" disabled={busy||offline} onClick={()=>showRestaurantOrder(o)}>Ver comanda</Action>
+      {canManage&&<Action kind="secondary" disabled={offline} onClick={()=>setSupport({id:o.id,mode:'restaurant'})}>Chat con cliente</Action>}
       {orderDetail?.orderId===o.id&&orderDetail.restaurantId===selectedRestaurantId&&<>
        <ul aria-label="Artículos de la comanda">{orderDetail.items.map((item,index)=><li key={index}>{item.quantity} × {item.name_snapshot}</li>)}</ul>
        <Action kind="secondary" onClick={()=>window.print()}>Imprimir comanda</Action>
@@ -493,6 +566,8 @@ export default function LiveApp(){
    {scope==='courier'&&<div className="dvl-stack"><section className="dvl-panel"><h2>Mis entregas</h2>
     <p className="dvl-muted">Máximo dos pedidos activos. La confirmación final exige el PIN del cliente.</p></section>
     <div className="dvl-grid">{orders.map(o=><OrderCard key={o.id} order={o}>
+      {o.courierResponse==='accepted'&&<Action kind="secondary" disabled={offline}
+       onClick={()=>setSupport({id:o.id,mode:'courier'})}>Chat con cliente</Action>}
       <p>{o.deliveryAddress||(o.courierResponse==='offered'?'La dirección se muestra al aceptar el pedido.':'Dirección por confirmar')}</p>
       {o.courierResponse==='offered'&&<div className="dvl-inline">
        <Action disabled={busy||offline} onClick={()=>action(()=>api.courierOffer(o,'accept',newKey()))}>Aceptar pedido</Action>

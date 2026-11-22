@@ -8,7 +8,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -645,4 +645,93 @@ test('changing a delivery fee preserves a concurrently updated subscription',asy
  assert.equal(response.body.restaurant.delivery_fee_minor,950);
  assert.equal(response.body.restaurant.subscription_status,'inactive');
  assert.equal(response.body.restaurant.online_state,'closed');
+});
+
+test('QA registration, cookie persistence, logout and one-use recovery', async()=>{
+ const f=await fixture();
+ const origin='https://dvolada-qa.dvoladanexora.workers.dev';
+ f.env.CORS_ORIGINS=origin;
+ async function request(path,{method='GET',body,cookie,account,source=origin,url=origin}={}){
+  const headers={Origin:source};
+  if(body)headers['Content-Type']='application/json';
+  if(cookie)headers.Cookie=cookie;
+  if(account)headers['X-Client-Account']=account;
+  return worker.fetch(new Request(url+path,{method,headers,body:body?JSON.stringify(body):undefined}),f.env);
+ }
+ const auth=(action,body,options)=>request('/api/v1/auth/client/'+action,{method:'POST',body,...options});
+ assert.equal((await auth('register',{displayName:'Cliente ficticio'})).status,404);
+ f.env.QA_CLIENT_ACCESS='true';
+ assert.equal((await auth('register',{displayName:'Cliente ficticio'},{url:'https://other.example'})).status,404);
+ assert.equal((await auth('register',{displayName:'Cliente ficticio',role:'platform_admin'})).status,400);
+ const register=await auth('register',{displayName:'Cliente ficticio'});
+ assert.equal(register.status,201);
+ assert.match(register.headers.get('set-cookie'),/Path=\/; Secure; HttpOnly; SameSite=Strict/);
+ const cookie=register.headers.get('set-cookie').split(';')[0];
+ const codes=await register.json();
+ assert.notEqual(codes.access,codes.recovery);
+ const me=await request('/api/v1/auth/me',{cookie}).then(response=>response.json());
+ assert.equal(me.user.role,'customer');
+ assert.deepEqual(me.restaurants,[]);
+ assert.equal((await request('/api/v1/customer/orders',{cookie,account:me.user.id})).status,200);
+ assert.equal((await request('/api/v1/customer/orders',{cookie,account:f.tokens.customer.id})).status,401);
+ const credential=f.DB.db.prepare('SELECT * FROM client_credentials WHERE user_id=?').get(me.user.id);
+ assert.notEqual(credential.access_hash,codes.access);
+ assert.notEqual(credential.recovery_hash,codes.recovery);
+ const reopened=await auth('login',{code:codes.access});
+ assert.equal(reopened.status,204);
+ const oldCookie=reopened.headers.get('set-cookie').split(';')[0];
+ const recovered=await auth('recover',{code:codes.recovery});
+ assert.equal(recovered.status,200);
+ const replacement=await recovered.json();
+ const newCookie=recovered.headers.get('set-cookie').split(';')[0];
+ assert.notEqual(replacement.access,codes.access);
+ assert.equal((await auth('recover',{code:codes.recovery})).status,401);
+ assert.equal((await auth('login',{code:codes.access})).status,401);
+ assert.equal((await request('/api/v1/auth/me',{cookie:oldCookie})).status,401);
+ assert.equal((await request('/api/v1/auth/me',{cookie})).status,401);
+ const unauthorised=await request('/api/v1/auth/logout',{method:'POST',cookie:newCookie,account:me.user.id,source:'https://other.example'});
+ assert.equal(unauthorised.status,403);
+ const logout=await request('/api/v1/auth/logout',{method:'POST',cookie:newCookie,account:me.user.id});
+ assert.equal(logout.status,204);
+ assert.match(logout.headers.get('set-cookie'),/Max-Age=0/);
+ assert.equal((await request('/api/v1/auth/me',{cookie:newCookie})).status,401);
+ const login=await auth('login',{code:replacement.access});
+ assert.equal(login.status,204);
+ f.DB.db.prepare('UPDATE auth_sessions SET expires_at=0 WHERE user_id=?').run(me.user.id);
+ assert.equal((await request('/api/v1/auth/me',{cookie:login.headers.get('set-cookie').split(';')[0]})).status,401);
+});
+
+test('favorites are private and support follows the customer and authorised order participants',async()=>{
+ const f=await fixture();
+ const id=f.restaurants[0];
+ let result=await f.call('/api/v1/customer/favorites/'+id,{method:'PATCH',body:{favorite:true}});
+ assert.equal(result.body.favorite,true);
+ assert.deepEqual((await f.call('/api/v1/customer/favorites')).body.ids,[id]);
+ assert.deepEqual((await f.call('/api/v1/customer/favorites',{by:'customer2'})).body.ids,[]);
+ const order=(await f.create()).body.order;
+ const endpoint='/api/v1/orders/'+order.id;
+ const chat=endpoint+'/chat/restaurant';
+ const key=randomUUID(),body={message:'Consulta ficticia de QA'};
+ assert.equal((await f.call(chat,{method:'POST',key,body})).status,200);
+ assert.equal((await f.call(chat,{method:'POST',key,body})).body.messages.length,1);
+ assert.equal((await f.call(chat,{by:'customer2'})).status,404);
+ assert.equal((await f.call(chat,{by:'staffB'})).status,404);
+ assert.equal((await f.call(chat,{by:'staffA'})).body.messages[0].body,body.message);
+ assert.equal((await f.call(endpoint+'/chat/courier')).status,404);
+ assert.equal((await f.status(order.id,'staffA','Aceptado',1)).status,200);
+ assert.equal((await f.call('/api/v1/restaurant/orders/'+order.id+'/assign',{by:'staffA',method:'PATCH',restaurantId:id,key:randomUUID(),body:{courierId:f.tokens.courier.id,expectedVersion:2}})).status,200);
+ assert.equal((await f.call(endpoint+'/chat/courier',{by:'courier'})).status,404);
+ const acceptance=await f.call('/api/v1/courier/orders/'+order.id+'/offer',{by:'courier',method:'POST',key:randomUUID(),body:{action:'accept',expectedVersion:3}});
+ assert.equal(acceptance.status,200);
+ assert.equal((await f.call(endpoint+'/chat/courier',{by:'courier',method:'POST',key:randomUUID(),body})).status,200);
+ assert.equal((await f.call(endpoint+'/chat/courier')).body.messages[0].body,body.message);
+ assert.equal((await f.call(endpoint+'/chat/courier',{by:'staffA'})).status,404);
+ const claim=endpoint+'/claim';
+ const input={category:'pedido',message:'Detalle ficticio de QA'};
+ assert.equal((await f.call(claim,{method:'POST',body:input})).body.claim.status,'open');
+ assert.equal((await f.call(claim,{method:'POST',body:input})).status,200);
+ assert.equal((await f.call(claim,{by:'customer2'})).status,404);
+ assert.equal((await f.call(claim,{method:'PATCH',body:{status:'review'}})).status,403);
+ assert.equal((await f.call(claim,{by:'platformAdmin',method:'PATCH',body:{status:'resolved',resolution:'Resolución ficticia'}})).body.claim.status,'resolved');
+ assert.equal((await f.call(claim)).body.claim.status,'resolved');
 });

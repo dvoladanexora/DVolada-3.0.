@@ -82,3 +82,13 @@
  .dvl-print-sheet{display:block;padding:8mm;font:12pt system-ui,sans-serif;color:black;background:white}
  .dvl-print-sheet li{margin:2mm 0;break-inside:avoid}
 }
+
+.dvl-client-modes{flex-wrap:wrap}
+.dvl-code-panel{max-width:36rem;margin:0 auto 1rem}
+.dvl-code-panel label{margin-bottom:.75rem}
+.dvl-code-panel input{font-family:monospace}
+.dvl-panel .dvl-favorite-filter{display:flex;flex-direction:row;align-items:center;min-height:44px}
+.dvl-favorite-filter input[type=checkbox]{width:auto;accent-color:var(--accent,#f66c32)}
+.dvl-client-support{grid-column:1/-1;position:sticky;bottom:1rem;z-index:5;max-height:65vh;overflow-y:auto;overscroll-behavior:contain}
+.dvl-chat-log{display:grid;gap:.5rem;list-style:none;padding:0;max-height:24vh;overflow:auto;overflow-wrap:anywhere}
+.dvl-client-support{position:fixed;right:1rem;bottom:max(1rem,env(safe-area-inset-bottom));width:min(28rem,calc(100% - 2rem));z-index:32;background:var(--surface,#fff);box-shadow:0 10px 35px #0003}

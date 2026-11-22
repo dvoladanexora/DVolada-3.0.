@@ -11,6 +11,9 @@ import { issueQaPushIdentity } from './qa-push-identity.js';
 import {createRestaurant,updateRestaurant,assignMember,enrollCourier,createProduct,
  updateProduct,updateAvailability} from './management.js';
 
+import {clientAuth,clientAccessEnabled,readClientCookie,changeClientCookie} from './client-access.js';
+import {favorites,clientProfile,conversation,orderClaim} from './client-workspace.js';
+
 async function route(req,env){
  assertConfiguration(env);
  assertAllowedOrigin(req,env);
@@ -50,13 +53,29 @@ async function route(req,env){
     FROM products WHERE restaurant_id=? AND available=1 ORDER BY name,id LIMIT 150`).bind(id).all();
   return respond(req,env,200,{restaurant:rest,products:results});
  }
+ const access=/^\/api\/v1\/auth\/client\/(register|login|recover)$/.exec(path);
+ if(method==='POST'&&access)return clientAuth(req,env,access[1]);
+ if(method==='GET'&&path==='/api/v1/auth/client/config')
+  return respond(req,env,200,{enabled:clientAccessEnabled(req,env)});
+ const token=!req.headers.has('authorization')&&readClientCookie(req,env);
+ if(token){
+  if(!/^\/api\/v1\/(customer\/|orders\/|auth\/(me|logout)$)/.test(path))
+   throw new ApiError(403,'ROLE_FORBIDDEN');
+  if(method!=='GET'&&req.headers.get('origin')!==url.origin)throw new ApiError(403,'ORIGIN_FORBIDDEN');
+  const headers=new Headers(req.headers);
+  headers.set('authorization','Bearer '+token);
+  req=new Request(req,{headers});
+ }
  const actor=await identity(req,env);
+ if(token&&(actor.role!=='customer'||(path!=='/api/v1/auth/me'&&req.headers.get('x-client-account')!==actor.userId)))
+  throw new ApiError(401,'SESSION_INVALID');
+
  if(['POST','PATCH'].includes(method))await mutationRateLimit(env,actor);
  if(method==='POST'&&path==='/api/v1/push/identity'){
   return respond(req,env,200,await issueQaPushIdentity(req,env,actor));
  }
  if(method==='GET'&&path==='/api/v1/auth/me'){
-  const {results=[]}=await env.DB.prepare(`SELECT m.restaurant_id,m.staff_role,r.name
+  const {results=[]}=token?{}:await env.DB.prepare(`SELECT m.restaurant_id,m.staff_role,r.name
     FROM restaurant_memberships m JOIN restaurants r ON r.id=m.restaurant_id
     WHERE m.user_id=? AND m.active=1 ORDER BY r.name LIMIT 50`).bind(actor.userId).all();
   return respond(req,env,200,{user:{id:actor.userId,displayName:actor.displayName,
@@ -65,8 +84,16 @@ async function route(req,env){
  if(method==='POST'&&path==='/api/v1/auth/logout'){
   await env.DB.prepare('UPDATE auth_sessions SET revoked_at=? WHERE id=? AND revoked_at IS NULL')
    .bind(Math.floor(Date.now()/1000),actor.sessionId).run();
-  return respond(req,env,204);
+  return changeClientCookie(respond(req,env,204),'');
  }
+ const thread=/^\/api\/v1\/orders\/([0-9a-f-]+)\/chat\/(restaurant|courier)$/i.exec(path);
+ if(thread&&['GET','POST'].includes(method))return conversation(req,env,actor,thread[1],thread[2],Boolean(token));
+ const claim=/^\/api\/v1\/orders\/([0-9a-f-]+)\/claim$/i.exec(path);
+ if(claim&&['GET','POST','PATCH'].includes(method))return orderClaim(req,env,actor,claim[1]);
+ const favorite=/^\/api\/v1\/customer\/favorites\/([0-9a-f-]+)$/i.exec(path);
+ if(path==='/api/v1/customer/favorites'&&method==='GET'||favorite&&method==='PATCH')
+  return favorites(req,env,actor,favorite?.[1]);
+ if(path==='/api/v1/customer/profile'&&['GET','PATCH'].includes(method))return clientProfile(req,env,actor);
  if(method==='GET'&&path==='/api/v1/admin/overview'){
   if(actor.role!=='platform_admin')throw new ApiError(403,'ROLE_FORBIDDEN');
   const [restaurants,orders,couriers]=await Promise.all([

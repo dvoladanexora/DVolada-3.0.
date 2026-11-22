@@ -10,15 +10,17 @@ export function validateApiOrigin(value){
   parsed.pathname!==''||parsed.search||parsed.hash)throw Error('La API requiere una dirección HTTPS segura');
  return parsed.origin;
 }
-export function createLiveApi({baseUrl,getSessionToken,fetchImpl=fetch}){
+export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null,fetchImpl=fetch}){
  const origin=validateApiOrigin(baseUrl);
  if(typeof getSessionToken!=='function')throw Error('Session provider required');
- async function request(path,{method='GET',body,auth=true,restaurantId,key,signal}={}){
+ async function request(path,{method='GET',body,auth=true,cookie=false,restaurantId,key,signal}={}){
   const token=auth?getSessionToken():null;
-  if(auth&&!token)throw new LiveApiError('SESSION_REQUIRED',401);
+  const account=auth&&!token?getClientAccount():null;
+  if(auth&&!token&&!account&&!cookie)throw new LiveApiError('SESSION_REQUIRED',401);
   const headers={Accept:'application/json'};
   if(body!==undefined)headers['Content-Type']='application/json';
-  if(auth)headers.Authorization='Bearer '+token;
+  if(token)headers.Authorization='Bearer '+token;
+  if(account)headers['X-Client-Account']=account;
   if(restaurantId)headers['X-Restaurant-ID']=restaurantId;
   if(key)headers['Idempotency-Key']=key;
   let res;
@@ -37,7 +39,17 @@ export function createLiveApi({baseUrl,getSessionToken,fetchImpl=fetch}){
   products:id=>request('/api/v1/catalog/restaurants/'+s(id)+'/products',{auth:false}),
   searchProducts:(term,signal)=>request('/api/v1/catalog/search?q='+s(term),{auth:false,signal}),
   exchange:(idToken,deviceLabel)=>request('/api/v1/auth/exchange',{auth:false,method:'POST',body:{idToken,deviceLabel}}),
-  me:()=>request('/api/v1/auth/me'),
+  me:(cookie=false)=>request('/api/v1/auth/me',{cookie}),
+  clientAccess:()=>request('/api/v1/auth/client/config',{auth:false}),
+  clientAuthenticate:(operation,body)=>request('/api/v1/auth/client/'+s(operation),{auth:false,method:'POST',body}),
+  clientProfile:()=>request('/api/v1/customer/profile'),
+  renameClient:displayName=>request('/api/v1/customer/profile',{method:'PATCH',body:{displayName}}),
+  favorites:()=>request('/api/v1/customer/favorites'),
+  setFavorite:(id,favorite)=>request('/api/v1/customer/favorites/'+s(id),{method:'PATCH',body:{favorite}}),
+  chat:(id,channel)=>request('/api/v1/orders/'+s(id)+'/chat/'+s(channel)),
+  sendMessage:(id,channel,message,key)=>request('/api/v1/orders/'+s(id)+'/chat/'+s(channel),{method:'POST',key,body:{message}}),
+  claim:id=>request('/api/v1/orders/'+s(id)+'/claim'),
+  sendClaim:(id,category,message)=>request('/api/v1/orders/'+s(id)+'/claim',{method:'POST',body:{category,message}}),
   pushIdentity:()=>request('/api/v1/push/identity',{method:'POST'}),
   logout:()=>request('/api/v1/auth/logout',{method:'POST'}),
   customerOrders:()=>request('/api/v1/customer/orders'),

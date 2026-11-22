@@ -7,7 +7,7 @@ const ROOT='/DVolada-3.0./';
 const MANIFEST='manifest.webmanifest';
 const LIVE_ASSETS=[];
 const installedRoutes=[ROOT,ROOT+'pruebas',ROOT+'pruebas/'];
-const SHELL=[ROOT,ROOT+'index.html',ROOT+MANIFEST,ROOT+'icon-clean-192.png',ROOT+'icon-clean-512.png'];
+const SHELL=[ROOT,ROOT+'index.html',ROOT+MANIFEST,ROOT+'logo.png',ROOT+'icon-clean-192.png',ROOT+'icon-clean-512.png'];
 const STATIC_PUBLIC=new Set(['manifest-live.webmanifest','logo.png','dvolada-logo-original.png','nexora-logo-original.png','dvolada-slide-white.svg','dvolada-d-symbol.svg','icon-clean-192.png','icon-clean-512.png','manifest.webmanifest'].map(path=>ROOT+path));
 const shellPath=pathname=>pathname===ROOT||pathname===ROOT+'index.html';
 const privatePath=pathname=>/\/(?:api|auth|admin|session|push)(?:\/|$|-)/i.test(pathname);

@@ -66,18 +66,16 @@ export async function enrollCourier(req,env,actor){
  const body=await readJson(req);requireKeys(body,['userId']);
  const userId=requireUuid(body.userId,'userId');
  if(actor.userId===userId)throw new ApiError(403,'CANNOT_ENROLL_SELF');
- const user=await env.DB.prepare(`SELECT u.account_role,u.status,
-  (SELECT COUNT(*) FROM restaurant_memberships WHERE user_id=u.id AND active=1) AS staff_count
-  FROM users u WHERE id=?`).bind(userId).first();
- if(!user||user.status!=='active'||user.account_role!=='customer'||user.staff_count>0)
-  throw new ApiError(409,'COURIER_ENROLLMENT_FORBIDDEN');
- await env.DB.batch([
-  env.DB.prepare("UPDATE users SET account_role='courier' WHERE id=? AND account_role='customer'").bind(userId),
-  env.DB.prepare(`INSERT INTO courier_profiles(user_id,active,max_active_orders) VALUES(?,1,2)
-    ON CONFLICT(user_id) DO UPDATE SET active=1,max_active_orders=2`).bind(userId),
+ const [approved]=await env.DB.batch([
+  env.DB.prepare(`UPDATE users SET account_role='courier' WHERE id=? AND account_role='customer' AND status='active'
+   AND NOT EXISTS(SELECT 1 FROM restaurant_memberships WHERE user_id=users.id)`).bind(userId),
+  env.DB.prepare(`INSERT INTO courier_profiles(user_id,active,max_active_orders,available)
+   SELECT ?,1,2,0 WHERE changes()>0
+   ON CONFLICT(user_id) DO UPDATE SET active=1,max_active_orders=2,available=0`).bind(userId),
   env.DB.prepare(`INSERT INTO platform_audit(actor_id,subject_id,action)
-    VALUES(?,?,'courier_enrolled')`).bind(actor.userId,userId)
+   SELECT ?,?,'courier_enrolled' WHERE changes()>0`).bind(actor.userId,userId)
  ]);
+ if(!approved.meta.changes)throw new ApiError(409,'COURIER_ENROLLMENT_FORBIDDEN');
  return {courierId:userId,active:true,maxActiveOrders:2};
 }
 export async function createProduct(req,env,actor,access){

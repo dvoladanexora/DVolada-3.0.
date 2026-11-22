@@ -86,7 +86,8 @@ export async function clientAuth(req, env, operation) {
  const hash=recovery||!passwordMode
   ?await hmacHex(env.SESSION_PEPPER,(recovery?'client-recover:v1:':'client-access:v1:')+body.code):null;
  const credentialQuery=`SELECT c.user_id,c.revision FROM client_credentials c JOIN users u ON u.id=c.user_id
-  WHERE u.status='active' AND u.account_role='customer' AND `;
+  WHERE u.status='active' AND (u.account_role='customer' OR (u.account_role='courier' AND EXISTS(
+   SELECT 1 FROM courier_profiles cp WHERE cp.user_id=u.id AND cp.active=1))) AND `;
  const row=await (passwordMode
   ?env.DB.prepare(credentialQuery+(recovery?'c.login_name=? AND c.recovery_hash=?':'c.login_name=? AND c.password_hash=?'))
    .bind(login,recovery?hash:passwordHash)

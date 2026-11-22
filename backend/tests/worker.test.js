@@ -8,7 +8,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -1073,4 +1073,109 @@ test('settlements reconcile cash and transfer, apply historical rules, serialize
  assert.equal((await central('/'+id+'/markPaid',{reference:'REGISTRO QA'})).body.settlement.status,'paid');
  assert.equal((await central('/'+id+'/markPaid',{reference:'REEMPLAZO QA'})).status,409);
  assert.deepEqual((await central('/'+id)).body.split,{restaurant_minor:18874,courier_minor:400,dvolada_minor:1051});
+ const courier=(await api('courier/history',undefined,{by:'courier'})).body;
+ assert.deepEqual(courier.orders.map(o=>[o.id,o.earningsMinor,o.settlementStatus]),[[transfer,400,'paid']]);
+ assert.deepEqual(courier.periods.map(p=>[p.id,p.earningsMinor,p.adjustmentMinor]),[[id,400,0]]);
+ assert.equal(courier.orders[0].restaurantMinor,undefined);
+});
+
+test('QA courier application, platform validation, sign-in, one-use recovery and global session revocation',async()=>{
+ const f=await fixture();
+ const origin='https://dvolada-qa.dvoladanexora.workers.dev';
+ Object.assign(f.env,{CORS_ORIGINS:origin,QA_CLIENT_ACCESS:'true'});
+ const req=(path,body,{cookie,account,method=body?'POST':'GET'}={})=>{
+  const headers={Origin:origin};
+  if(body)headers['Content-Type']='application/json';
+  if(cookie)headers.Cookie=cookie;
+  if(account)headers['X-Client-Account']=account;
+  return worker.fetch(new Request(origin+'/api/v1/'+path,{method,headers,body:body&&JSON.stringify(body)}),f.env);
+ };
+ const auth=(action,body)=>req('auth/client/'+action,body);
+ const registration=await auth('register',{displayName:'Repartidor ficticio'});
+ const codes=await registration.json();
+ const initial=registration.headers.get('set-cookie').split(';')[0];
+ const me=await (await req('auth/me',undefined,{cookie:initial})).json();
+ const account=me.user.id;
+ assert.equal((await req('courier/orders',undefined,{cookie:initial,account})).status,403);
+ for(let i=0;i<2;i++)assert.equal((await req('customer/courier-application',{},{cookie:initial,account})).status,200);
+ assert.equal((await f.call('/api/v1/admin/courier-applications')).status,403);
+ assert.deepEqual((await f.call('/api/v1/admin/courier-applications',{by:'platformAdmin'})).body.applications.map(x=>x.user_id),[account]);
+ assert.equal((await f.call('/api/v1/admin/couriers',{by:'platformAdmin',method:'POST',body:{userId:account}})).status,201);
+ const login=await auth('login',{code:codes.access});
+ assert.equal(login.status,204);
+ const old=login.headers.get('set-cookie').split(';')[0];
+ const recovery=await auth('recover',{code:codes.recovery});
+ assert.equal(recovery.status,200);
+ assert.equal((await auth('recover',{code:codes.recovery})).status,401);
+ assert.equal((await req('auth/me',undefined,{cookie:old})).status,401);
+ assert.equal((await auth('login',{code:codes.access})).status,401);
+ const cookie=recovery.headers.get('set-cookie').split(';')[0];
+ const current=await (await req('auth/me',undefined,{cookie})).json();
+ assert.equal(current.user.role,'courier');
+ assert.equal((await (await req('courier/orders',undefined,{cookie,account})).json()).profile.available,0);
+ assert.equal((await req('courier/availability',{available:true},{cookie,account,method:'PATCH'})).status,200);
+ assert.equal((await req('customer/orders',undefined,{cookie,account})).status,403);
+ assert.equal((await req('courier/revoke-sessions',{},{cookie,account})).status,204);
+ assert.equal((await req('auth/me',undefined,{cookie})).status,401);
+ assert.equal(f.DB.db.prepare('SELECT available FROM courier_profiles WHERE user_id=?').get(account).available,0);
+ assert.equal(f.DB.db.prepare('SELECT COUNT(*) AS n FROM courier_availability_events WHERE courier_id=?').get(account).n,2);
+});
+
+test('courier offer timeout protects addresses, dispatch conversation and idempotent PIN attempts',async()=>{
+ const f=await fixture(),[rid,other]=f.restaurants;
+ const outsider=await f.user('courierB','courier');
+ f.DB.db.prepare('INSERT INTO courier_profiles(user_id,active,max_active_orders) VALUES(?,1,2)').run(outsider.id);
+ const call=(path,body,by='courier',method=body?'POST':'GET',key=randomUUID(),restaurantId=rid)=>
+  f.call('/api/v1/'+path,{by,method,body,key,restaurantId});
+ const made=(await f.create()).body,id=made.order.id;
+ for(const [index,status] of ['Aceptado','Preparando','Listo'].entries())assert.equal((await f.status(id,'staffA',status,index+1)).status,200);
+ const assign=(courierId,expectedVersion)=>call('restaurant/orders/'+id+'/assign',{courierId,expectedVersion},'staffA','PATCH');
+ const mine=f.tokens.courier.id;
+ assert.equal((await call('courier/availability',{available:false},'courier','PATCH')).status,200);
+ assert.equal((await assign(mine,4)).body.error,'COURIER_UNAVAILABLE');
+ await call('courier/availability',{available:true},'courier','PATCH');
+ assert.equal((await assign(mine,4)).status,200);
+ let cards=(await call('courier/orders')).body.orders;
+ assert.equal(cards.length,1);
+ assert.ok(cards[0].offerExpiresAt>Date.now()/1000);
+ assert.equal(cards[0].deliveryAddress,undefined);
+ assert.equal(cards[0].pickupAddress,undefined);
+ const dispatch='orders/'+id+'/chat/dispatch';
+ assert.equal((await call(dispatch)).status,404);
+ f.DB.db.prepare('UPDATE online_orders SET courier_offer_expires_at=unixepoch()-1 WHERE id=?').run(id);
+ const offer=(action,expectedVersion,by='courier')=>call('courier/orders/'+id+'/offer',{action,expectedVersion},by);
+ assert.equal((await offer('accept',5)).body.error,'OFFER_EXPIRED');
+ assert.deepEqual((await call('courier/orders')).body.orders,[]);
+ assert.equal((await assign(outsider.id,5)).status,200);
+ assert.equal((await offer('reject',6,'courierB')).status,200);
+ assert.equal((await assign(mine,7)).status,200);
+ assert.equal((await offer('accept',8)).status,200);
+ cards=(await call('courier/orders')).body.orders;
+ assert.equal(cards[0].deliveryAddress,made.order.deliveryAddress||'Barrio El Centro, casa 10');
+ assert.ok(Object.hasOwn(cards[0],'pickupAddress'));
+ const chatKey=randomUUID();
+ for(let i=0;i<2;i++)assert.equal((await call(dispatch,{message:'Retiro ficticio'},'courier','POST',chatKey)).status,200);
+ assert.equal((await call(dispatch,undefined,'staffA')).body.messages.length,1);
+ assert.equal((await call(dispatch,{message:'Listo para recoger'},'staffA')).status,200);
+ assert.equal((await call(dispatch,undefined,'courierB')).status,404);
+ assert.equal((await call(dispatch,undefined,'staffB','GET',randomUUID(),other)).status,404);
+ assert.equal((await call(dispatch,undefined,'customer')).status,404);
+ assert.equal((await call('orders/'+id+'/chat/courier',{message:'Mensaje ficticio'},'customer')).status,200);
+ assert.equal((await call('orders/'+id+'/chat/courier')).body.messages.length,1);
+ for(const [index,status] of ['Recogido','En camino','En ubicación'].entries())
+  assert.equal((await call('courier/orders/'+id+'/status',{status,expectedVersion:9+index},'courier','PATCH')).status,200);
+ const deliver='courier/orders/'+id+'/deliver';
+ const wrong={expectedVersion:12,pin:made.deliveryPin==='000000'?'111111':'000000'},wrongKey=randomUUID();
+ for(let i=0;i<2;i++)assert.equal((await call(deliver,wrong,'courier','POST',wrongKey)).status,403);
+ assert.equal(f.DB.db.prepare('SELECT pin_attempts FROM online_orders WHERE id=?').get(id).pin_attempts,1);
+ const right={expectedVersion:12,pin:made.deliveryPin},deliveryKey=randomUUID();
+ assert.equal((await call(deliver,right,'courierB')).status,404);
+ assert.equal((await call(deliver,right,'courier','POST',deliveryKey)).status,200);
+ assert.equal((await call(deliver,right,'courier','POST',deliveryKey)).body.replayed,true);
+ const history=(await call('courier/history')).body;
+ assert.equal(history.orders[0].id,id);
+ assert.equal(history.orders[0].earningsMinor,null);
+ assert.equal(history.orders[0].deliveryAddress,undefined);
+ assert.equal((await call('courier/history',undefined,'courierB')).body.orders.length,0);
+ assert.equal((await call(dispatch)).body.writable,false);
 });

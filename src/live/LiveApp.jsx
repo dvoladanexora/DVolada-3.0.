@@ -1,3 +1,4 @@
+import {CourierConsole,CourierApplication,CourierApplications} from './CourierWorkspace.jsx';
 import {StaffSignIn,StaffSecret,ManageStaffAccess,SettlementPanel} from './RestaurantCommercial.jsx';
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
@@ -23,7 +24,7 @@ const orderLabel={Pendiente:'Pendiente',Aceptado:'Aceptado',Preparando:'Preparan
  Entregado:'Entregado',Cancelado:'Cancelado',Rechazado:'Rechazado'};
 const staffTransitions={Pendiente:['Aceptado','Rechazado'],Aceptado:['Preparando','Cancelado'],
  Preparando:['Listo','Cancelado']};
-const courierTransitions={Listo:'Recogido',Recogido:'En camino','En camino':'En ubicación'};
+
 const auditLabels={restaurant_created:'Alta de negocio',restaurant_updated:'Cambio de negocio',
  membership_assigned:'Vinculación de personal',courier_enrolled:'Alta de repartidor'};
 const newKey=()=>crypto.randomUUID();
@@ -50,6 +51,9 @@ function errorLabel(error){
   CHECKOUT_TOTAL_CHANGED:'Cambió el precio del pedido. Actualizá el menú y revisá el total antes de confirmar.',
   CHECKOUT_NOT_FOUND:'Aún no encontramos una confirmación. Podés reintentar con los mismos datos.',
   IDEMPOTENCY_KEY_REUSED:'Verificá el pedido anterior antes de intentar una nueva compra.',
+  OFFER_EXPIRED:'La oferta venció. Actualizá la lista de pedidos.',
+  COURIER_UNAVAILABLE:'El repartidor ya no está disponible.',
+  COURIER_INACTIVE:'Esta cuenta de repartidor está inactiva.',
   COURIER_LIMIT:'Este repartidor ya tiene dos pedidos activos.',
   PIN_INVALID:'El PIN no coincide. Confirmalo con el cliente.',
   PIN_LOCKED:'Demasiados intentos. Se requiere intervención autorizada.',
@@ -111,7 +115,7 @@ export default function LiveApp(){
  const [adminSelectedId,setAdminSelectedId]=useState(''),[adminMemberId,setAdminMemberId]=useState(''),[adminStaffRole,setAdminStaffRole]=useState('owner');
  const [adminCourierId,setAdminCourierId]=useState('');
  const [adminFee,setAdminFee]=useState(''),[audit,setAudit]=useState(null);
- const [selectedPin,setSelectedPin]=useState(null),[pinEntry,setPinEntry]=useState('');
+ const [selectedPin,setSelectedPin]=useState(null),[courierProfile,setCourierProfile]=useState(null);
  const [adminStats,setAdminStats]=useState(null),[adminRestaurants,setAdminRestaurants]=useState([]);
  const [busy,setBusy]=useState(false),[offline,setOffline]=useState(!navigator.onLine);
  const [theme,setTheme]=useState(()=>{try{return JSON.parse(localStorage.getItem('dv_theme'))||'light'}catch{return 'light'}});
@@ -145,7 +149,7 @@ export default function LiveApp(){
   setCart([]);setCartRestaurantId('');setShoppingRestaurant('');setProducts([]);setCatalogTerm('');
   setOptionsByProduct({});setAppliedCoupon(null);setCouponText('');
   setPendingKey(null);setReplaceCart(null);setDeliveryMethod('delivery');
-  setSelectedPin(null);setPinEntry('');setPhone('');setDeliveryAddress('');setOrderNote('');
+  setSelectedPin(null);setCourierProfile(null);setPhone('');setDeliveryAddress('');setOrderNote('');
   setStaffCredential(null);setPushEnabled(false);setRefreshWarning('');setStatus('');
  },[]);
  const openSession=useCallback((me,clientAccount=false)=>{
@@ -210,7 +214,7 @@ export default function LiveApp(){
    if(canApply()){setOrders(result.orders||[]);setCouriers(eligible.couriers||[]);
     setManageProducts(menu.products||[]);setRestaurantCapabilities(capabilities);setNextHistory(result.nextCursor||null)}
   }
-  if(view==='courier'){const r=await api.courierOrders();if(canApply())setOrders(r.orders||[])}
+  if(view==='courier'){const r=await api.courierOrders();if(canApply()){setOrders(r.orders||[]);setCourierProfile(r.profile)}}
   if(view==='admin'){
    const [overview,managed]=await Promise.all([api.adminOverview(),api.adminRestaurants()]);
    if(canApply()){setAdminStats(overview);setAdminRestaurants(managed.restaurants||[])}
@@ -522,17 +526,18 @@ export default function LiveApp(){
   </form>}
   {session&&<>
    <nav className="dvl-roles" aria-label="Paneles autorizados">{availableScopes.map(s=><button key={s} className={scope===s?'active':''}
-    onClick={()=>{setScope(s);setError('');setSelectedPin(null);setOrderDetail(null)}}>{s==='customer'?<ShoppingBag size={17}/>:s==='restaurant'?<Store size={17}/>:s==='courier'?<Bike size={17}/>:<ShieldCheck size={17}/>} {roles[s]}</button>)}
+    onClick={()=>{setScope(s);setError('');setSupport(null);setSelectedPin(null);setOrderDetail(null)}}>{s==='customer'?<ShoppingBag size={17}/>:s==='restaurant'?<Store size={17}/>:s==='courier'?<Bike size={17}/>:<ShieldCheck size={17}/>} {roles[s]}</button>)}
     <Action kind="secondary" disabled={busy||offline} onClick={()=>run(()=>load(scope,selectedRestaurantId),{refresh:false})}><RefreshCw size={15}/> Actualizar</Action>
     {pushConfig?.enabled&&<>
      {!pushEnabled&&<Action kind="secondary" disabled={busy||offline} onClick={()=>setQaPush(true)}>Activar notificaciones</Action>}
      <Action kind="secondary" disabled={busy||offline} onClick={()=>setQaPush(false)}>Desactivar notificaciones</Action>
     </>}
    </nav>
-    {support&&orders.some(order=>order.id===support.id)&&<ClientSupport key={support.id+support.mode}
-     mode={support.mode} counterpart={scope!=='customer'} order={orders.find(order=>order.id===support.id)} api={api} offline={offline}
+    {support&&(support.order||orders.some(order=>order.id===support.id))&&<ClientSupport key={support.id+support.mode}
+     mode={support.mode} counterpart={support.mode==='dispatch'?(scope==='courier'?'Restaurante':'Repartidor'):scope!=='customer'?'Cliente':null} order={support.order||orders.find(order=>order.id===support.id)} api={api} offline={offline}
      close={()=>setSupport(null)} onSessionError={handleSessionError}/>}
    {scope==='customer'&&<div className="dvl-columns">
+    {accountEnabled&&<CourierApplication api={api} busy={busy} offline={offline} account={session.user.id} run={run}/>}
     <FlashOffers campaigns={offline?[]:flashOffers} money={price} open={viewProducts}/>
     <section className="dvl-panel"><h2>Restaurantes afiliados</h2>
      {!shoppingRestaurant?<div className="dvl-stack">
@@ -691,6 +696,8 @@ export default function LiveApp(){
       {o.flashGiftName&&<p>Regalo: {o.flashGiftName}</p>}
       <Action kind="secondary" disabled={busy||offline} onClick={()=>showRestaurantOrder(o)}>Ver comanda</Action>
       {canManage&&<Action kind="secondary" disabled={offline} onClick={()=>setSupport({id:o.id,mode:'restaurant'})}>Chat con cliente</Action>}
+      {canManage&&o.courierResponse==='accepted'&&<Action kind="secondary" disabled={offline}
+       onClick={()=>setSupport({id:o.id,mode:'dispatch'})}>Chat con repartidor</Action>}
       {orderDetail?.orderId===o.id&&orderDetail.restaurantId===selectedRestaurantId&&<>
        <ul aria-label="Artículos de la comanda">{orderDetail.items.map((item,index)=><li key={index}>{item.quantity} × {item.name_snapshot}{(item.optionNames||optionsFromReceipt(item).map(option=>option.name)).map(name=>' · '+name)}</li>)}</ul>
        {orderDetail.note&&<p>Observaciones: {orderDetail.note}</p>}
@@ -719,26 +726,9 @@ export default function LiveApp(){
     </div>}
     </>}
     </div>}
-   {scope==='courier'&&<div className="dvl-stack"><section className="dvl-panel"><h2>Mis entregas</h2>
-    <p className="dvl-muted">Máximo dos pedidos activos. La confirmación final exige el PIN del cliente.</p></section>
-    <div className="dvl-grid">{orders.map(o=><OrderCard key={o.id} order={o}>
-      {o.courierResponse==='accepted'&&<Action kind="secondary" disabled={offline}
-       onClick={()=>setSupport({id:o.id,mode:'courier'})}>Chat con cliente</Action>}
-      <p>{o.deliveryAddress||(o.courierResponse==='offered'?'La dirección se muestra al aceptar el pedido.':'Dirección por confirmar')}</p>
-      {o.courierResponse==='offered'&&<div className="dvl-inline">
-       <Action disabled={busy||offline} onClick={()=>action(()=>api.courierOffer(o,'accept',newKey()))}>Aceptar pedido</Action>
-       <Action kind="secondary" disabled={busy||offline} onClick={()=>action(()=>api.courierOffer(o,'reject',newKey()))}>Rechazar</Action>
-      </div>}
-      {o.courierResponse==='accepted'&&courierTransitions[o.status]&&<Action disabled={busy||offline}
-       onClick={()=>action(()=>api.courierStatus(o,courierTransitions[o.status],newKey()))}>{courierTransitions[o.status]}</Action>}
-      {o.status==='En ubicación'&&<><label>PIN del cliente<input inputMode="numeric" type="password"
-       maxLength={6} placeholder="6 dígitos" value={selectedPin?.id===o.id?pinEntry:''}
-       onFocus={()=>{if(selectedPin?.id!==o.id){setSelectedPin({id:o.id});setPinEntry('')}}}
-       onChange={e=>setPinEntry(e.target.value.replace(/\D/g,'').slice(0,6))}/></label>
-       <Action disabled={busy||offline||pinEntry.length!==6||selectedPin?.id!==o.id}
-        onClick={()=>action(async()=>{const r=await api.courierDeliver(o,pinEntry,newKey());setPinEntry('');return r})}>Confirmar entrega</Action></>}
-    </OrderCard>)}{!orders.length&&<div className="dvl-panel"><CheckCircle2 size={27}/><p>Sin pedidos asignados.</p></div>}</div>
-   </div>}
+   {scope==='courier'&&<CourierConsole api={api} profile={courierProfile} orders={orders} busy={busy} offline={offline}
+    action={action} run={run} money={price} errorLabel={errorLabel} endSession={endLocalSession}
+    openChat={(order,mode)=>setSupport({id:order.id,order,mode})}/>}
    {scope==='admin'&&<div className="dvl-stack"><section className="dvl-panel"><h2>Centro de Control</h2>
     <p className="dvl-muted">Resumen operativo en el servidor. La autorización se comprueba en cada solicitud.</p>
     <div className="dvl-stats"><div><strong>{adminStats?.restaurants?.total??'—'}</strong><span>Restaurantes</span></div>
@@ -790,6 +780,7 @@ export default function LiveApp(){
        onClick={()=>action(()=>api.adminEnrollCourier(adminCourierId.trim()))}>Habilitar repartidor</Action>
      </div>
     </section>
+    <CourierApplications api={api} run={run} busy={busy} offline={offline} errorLabel={errorLabel}/>
     {flashEnabled&&<FlashAdmin api={api} restaurants={adminRestaurants} busy={busy} offline={offline} run={run}/>}
     {commercial&&adminRestaurants.some(r=>r.id===adminSelectedId&&r.plan!=='LOCAL')&&
      <SettlementPanel key={'central-'+adminSelectedId} api={api} restaurant={adminSelectedId} central

@@ -41,7 +41,7 @@ function Chat({api,order,channel,offline,onSessionError,counterpart}) {
    {!data&&!error&&<p role="status">{offline?'Sin conexión.':'Cargando conversación…'}</p>}
    {data&&<>
     <ol className="dvl-chat-log" aria-label="Mensajes">{data.messages.map(message=><li key={message.id}>
-     <strong>{message.mine?'Vos':counterpart?'Cliente':channel==='courier'?'Repartidor':'Restaurante'}</strong> {message.body}
+     <strong>{message.mine?'Vos':counterpart||(channel==='courier'?'Repartidor':'Restaurante')}</strong> {message.body}
     </li>)}</ol>
     {!data.messages.length&&<p>Aún no hay mensajes.</p>}
     {data.writable?<form className="dvl-stack" onSubmit={send}>
@@ -87,7 +87,7 @@ function Claim({api,order,offline,onSessionError}) {
 
 export default function ClientSupport({mode,order,api,offline,close,onSessionError,counterpart}) {
  return <aside className="dvl-panel dvl-client-support" aria-label="Ayuda con el pedido">
-  <div className="dvl-row"><h2>{mode==='claim'?'Reclamo':counterpart?'Chat con cliente':mode==='restaurant'?'Chat con restaurante':'Chat con repartidor'}</h2>
+  <div className="dvl-row"><h2>{mode==='claim'?'Reclamo':'Chat con '+(counterpart||(mode==='restaurant'?'Restaurante':'Repartidor')).toLowerCase()}</h2>
    <button className="dvl-action secondary" type="button" onClick={close}>Cerrar</button></div>
   <p className="dvl-muted">Pedido {order.orderNumber}</p>
   {mode==='claim'?<Claim {...{api,order,offline,onSessionError}}/>:<Chat {...{api,order,offline,onSessionError}} channel={mode} counterpart={counterpart}/>}

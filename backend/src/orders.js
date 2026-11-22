@@ -1,3 +1,4 @@
+import {courierProfile} from './courier-workspace.js';
 import {resolveFlash} from './flash.js';
 import {
  ApiError,requireUuid,requireInteger,requireText,requireKeys,readJson,sha256,
@@ -17,17 +18,19 @@ const courierMoves={
  'En camino':['En ubicación']
 };
 const dataOrder=`SELECT id,restaurant_id,customer_id,courier_id,order_number,delivery_method,
- delivery_address,customer_note,status,version,courier_response,subtotal_minor,delivery_fee_minor,total_minor,discount_minor,flash_gift_name,pin_attempts,
+ delivery_address,customer_note,status,version,courier_response,courier_offer_expires_at,subtotal_minor,delivery_fee_minor,total_minor,discount_minor,flash_gift_name,pin_attempts,
  created_at,updated_at FROM online_orders`;
-const briefOrder=`SELECT id,restaurant_id,courier_id,order_number,delivery_method,status,version,courier_response,
+const briefOrder=`SELECT id,restaurant_id,courier_id,order_number,delivery_method,status,version,courier_response,courier_offer_expires_at,
  subtotal_minor,delivery_fee_minor,total_minor,discount_minor,flash_gift_name,created_at,updated_at FROM online_orders`;
 function orderDto(order,{includeAddress=false}={}){
  if(!order)return null;
+ const expired=order.courier_response==='offered'&&order.courier_offer_expires_at<=Math.floor(Date.now()/1000);
  const data={id:order.id,restaurantId:order.restaurant_id,orderNumber:order.order_number,
-   status:order.status,version:order.version,courierResponse:order.courier_response,deliveryMethod:order.delivery_method,
-   courierId:order.courier_id,subtotalMinor:order.subtotal_minor,
+   status:order.status,version:order.version,courierResponse:expired?'unassigned':order.courier_response,deliveryMethod:order.delivery_method,
+   courierId:expired?null:order.courier_id,subtotalMinor:order.subtotal_minor,
    deliveryFeeMinor:order.delivery_fee_minor,discountMinor:order.discount_minor||0,flashGiftName:order.flash_gift_name||null,totalMinor:order.total_minor-(order.discount_minor||0),
    createdAt:order.created_at,updatedAt:order.updated_at};
+ if(order.courier_response==='offered'&&!expired)data.offerExpiresAt=order.courier_offer_expires_at;
  if(includeAddress)data.deliveryAddress=order.delivery_address;
  return data;
 }
@@ -52,7 +55,7 @@ export async function transition(env,actor,{orderId,restaurantId,expectedVersion
    .bind(orderId,restaurantId).first();
  if(!existing)throw new ApiError(404,'ORDER_NOT_FOUND');
  if(existing.version!==expectedVersion)throw new ApiError(409,'ORDER_CHANGED');
- if(existing.courier_id&&status==='Cancelado')throw new ApiError(409,'COURIER_ASSIGNED');
+ if(existing.courier_id&&status==='Cancelado'&&(existing.courier_response!=='offered'||existing.courier_offer_expires_at>Math.floor(Date.now()/1000)))throw new ApiError(409,'COURIER_ASSIGNED');
  const actionId=crypto.randomUUID();
  try{
   await env.DB.prepare(`INSERT INTO order_actions(id,order_id,restaurant_id,actor_id,request_key,
@@ -172,14 +175,8 @@ export async function assignCourier(req,env,actor,access,orderId){
  }
  return {order:{id,courierId,version:expectedVersion+1},replayed:false};
 }
-async function assertCourierActive(env,actor){
- requireRole(actor,'courier');
- const profile=await env.DB.prepare('SELECT active FROM courier_profiles WHERE user_id=?')
-  .bind(actor.userId).first();
- if(!profile||profile.active!==1)throw new ApiError(403,'COURIER_INACTIVE');
-}
 export async function courierOffer(req,env,actor,orderId){
- await assertCourierActive(env,actor);
+ await courierProfile(env,actor);
  const body=await readJson(req);
  requireKeys(body,['action','expectedVersion']);
  if(!['accept','reject'].includes(body.action))throw new ApiError(400,'INVALID_COURIER_ACTION');
@@ -209,14 +206,20 @@ export async function courierOffer(req,env,actor,orderId){
   replayed:false};
 }
 export async function courierOrders(env,actor){
- await assertCourierActive(env,actor);
- const {results=[]}=await env.DB.prepare(`${dataOrder} WHERE courier_id=?
-  AND status NOT IN ('Entregado','Cancelado','Rechazado') ORDER BY created_at DESC,id LIMIT 20`)
-  .bind(actor.userId).all();
- return {orders:results.map(x=>orderDto(x,{includeAddress:x.courier_response==='accepted'}))};
+ const profile=await courierProfile(env,actor);
+ const {results=[]}=await env.DB.prepare(`SELECT o.*,r.name AS pickup_name,p.address AS pickup_address,p.latitude,p.longitude
+  FROM online_orders o JOIN restaurants r ON r.id=o.restaurant_id LEFT JOIN restaurant_profiles p ON p.restaurant_id=r.id
+  WHERE o.courier_id=? AND o.status NOT IN ('Entregado','Cancelado','Rechazado')
+   AND (o.courier_response='accepted' OR (o.courier_response='offered' AND o.courier_offer_expires_at>unixepoch()))
+  ORDER BY o.created_at DESC,o.id LIMIT 20`).bind(actor.userId).all();
+ return {profile,orders:results.map(order=>{
+  const accepted=order.courier_response==='accepted';
+  return {...orderDto(order,{includeAddress:accepted}),restaurantName:order.pickup_name,
+   ...(accepted?{pickupAddress:order.pickup_address,pickupLatitude:order.latitude,pickupLongitude:order.longitude}:{})};
+ })};
 }
 export async function courierStatus(req,env,actor,orderId){
- await assertCourierActive(env,actor);
+ await courierProfile(env,actor);
  const body=await readJson(req);requireKeys(body,['status','expectedVersion']);
  const id=requireUuid(orderId);const status=requireText(body.status,1,32,'status');
  const order=await env.DB.prepare(`${dataOrder} WHERE id=? AND courier_id=?`).bind(id,actor.userId).first();
@@ -228,7 +231,7 @@ export async function courierStatus(req,env,actor,orderId){
  return transition(env,actor,{orderId:id,restaurantId:order.restaurant_id,expectedVersion:body.expectedVersion,status,key});
 }
 export async function confirmDelivery(req,env,actor,orderId){
- await assertCourierActive(env,actor);
+ await courierProfile(env,actor);
  const body=await readJson(req);requireKeys(body,['expectedVersion','pin']);
  const id=requireUuid(orderId);const v=requireInteger(body.expectedVersion,1,2147483646,'expectedVersion');
  if(typeof body.pin!=='string'||!/^[0-9]{6}$/.test(body.pin))throw new ApiError(400,'INVALID_PIN');
@@ -238,12 +241,16 @@ export async function confirmDelivery(req,env,actor,orderId){
  if(order.delivery_method!=='delivery')throw new ApiError(422,'DELIVERY_REQUIRED');
  const correct=await deliveryPin(env.PIN_SECRET,id);
  const same=correct.length===body.pin.length&&[...correct].reduce((diff,ch,i)=>diff|(ch.charCodeAt(0)^body.pin.charCodeAt(i)),0)===0;
+ if(order.pin_attempts>=5)throw new ApiError(423,'PIN_LOCKED');
  if(!same){
-  await env.DB.prepare(`UPDATE online_orders SET pin_attempts=pin_attempts+1
-    WHERE id=? AND courier_id=? AND pin_attempts<5 AND status='En ubicación'`).bind(id,actor.userId).run();
+  await env.DB.prepare(`INSERT INTO courier_pin_rejections(courier_id,request_key,order_id)
+   SELECT courier_id,?,id FROM online_orders WHERE id=? AND courier_id=? AND version=? AND status='En ubicación'
+    AND courier_response='accepted' AND pin_attempts<5 ON CONFLICT(courier_id,request_key) DO NOTHING`)
+   .bind(key,id,actor.userId,v).run();
   throw new ApiError(403,'PIN_INVALID');
  }
- if(order.pin_attempts>=5)throw new ApiError(423,'PIN_LOCKED');
+ if(await env.DB.prepare('SELECT 1 FROM courier_pin_rejections WHERE courier_id=? AND request_key=?').bind(actor.userId,key).first())
+  throw new ApiError(409,'IDEMPOTENCY_KEY_REUSED');
  // PIN is never stored in mutation records or logs.
  return transition(env,actor,{orderId:id,restaurantId:order.restaurant_id,expectedVersion:v,status:'Entregado',key});
 }

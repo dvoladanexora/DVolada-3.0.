@@ -1,3 +1,4 @@
+import {courierProfile,courierAvailability,courierApplication,pendingCouriers,revokeCourierSessions,courierHistory,courierRestaurantChat} from './courier-workspace.js';
 import {restaurantProfile,menuOption,savePhoto,publicPhoto,staffRoster,restaurantCash,restaurantReport} from './restaurant-operations.js';
 import {
  ApiError,requireUuid,identity,assertConfiguration,assertAllowedOrigin,respond,preflight,
@@ -82,7 +83,7 @@ async function route(req,env){
  if(commercial&&method==='POST'&&staffLogin)return staffAuthenticate(req,env,staffLogin[1]);
  const token=!req.headers.has('authorization')&&readClientCookie(req,env);
  if(token){
-  if(!/^\/api\/v1\/(customer\/|orders\/|restaurant\/|auth\/(me|logout)$)/.test(path))
+  if(!/^\/api\/v1\/(customer\/|orders\/|restaurant\/|courier\/|auth\/(me|logout)$)/.test(path))
    throw new ApiError(403,'ROLE_FORBIDDEN');
   if(method!=='GET'&&req.headers.get('origin')!==url.origin)throw new ApiError(403,'ORIGIN_FORBIDDEN');
   const headers=new Headers(req.headers);
@@ -90,11 +91,13 @@ async function route(req,env){
   req=new Request(req,{headers});
  }
  const actor=await identity(req,env);
- if(token&&(actor.role!=='customer'||(path!=='/api/v1/auth/me'&&req.headers.get('x-client-account')!==actor.userId)))
+ if(token&&(!['customer','courier'].includes(actor.role)||(path!=='/api/v1/auth/me'&&req.headers.get('x-client-account')!==actor.userId)))
   throw new ApiError(401,'SESSION_INVALID');
 
+ if(token&&!actor.staffRestaurantId&&(actor.role==='courier'?!/^\/api\/v1\/(courier\/|orders\/[0-9a-f-]+\/chat\/(courier|dispatch)$|auth\/(me|logout)$)/i.test(path):path.startsWith('/api/v1/courier/')))
+  throw new ApiError(403,'ROLE_FORBIDDEN');
  if(actor.staffRestaurantId){
-  if(!commercial||!/^\/api\/v1\/(restaurant\/|orders\/[0-9a-f-]+\/chat\/restaurant$|auth\/(me|logout)$)/i.test(path))
+  if(!commercial||!/^\/api\/v1\/(restaurant\/|orders\/[0-9a-f-]+\/chat\/(restaurant|dispatch)$|auth\/(me|logout)$)/i.test(path))
    throw new ApiError(403,'ROLE_FORBIDDEN');
  }else if(token&&path.startsWith('/api/v1/restaurant/'))throw new ApiError(403,'ROLE_FORBIDDEN');
 
@@ -115,11 +118,15 @@ async function route(req,env){
    .bind(Math.floor(Date.now()/1000),actor.sessionId).run();
   return changeClientCookie(respond(req,env,204),'');
  }
- const thread=/^\/api\/v1\/orders\/([0-9a-f-]+)\/chat\/(restaurant|courier)$/i.exec(path);
+ const thread=/^\/api\/v1\/orders\/([0-9a-f-]+)\/chat\/(restaurant|courier|dispatch)$/i.exec(path);
  if(thread&&['GET','POST'].includes(method)){
   if(actor.staffRestaurantId&&!await env.DB.prepare('SELECT 1 FROM online_orders WHERE id=? AND restaurant_id=?')
    .bind(requireUuid(thread[1]),actor.staffRestaurantId).first())throw new ApiError(404,'ORDER_NOT_FOUND');
-  return conversation(req,env,actor,thread[1],thread[2],Boolean(token)&&!actor.staffRestaurantId);
+  if(thread[2]==='dispatch'){
+   if(token&&actor.role==='customer'&&!actor.staffRestaurantId)throw new ApiError(404,'CONVERSATION_NOT_FOUND');
+   return courierRestaurantChat(req,env,actor,thread[1]);
+  }
+  return conversation(req,env,actor,thread[1],thread[2],Boolean(token)&&actor.role==='customer'&&!actor.staffRestaurantId);
  }
  const claim=/^\/api\/v1\/orders\/([0-9a-f-]+)\/claim$/i.exec(path);
  if(claim&&['GET','POST','PATCH'].includes(method))return orderClaim(req,env,actor,claim[1]);
@@ -167,6 +174,10 @@ async function route(req,env){
  const platformMember=/^\/api\/v1\/admin\/restaurants\/([0-9a-f-]+)\/members$/i.exec(path);
  if(method==='POST'&&platformMember)
   return respond(req,env,200,await assignMember(req,env,actor,platformMember[1]));
+ if(clientAccessEnabled(req,env)&&['GET','POST'].includes(method)&&path==='/api/v1/customer/courier-application')
+  return respond(req,env,200,await courierApplication(req,env,actor));
+ if(method==='GET'&&path==='/api/v1/admin/courier-applications')
+  return respond(req,env,200,await pendingCouriers(env,actor));
  if(method==='POST'&&path==='/api/v1/admin/couriers')
   return respond(req,env,201,await enrollCourier(req,env,actor));
  if(commercial){
@@ -219,8 +230,9 @@ async function route(req,env){
     FROM courier_profiles c JOIN users u ON u.id=c.user_id
     LEFT JOIN online_orders o ON o.courier_id=c.user_id
       AND o.status NOT IN ('Entregado','Cancelado','Rechazado')
-    WHERE c.active=1 AND u.status='active'
-    GROUP BY c.user_id HAVING COUNT(o.id)<c.max_active_orders ORDER BY u.display_name LIMIT 60`).all();
+      AND (o.courier_response='accepted' OR (o.courier_response='offered' AND o.courier_offer_expires_at>unixepoch()))
+    WHERE c.active=1 AND c.available=1 AND u.status='active' AND u.account_role='courier'
+    GROUP BY c.user_id HAVING COUNT(o.id)<MIN(c.max_active_orders,2) ORDER BY u.display_name LIMIT 60`).all();
    return respond(req,env,200,{couriers:results});
   }
   if(method==='POST'&&path==='/api/v1/restaurant/products')
@@ -247,6 +259,14 @@ async function route(req,env){
   if(method==='PATCH'&&assign)
    return respond(req,env,200,await assignCourier(req,env,actor,access,assign[1]));
  }
+ if(method==='GET'&&path==='/api/v1/courier/profile')
+  return respond(req,env,200,{profile:await courierProfile(env,actor)});
+ if(method==='PATCH'&&path==='/api/v1/courier/availability')
+  return respond(req,env,200,await courierAvailability(req,env,actor));
+ if(method==='GET'&&path==='/api/v1/courier/history')
+  return respond(req,env,200,await courierHistory(env,actor,url));
+ if(method==='POST'&&path==='/api/v1/courier/revoke-sessions')
+  return changeClientCookie(await revokeCourierSessions(req,env,actor),'');
  if(method==='GET'&&path==='/api/v1/courier/orders')
   return respond(req,env,200,await courierOrders(env,actor));
  const courierOfferMatch=/^\/api\/v1\/courier\/orders\/([0-9a-f-]+)\/offer$/i.exec(path);

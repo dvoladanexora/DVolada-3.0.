@@ -137,6 +137,8 @@ export function idempotencyKey(req){
 }
 export function sqlConflict(error){
   const message=String(error?.message||error);
+  if(/OFFER_EXPIRED/.test(message))return new ApiError(409,'OFFER_EXPIRED');
+  if(/PIN_LOCKED/.test(message))return new ApiError(423,'PIN_LOCKED');
   if(/STALE_ORDER|STALE_ASSIGNMENT|OFFER_CHANGED/.test(message))return new ApiError(409,'ORDER_CHANGED');
   if(/RESTAURANT_CLOSED/.test(message))return new ApiError(409,'RESTAURANT_NOT_ACCEPTING');
   if(/PRODUCT_CHANGED/.test(message))return new ApiError(409,'PRODUCT_UNAVAILABLE');

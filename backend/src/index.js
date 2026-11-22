@@ -61,7 +61,8 @@ async function route(req,env){
     AND plan IN ('ONLINE','PLUS') AND subscription_status='active'
     AND online_state IN ('open','paused')`).bind(id).first();
   if(!rest)throw new ApiError(404,'RESTAURANT_NOT_FOUND');
-  const {results=[]}=await env.DB.prepare(`SELECT id,name,price_minor
+  const {results=[]}=await env.DB.prepare(`SELECT id,name,price_minor,category,
+    EXISTS(SELECT 1 FROM restaurant_product_photos photo WHERE photo.product_id=products.id) AS has_photo
     FROM products WHERE restaurant_id=? AND available=1 ORDER BY name,id LIMIT 150`).bind(id).all();
   const {results:options=[]}=await env.DB.prepare(`SELECT o.id,o.product_id,o.name,o.kind,o.price_minor
    FROM product_options o JOIN products p ON p.id=o.product_id WHERE p.restaurant_id=? AND p.available=1 AND o.available=1
@@ -71,7 +72,7 @@ async function route(req,env){
    if(!byProduct.has(option.product_id))byProduct.set(option.product_id,[]);
    byProduct.get(option.product_id).push(option);
   }
-  return respond(req,env,200,{restaurant:rest,products:results.map(product=>({...product,photoUrl:product.has_photo?'/api/v1/catalog/photos/'+product.id:null,options:byProduct.get(product.id)||[]}))});
+  return respond(req,env,200,{restaurant:rest,products:results.map(({has_photo,...product})=>({...product,photoUrl:has_photo?'/api/v1/catalog/photos/'+product.id:null,options:byProduct.get(product.id)||[]}))});
  }
  const access=/^\/api\/v1\/auth\/client\/(register|login|recover)$/.exec(path);
  if(method==='POST'&&access)return clientAuth(req,env,access[1]);

@@ -124,10 +124,8 @@ export function requireRole(actor,role){
 }
 export async function mutationRateLimit(env,actor,max=60){
   const bucket=Math.floor(Date.now()/60000);
-  await env.DB.prepare(`INSERT INTO request_rate_limits(session_id,window_minute,count) VALUES(?,?,1)
-    ON CONFLICT(session_id,window_minute) DO UPDATE SET count=count+1`)
-    .bind(actor.sessionId,bucket).run();
-  const row=await env.DB.prepare('SELECT count FROM request_rate_limits WHERE session_id=? AND window_minute=?')
+  const row=await env.DB.prepare(`INSERT INTO request_rate_limits(session_id,window_minute,count) VALUES(?,?,1)
+    ON CONFLICT(session_id,window_minute) DO UPDATE SET count=count+1 RETURNING count`)
     .bind(actor.sessionId,bucket).first();
   if(row.count>max)throw new ApiError(429,'RATE_LIMITED');
 }

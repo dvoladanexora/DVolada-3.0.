@@ -114,7 +114,7 @@ export async function staffAuthenticate(req,env,operation){
    WHERE u.status='active' AND r.subscription_status='active' AND r.plan IN ('ONLINE','PLUS')
     AND m.staff_role IN ('manager','kitchen','cashier') AND `;
  const query=claim?'a.invitation_hash=? AND a.invitation_expires_at>?':'a.credential_hash=? AND m.active=1';
- const account=await env.DB.prepare('SELECT a.user_id,a.restaurant_id,a.revision FROM restaurant_staff_access a '+active+query)
+ const account=await env.DB.prepare('SELECT a.user_id,a.restaurant_id,a.revision,u.admin_version FROM restaurant_staff_access a '+active+query)
   .bind(...(claim?[hash,at]:[hash])).first();
  if(!account)throw new ApiError(401,'STAFF_CODE_INVALID');
  const token=secret(),credential=claim?secret():null;
@@ -122,14 +122,15 @@ export async function staffAuthenticate(req,env,operation){
  const next=claim?await digest(env,'credential',credential):hash;
  const session=env.DB.prepare(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at,staff_restaurant_id)
   SELECT ?,a.user_id,?,?,a.restaurant_id FROM restaurant_staff_access a ${active}
-  a.user_id=? AND a.restaurant_id=? AND a.credential_hash=? AND a.revision=? AND m.active=1`).bind(
-  crypto.randomUUID(),tokenHash,at+7*86400,account.user_id,account.restaurant_id,next,account.revision+(claim?1:0));
+  a.user_id=? AND a.restaurant_id=? AND a.credential_hash=? AND a.revision=? AND u.admin_version=? AND m.active=1`).bind(
+  crypto.randomUUID(),tokenHash,at+7*86400,account.user_id,account.restaurant_id,next,account.revision+(claim?1:0),account.admin_version);
  let result;
  if(claim){
   const outcomes=await env.DB.batch([
    env.DB.prepare(`UPDATE restaurant_staff_access SET invitation_hash=NULL,invitation_expires_at=NULL,credential_hash=?,revision=revision+1
-    WHERE user_id=? AND restaurant_id=? AND invitation_hash=? AND invitation_expires_at>? AND revision=?`)
-    .bind(next,account.user_id,account.restaurant_id,hash,at,account.revision),
+    WHERE user_id=? AND restaurant_id=? AND invitation_hash=? AND invitation_expires_at>? AND revision=?
+      AND EXISTS(SELECT 1 FROM users u WHERE u.id=restaurant_staff_access.user_id AND u.status='active' AND u.admin_version=?)`)
+    .bind(next,account.user_id,account.restaurant_id,hash,at,account.revision,account.admin_version),
    env.DB.prepare(`INSERT INTO restaurant_operation_log(restaurant_id,actor_id,action,subject_id)
     SELECT ?,?,'staff_claimed',? WHERE changes()>0`).bind(account.restaurant_id,account.user_id,account.user_id),
    env.DB.prepare(`UPDATE restaurant_memberships SET active=1 WHERE user_id=? AND restaurant_id=? AND EXISTS(

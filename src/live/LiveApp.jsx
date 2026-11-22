@@ -203,7 +203,9 @@ export default function LiveApp(){
   panelRef.current={scope,restaurantId:selectedRestaurantId};
  }
 
- const load=useCallback(async (view=scope,restaurantId=selectedRestaurantId)=>{
+ const pollingBusy=useRef(false);
+ pollingBusy.current=busy;
+ const load=useCallback(async (view=scope,restaurantId=selectedRestaurantId,poll=false)=>{
   const activeSession=sessionRef.current;
   if(!api||!activeSession||!navigator.onLine)return;
   const panel=panelRef.current;
@@ -216,16 +218,21 @@ export default function LiveApp(){
    const board=assignment==='cashier'||restaurantTab==='cash'?'unrecorded':restaurantTab==='history'?'history':'active';
    const [result,eligible,menu,capabilities]=await Promise.all([
     api.restaurantOrders(restaurantId,board==='history'&&restaurantTab==='history'?historyCursor:undefined,board),
-    manages?api.eligibleCouriers(restaurantId):{couriers:[]},manages?api.restaurantProducts(restaurantId):{products:[]},
-    api.restaurantCapabilities(restaurantId)
+    manages&&(!poll||board==='active')?api.eligibleCouriers(restaurantId):null,
+    manages&&(!poll||restaurantTab==='menu')?api.restaurantProducts(restaurantId):null,
+    !poll?api.restaurantCapabilities(restaurantId):null
    ]);
-   if(canApply()){setOrders(result.orders||[]);setCouriers(eligible.couriers||[]);
-    setManageProducts(menu.products||[]);setRestaurantCapabilities(capabilities);setNextHistory(result.nextCursor||null)}
+   if(canApply()){
+    setOrders(result.orders||[]);setNextHistory(result.nextCursor||null);
+    if(eligible)setCouriers(eligible.couriers||[]);
+    if(menu)setManageProducts(menu.products||[]);
+    if(capabilities)setRestaurantCapabilities(capabilities);
+   }
   }
   if(view==='courier'){const r=await api.courierOrders();if(canApply()){setOrders(r.orders||[]);setCourierProfile(r.profile)}}
   if(view==='admin'){
-   const [overview,managed]=await Promise.all([api.adminOverview(),api.adminRestaurants()]);
-   if(canApply()){setAdminStats(overview);setAdminRestaurants(managed.restaurants||[])}
+   const [overview,managed]=await Promise.all([api.adminOverview(),poll?null:api.adminRestaurants()]);
+   if(canApply()){setAdminStats(overview);if(managed)setAdminRestaurants(managed.restaurants||[])}
   }
  },[api,scope,selectedRestaurantId,session,restaurantTab,historyCursor]);
  useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
@@ -248,13 +255,21 @@ export default function LiveApp(){
   return()=>{stopped=true};
  },[api,offline]);
  useEffect(()=>{
-  if(!session||!api||offline||busy)return;
-  let live=true;
-  const onReadError=error=>{if(live&&!handleSessionError(error))setError(errorLabel(error))};
-  load(scope,selectedRestaurantId).catch(onReadError);
-  const timer=setInterval(()=>{if(live)load(scope,selectedRestaurantId).catch(onReadError)},15000);
-  return()=>{live=false;clearInterval(timer)};
- },[session,api,scope,selectedRestaurantId,load,busy,offline,handleSessionError]);
+  if(!session||!api||offline)return;
+  let live=true,running=false;
+  const refresh=async poll=>{
+   if(!live||running||(poll&&(document.hidden||pollingBusy.current)))return;
+   running=true;
+   try{await load(scope,selectedRestaurantId,poll)}
+   catch(error){if(live&&!handleSessionError(error))setError(errorLabel(error))}
+   finally{running=false}
+  };
+  const foreground=()=>{if(!document.hidden)refresh(false)};
+  refresh(false);
+  const timer=setInterval(()=>refresh(true),15000);
+  document.addEventListener('visibilitychange',foreground);
+  return()=>{live=false;clearInterval(timer);document.removeEventListener('visibilitychange',foreground)};
+ },[session,api,scope,selectedRestaurantId,load,offline,handleSessionError]);
 
  useEffect(()=>{
   if(!cartAccount||offline)return;

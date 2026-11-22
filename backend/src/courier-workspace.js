@@ -43,6 +43,7 @@ export async function pendingCouriers(env,actor){
 export async function revokeCourierSessions(req,env,actor){
  await courierProfile(env,actor);
  await env.DB.batch([
+  env.DB.prepare('UPDATE users SET admin_version=admin_version+1 WHERE id=?').bind(actor.userId),
   env.DB.prepare('UPDATE auth_sessions SET revoked_at=unixepoch() WHERE user_id=? AND revoked_at IS NULL').bind(actor.userId),
   env.DB.prepare('UPDATE courier_profiles SET available=0 WHERE user_id=? AND active=1').bind(actor.userId)
  ]);

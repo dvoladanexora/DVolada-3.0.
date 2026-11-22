@@ -45,7 +45,8 @@ export default {
     const body = request.method === 'HEAD' ? null
       : new Blob([gzip]).stream().pipeThrough(new DecompressionStream('gzip'));
     return new Response(body, {
-      headers: { ...headers, 'Content-Type': type, 'Cache-Control': 'no-store',
+      headers: { ...headers, 'Content-Type': type,
+        'Cache-Control': route.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-store',
         ...(route === '/push/onesignal/OneSignalSDKWorker.js' ? {
           'Service-Worker-Allowed': '/push/onesignal/',
           'Content-Security-Policy': "default-src 'self'; script-src 'self' https://cdn.onesignal.com; connect-src 'self' https://*.onesignal.com",

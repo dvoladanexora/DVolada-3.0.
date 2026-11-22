@@ -55,8 +55,11 @@ export async function clientAuth(req, env, operation) {
  const passwordHash=passwordMode?await hmacHex(env.SESSION_PEPPER,'client-password:pbkdf2-v1:'+login+':'+body.proof):null;
  const now = Math.floor(Date.now()/1000);
  const token = randomSecret();
+ const eligible=`u.status='active' AND (u.account_role='customer' OR
+  (u.account_role='courier' AND EXISTS(SELECT 1 FROM courier_profiles cp WHERE cp.user_id=u.id AND cp.active=1)))`;
  const session = env.DB.prepare(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at)
-  SELECT ?,user_id,?,? FROM client_credentials WHERE user_id=? AND revision=?`);
+  SELECT ?,c.user_id,?,? FROM client_credentials c JOIN users u ON u.id=c.user_id
+  WHERE c.user_id=? AND c.revision=? AND u.admin_version=? AND ${eligible}`);
  const sessionArgs = [crypto.randomUUID(),await hmacHex(env.SESSION_PEPPER,'session:v1:'+token),now+maxAge];
  const issueCodes = async () => {
   const access = randomSecret(), recovery = randomSecret();
@@ -72,7 +75,7 @@ export async function clientAuth(req, env, operation) {
    env.DB.prepare("INSERT INTO users(id,display_name,account_role) VALUES(?,?,'customer')").bind(id,displayName),
    env.DB.prepare('INSERT INTO client_credentials(user_id,access_hash,recovery_hash,login_name,password_hash) VALUES(?,?,?,?,?)')
     .bind(id,codes.accessHash,codes.recoveryHash,passwordMode?login:null,passwordHash),
-   session.bind(...sessionArgs,id,1)
+   session.bind(...sessionArgs,id,1,1)
   ])}catch(error){
    if(passwordMode&&/UNIQUE constraint failed: client_credentials.login_name/.test(String(error)))throw new ApiError(409,'CLIENT_LOGIN_UNAVAILABLE');
    throw error;
@@ -85,9 +88,8 @@ export async function clientAuth(req, env, operation) {
   throw new ApiError(401,'CLIENT_CODE_INVALID');
  const hash=recovery||!passwordMode
   ?await hmacHex(env.SESSION_PEPPER,(recovery?'client-recover:v1:':'client-access:v1:')+body.code):null;
- const credentialQuery=`SELECT c.user_id,c.revision FROM client_credentials c JOIN users u ON u.id=c.user_id
-  WHERE u.status='active' AND (u.account_role='customer' OR (u.account_role='courier' AND EXISTS(
-   SELECT 1 FROM courier_profiles cp WHERE cp.user_id=u.id AND cp.active=1))) AND `;
+ const credentialQuery=`SELECT c.user_id,c.revision,u.admin_version
+  FROM client_credentials c JOIN users u ON u.id=c.user_id WHERE ${eligible} AND `;
  const row=await (passwordMode
   ?env.DB.prepare(credentialQuery+(recovery?'c.login_name=? AND c.recovery_hash=?':'c.login_name=? AND c.password_hash=?'))
    .bind(login,recovery?hash:passwordHash)
@@ -95,7 +97,7 @@ export async function clientAuth(req, env, operation) {
  if (!row) throw new ApiError(401,'CLIENT_CODE_INVALID');
 
  if (!recovery) {
-  const result = await session.bind(...sessionArgs,row.user_id,row.revision).run();
+  const result = await session.bind(...sessionArgs,row.user_id,row.revision,row.admin_version).run();
   if (!result.meta.changes) throw new ApiError(401,'CLIENT_CODE_INVALID');
   return changeClientCookie(respond(req,env,204),token);
  }
@@ -103,7 +105,9 @@ export async function clientAuth(req, env, operation) {
  const codes = await issueCodes();
  const [rotated] = await env.DB.batch([
   env.DB.prepare(`UPDATE client_credentials SET access_hash=?,recovery_hash=?,password_hash=?,revision=revision+1
-   WHERE user_id=? AND revision=? AND recovery_hash=?`).bind(codes.accessHash,codes.recoveryHash,passwordHash,row.user_id,row.revision,hash),
+   WHERE user_id=? AND revision=? AND recovery_hash=? AND EXISTS(
+    SELECT 1 FROM users u WHERE u.id=client_credentials.user_id AND u.admin_version=? AND ${eligible}
+   )`).bind(codes.accessHash,codes.recoveryHash,passwordHash,row.user_id,row.revision,hash,row.admin_version),
   env.DB.prepare(`UPDATE auth_sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL
    AND EXISTS(SELECT 1 FROM client_credentials WHERE user_id=? AND recovery_hash=?)`)
    .bind(now,row.user_id,row.user_id,codes.recoveryHash),

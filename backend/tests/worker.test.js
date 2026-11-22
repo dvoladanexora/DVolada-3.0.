@@ -888,6 +888,10 @@ test('restaurant settings, menu options, photos and staffing stay within the ten
  assert.equal(res.status,200);
  assert.equal(res.headers.get('content-type'),'image/png');
  assert.equal(Buffer.from(await res.arrayBuffer()).toString('base64'),image);
+ const refreshed=(await f.call('/api/v1/catalog/restaurants/'+rid+'/products')).body.products.find(item=>item.id===pid);
+ assert.equal(refreshed.photoUrl,photo.body.photoUrl);
+ assert.equal(refreshed.category,'Bebidas');
+
  assert.equal((await ops('staff','PATCH',{userId:kitchen.id,role:'cashier',active:true})).status,403);
  assert.equal((await ops('staff','PATCH',{userId:owner.id,role:'cashier',active:true},'ownerA')).status,400);
  assert.equal((await ops('staff','PATCH',{userId:kitchen.id,role:'cashier',active:true},'ownerA')).status,200);
@@ -1250,4 +1254,41 @@ test('Control Center limits coupons at checkout and records auditable future rat
  assert.equal((await api('control/courier-rules',{restaurantId:rid,courierId:f.tokens.courier.id,effectiveAt:now+100,courierBps:5000})).status,200);
  assert.equal((await api('control/courier-rules?restaurant='+rid)).body.courierRules[0].courier_bps,5000);
  assert.deepEqual((await api('control/reports?from='+(now-60)+'&until='+(now+60)+'&restaurant='+rid)).body.orders,[{status:'Pendiente',orders:1}]);
+});
+
+test('session creation and recovery cannot cross administrative credential revocation',async()=>{
+ const f=await fixture();
+ const origin='https://dvolada-qa.dvoladanexora.workers.dev';
+ Object.assign(f.env,{CORS_ORIGINS:origin,QA_CLIENT_ACCESS:'true'});
+ const auth=(operation,body)=>worker.fetch(new Request(origin+'/api/v1/auth/client/'+operation,{
+  method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body)
+ }),f.env);
+ const original=(await (await auth('register',{displayName:'Cuenta ficticia de revocación'})).json());
+ const id=f.DB.db.prepare("SELECT id FROM users WHERE display_name='Cuenta ficticia de revocación'").get().id;
+ const before=f.DB.db.prepare('SELECT revision,recovery_hash FROM client_credentials WHERE user_id=?').get(id);
+ const DB=f.DB, prepare=DB.prepare;
+ let race=false;
+ DB.prepare=(sql)=>{
+  const stmt=prepare(sql);
+  if(!sql.startsWith('SELECT c.user_id,c.revision,u.admin_version'))return stmt;
+  return {bind(...args){
+   const query=stmt.bind(...args);
+   return {async first(){
+    const row=await query.first();
+    if(race){
+     DB.db.prepare('UPDATE users SET admin_version=admin_version+1 WHERE id=?').run(id);
+     DB.db.prepare('UPDATE auth_sessions SET revoked_at=unixepoch() WHERE user_id=?').run(id);
+    }
+    return row;
+   }};
+  }};
+ };
+ race=true;
+ assert.equal((await auth('login',{code:original.access})).status,401);
+ assert.equal((await auth('recover',{code:original.recovery})).status,401);
+ assert.deepEqual(DB.db.prepare('SELECT revision,recovery_hash FROM client_credentials WHERE user_id=?').get(id),before);
+ assert.equal(DB.db.prepare('SELECT COUNT(*) AS n FROM auth_sessions WHERE user_id=? AND revoked_at IS NULL').get(id).n,0);
+ race=false;
+ assert.equal((await auth('recover',{code:original.recovery})).status,200);
+ assert.equal((await auth('recover',{code:original.recovery})).status,401);
 });

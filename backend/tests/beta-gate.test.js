@@ -36,6 +36,13 @@ test('closed beta invitation is single-use, independent of app roles, expires an
   const cookie=attempts.find(x=>x.status===303).headers.get('set-cookie').split(';')[0];
   const access=()=>request('/cuenta',{headers:{cookie}});
   assert.equal(await access(),null);
+  const chooser=await request('/beta/paneles',{headers:{cookie}});
+  assert.equal(chooser.status,200);
+  assert.match(await chooser.text(),/name="beta_rol" value="courier"/);
+  const alreadyActivated=await request('/beta/activar',{headers:{cookie}});
+  assert.equal(alreadyActivated.status,303);
+  assert.equal(alreadyActivated.headers.get('location'),'/beta/paneles');
+  assert.equal((await request('/beta/paneles')).status,403);
   sqlite.exec("UPDATE closed_beta_invitations SET expires_at=unixepoch()");
   assert.equal((await access()).status,403);
   sqlite.exec("UPDATE closed_beta_invitations SET expires_at=unixepoch()+3600,revoked_at=unixepoch()");

@@ -17,6 +17,7 @@ import {createRestaurant,updateRestaurant,assignMember,enrollCourier,createProdu
 import {adminFlash,flashCatalogue} from './flash.js';
 import {clientPasskey} from './client-passkeys.js';
 import {clientAccessEnabled,readClientCookie,changeClientCookie} from './client-access.js';
+import {inviteOwner} from './privileged-access.js';
 import {staffAccess,staffAuthenticate} from './staff-access.js';
 import {settlements,settlementRule,requireSettlementStaff} from './restaurant-settlements.js';
 import {favorites,clientProfile,conversation,orderClaim} from './client-workspace.js';
@@ -88,7 +89,7 @@ async function route(req,env){
  if(commercial&&method==='POST'&&staffLogin)return staffAuthenticate(req,env,staffLogin[1]);
  const token=!req.headers.has('authorization')&&readClientCookie(req,env);
  if(token){
-  if(!/^\/api\/v1\/(customer\/|orders\/|restaurant\/|courier\/|auth\/(me|logout)$)/.test(path))
+  if(!/^\/api\/v1\/(customer\/|orders\/|restaurant\/|courier\/|admin\/|auth\/(me|logout|revoke-sessions)$)/.test(path))
    throw new ApiError(403,'ROLE_FORBIDDEN');
   if(method!=='GET'&&req.headers.get('origin')!==url.origin)throw new ApiError(403,'ORIGIN_FORBIDDEN');
   const headers=new Headers(req.headers);
@@ -96,13 +97,17 @@ async function route(req,env){
   req=new Request(req,{headers});
  }
  const actor=await identity(req,env);
- if(token&&(!['customer','courier'].includes(actor.role)||(path!=='/api/v1/auth/me'&&req.headers.get('x-client-account')!==actor.userId)))
+ if(token&&((!['customer','courier'].includes(actor.role)&&!(actor.role==='platform_admin'&&actor.privilegedPasskey))||(path!=='/api/v1/auth/me'&&req.headers.get('x-client-account')!==actor.userId)))
   throw new ApiError(401,'SESSION_INVALID');
 
- if(token&&!actor.staffRestaurantId&&(actor.role==='courier'?!/^\/api\/v1\/(courier\/|orders\/[0-9a-f-]+\/chat\/(courier|dispatch)$|auth\/(me|logout)$)/i.test(path):path.startsWith('/api/v1/courier/')))
+ if(token&&path.startsWith('/api/v1/admin/')&&!(actor.role==='platform_admin'&&actor.privilegedPasskey))
+  throw new ApiError(403,'ROLE_FORBIDDEN');
+ if(token&&actor.role==='platform_admin'&&!/^\/api\/v1\/(admin\/|auth\/(me|logout|revoke-sessions)$)/.test(path))
+  throw new ApiError(403,'ROLE_FORBIDDEN');
+ if(token&&!actor.staffRestaurantId&&(actor.role==='courier'?!/^\/api\/v1\/(courier\/|orders\/[0-9a-f-]+\/chat\/(courier|dispatch)$|auth\/(me|logout|revoke-sessions)$)/i.test(path):path.startsWith('/api/v1/courier/')))
   throw new ApiError(403,'ROLE_FORBIDDEN');
  if(actor.staffRestaurantId){
-  if(!commercial||!/^\/api\/v1\/(restaurant\/|orders\/[0-9a-f-]+\/chat\/(restaurant|dispatch)$|auth\/(me|logout)$)/i.test(path))
+  if((!commercial&&!actor.privilegedPasskey)||!/^\/api\/v1\/(restaurant\/|orders\/[0-9a-f-]+\/chat\/(restaurant|dispatch)$|auth\/(me|logout|revoke-sessions)$)/i.test(path))
    throw new ApiError(403,'ROLE_FORBIDDEN');
  }else if(token&&path.startsWith('/api/v1/restaurant/'))throw new ApiError(403,'ROLE_FORBIDDEN');
 
@@ -117,7 +122,15 @@ async function route(req,env){
     WHERE m.user_id=? AND m.active=1 AND (? IS NULL OR m.restaurant_id=?) ORDER BY r.name LIMIT 50`)
     .bind(actor.userId,actor.staffRestaurantId,actor.staffRestaurantId).all();
   return respond(req,env,200,{user:{id:actor.userId,displayName:actor.displayName,
-    role:actor.role},restaurants:results});
+    role:actor.role, ...(actor.privilegedPasskey?{privilegedPasskey:true}:{})},restaurants:results});
+ }
+ if(method==='POST'&&path==='/api/v1/auth/revoke-sessions'){
+  if(!actor.privilegedPasskey)throw new ApiError(403,'ROLE_FORBIDDEN');
+  await env.DB.batch([
+   env.DB.prepare('UPDATE users SET admin_version=admin_version+1 WHERE id=?').bind(actor.userId),
+   env.DB.prepare('UPDATE auth_sessions SET revoked_at=unixepoch() WHERE user_id=? AND revoked_at IS NULL').bind(actor.userId)
+  ]);
+  return changeClientCookie(respond(req,env,204),'');
  }
  if(method==='POST'&&path==='/api/v1/auth/logout'){
   await env.DB.prepare('UPDATE auth_sessions SET revoked_at=? WHERE id=? AND revoked_at IS NULL')
@@ -177,6 +190,8 @@ async function route(req,env){
  const platformRestaurant=/^\/api\/v1\/admin\/restaurants\/([0-9a-f-]+)$/i.exec(path);
  if(method==='PATCH'&&platformRestaurant)
   return respond(req,env,200,await updateRestaurant(req,env,actor,platformRestaurant[1]));
+ const ownerInvite=/^\/api\/v1\/admin\/restaurants\/([0-9a-f-]+)\/owner-invitations$/i.exec(path);
+ if(method==='POST'&&ownerInvite)return respond(req,env,201,await inviteOwner(req,env,actor,requireUuid(ownerInvite[1])));
  const platformMember=/^\/api\/v1\/admin\/restaurants\/([0-9a-f-]+)\/members$/i.exec(path);
  if(method==='POST'&&platformMember)
   return respond(req,env,200,await assignMember(req,env,actor,platformMember[1]));

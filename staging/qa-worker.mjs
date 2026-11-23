@@ -22,6 +22,10 @@ export default {
     if (protocol !== 'https:' || (!qa && !production) || (production && /^\/pruebas(?:\/|$)/.test(pathname))) return new Response(null, { status: 404 });
     if (production) env = {...env, QA_CLIENT_ACCESS:'false', QA_PUSH_ALLOWED:'false',
       QA_FLASH:env.FLASH_ENABLED, QA_RESTAURANT_COMMERCIAL:env.RESTAURANT_COMMERCIAL_ENABLED};
+    if (production && request.headers.has('authorization') && pathname.startsWith('/api/v1/'))
+      return new Response(JSON.stringify({error:'SESSION_REQUIRED'}),{
+        status:401,headers:{...headers,'Content-Type':'application/json','Cache-Control':'no-store'},
+      });
     if (pathname === '/health' || pathname.startsWith('/api/v1/')) {
       if (pathname === '/api/v1/push/identity' && env.QA_PUSH_ALLOWED !== 'true')
         return new Response(JSON.stringify({ error: 'PUSH_SETUP_PENDING' }), {

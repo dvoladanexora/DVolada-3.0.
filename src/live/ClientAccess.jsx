@@ -13,17 +13,17 @@ export default function ClientAccess({authenticate,offline,busy}){
   setCode('');
  }
  return <form className="dvl-panel dvl-login" onSubmit={submit}>
-  <h2>Cuenta Cliente</h2>
-  <div className="dvl-inline dvl-client-modes" aria-label="Acceso de cliente">
+  <h2>Cuenta Dvolada</h2>
+  <div className="dvl-inline dvl-client-modes" aria-label="Acceso a la cuenta">
    {Object.entries(actions).map(([key,label])=><button key={key} type="button" disabled={busy} aria-pressed={key===mode}
     className={'dvl-action '+(key===mode?'':'secondary')} onClick={()=>{setMode(key);setCode('')}}>{label}</button>)}
   </div>
   {mode==='register'&&<label>Nombre<input autoComplete="name" minLength={2} maxLength={80} value={name} onChange={event=>setName(event.target.value)} required/></label>}
   <label>Usuario<input autoComplete="username" autoCapitalize="none" spellCheck={false} minLength={4} maxLength={40}
    pattern="[A-Za-z0-9][A-Za-z0-9._\-]{3,39}" value={login} onChange={event=>setLogin(event.target.value)} required/></label>
-  {mode==='recover'&&<label>Código de recuperación<input type="password" autoComplete="off" minLength={43} maxLength={43}
+  {mode==='recover'&&<label>Código de recuperación o invitación<input type="password" autoComplete="off" minLength={43} maxLength={43}
    value={code} onChange={event=>setCode(event.target.value)} required/></label>}
-  <p className="dvl-muted">{mode==='recover'?'Creá una nueva llave con tu código de recuperación anterior. Se cerrarán las sesiones previas.':
+  <p className="dvl-muted">{mode==='recover'?'Usá tu invitación de Administrador o Propietario para activar la cuenta. Si ya tenés cuenta, usá tu código de recuperación para reemplazar la llave y cerrar las sesiones previas.':
    mode==='register'?'Tu dispositivo te pedirá una llave de acceso. Guardá el código de recuperación al finalizar.':
    'Ingresá con tu llave de acceso. Si tu cuenta usaba contraseña, elegí Recuperar acceso.'}</p>
   <button type="submit" className="dvl-action" disabled={busy||offline}>{busy?'Comprobando…':actions[mode]+' con llave'}</button>

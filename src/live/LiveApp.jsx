@@ -16,6 +16,28 @@ import ClientSupport from './ClientSupport.jsx';
 import CatalogSearch from './CatalogSearch.jsx';
 import {readCart,writeCart,updateQuantity} from './cart-draft.js';
 
+function OwnerInvitation({restaurantId,invite,disabled}){
+ const [login,setLogin]=useState(''),[displayName,setDisplayName]=useState(''),[issued,setIssued]=useState(null);
+ async function submit(event){
+  event.preventDefault();
+  const result=await invite(restaurantId,{login:login.trim().toLowerCase(),displayName:displayName.trim()});
+  if(result){setIssued(result);setLogin('');setDisplayName('')}
+ }
+ if(issued)return <section className="dvl-panel dvl-code-panel" aria-label="Invitación de propietario creada">
+  <h3>Invitación de propietario</h3>
+  <p>Entregala en privado a {issued.login}. Vence a las {new Date(issued.expiresAt*1000).toLocaleTimeString()}.</p>
+  <label>Código de invitación<input readOnly value={issued.invitation} onFocus={event=>event.target.select()}/></label>
+  <button type="button" className="dvl-action" onClick={()=>setIssued(null)}>Cerrar invitación</button>
+ </section>;
+ return <form className="dvl-grid dvl-editor" onSubmit={submit}>
+  <label>Nombre del propietario<input autoComplete="off" minLength={2} maxLength={80} required
+   value={displayName} onChange={event=>setDisplayName(event.target.value)}/></label>
+  <label>Usuario del propietario<input autoComplete="off" minLength={4} maxLength={40} required
+   value={login} onChange={event=>setLogin(event.target.value)}/></label>
+  <button type="submit" className="dvl-action" disabled={disabled}>Invitar propietario</button>
+ </form>;
+}
+
 const qaView=['/pruebas','/pruebas/'].includes(window.location.pathname);
 const apiOrigin=import.meta.env.VITE_DVOLADA_API_URL||window.location.origin;
 const optionPrice=options=>(options||[]).reduce((total,option)=>total+option.price_minor,0);
@@ -374,7 +396,7 @@ export default function LiveApp(){
   }catch(e){setError(errorLabel(e))}
   finally{setBusy(false)}
  }
- async function logout(){
+ async function logout(everywhere=false){
   setBusy(true);
   try{
    let pushFailure=false;
@@ -382,7 +404,7 @@ export default function LiveApp(){
     try{await disableQaPush(pushConfig)}catch{pushFailure=true}
     setPushEnabled(false);
    }
-   if(sessionRef.current)await api.logout();
+   if(sessionRef.current)await (everywhere?api.revokeAccessSessions():api.logout());
    endLocalSession();
    if(pushFailure)setStatus('Sesión cerrada. Revisá el permiso de notificaciones de este sitio en el navegador.');
   }catch(e){if(!handleSessionError(e))setError(errorLabel(e))}
@@ -532,7 +554,7 @@ export default function LiveApp(){
  const formattedUserId=session?.user?.id||'';
  return <div className="dvl-app">
   <header className="dvl-header"><div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada" /><div><strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
-   <div className="dvl-head-actions"><label className="dvl-theme">Tema<select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy||offline} onClick={logout}><LogOut size={15}/> Salir</Action>}</div></header>
+   <div className="dvl-head-actions"><label className="dvl-theme">Tema<select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy||offline} onClick={()=>logout()}><LogOut size={15}/> Salir</Action>}</div></header>
   <main className="dvl-main">
   <div className="dvl-intro"><span className="dvl-kicker">NEXORA SYSTEMS · DVOLADA ONLINE</span>
    <h1>{session?(scope==='restaurant'&&selectedBusiness?.staff_role==='kitchen'?'Cocina':roles[scope]) :(qaView?'Dvolada · Entorno de pruebas':'Dvolada · Mi cuenta')}</h1>
@@ -543,6 +565,8 @@ export default function LiveApp(){
   <WaitOrError message={refreshWarning}/>
   {session&&<div className="dvl-id-note"><span>ID de vinculación: <code>{formattedUserId}</code></span><Action kind="text"
    onClick={()=>navigator.clipboard?.writeText(formattedUserId).catch(()=>{})}>Copiar</Action></div>}
+    {session?.user.privilegedPasskey&&<Action kind="text" disabled={busy||offline}
+   onClick={()=>{if(window.confirm('¿Cerrar todas las sesiones de esta cuenta?'))logout(true)}}>Cerrar todas mis sesiones</Action>}
   {staffCredential&&<StaffSecret code={staffCredential} close={()=>setStaffCredential(null)} issued/>}
   {!session&&commercial&&accountEnabled&&<StaffSignIn authenticate={authenticateStaff} disabled={busy||offline}/>}
   <ClientCodes codes={newCodes} close={()=>setNewCodes(null)}/>
@@ -801,6 +825,9 @@ export default function LiveApp(){
        onClick={async()=>{if(await action(()=>api.adminUpdateRestaurant(r.id,{deliveryFeeMinor:Math.round(Number(adminFee)*100)})))setAdminFee('')}}>
        Guardar tarifa</Action>
      </div>)}
+     {session.user.privilegedPasskey&&adminSelectedId&&<OwnerInvitation key={adminSelectedId}
+      restaurantId={adminSelectedId} disabled={busy||offline}
+      invite={(id,body)=>run(()=>api.adminInviteOwner(id,body,newKey()),{refresh:false})}/>}
      <div className="dvl-grid dvl-editor">
       <label>ID de usuario registrado<input value={adminMemberId} onChange={e=>setAdminMemberId(e.target.value)} placeholder="UUID del usuario"/></label>
       <label>Rol del empleado<select value={adminStaffRole} onChange={e=>setAdminStaffRole(e.target.value)}>

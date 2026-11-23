@@ -3,21 +3,30 @@ import {isoBase64URL} from '@simplewebauthn/server/helpers';
 import {ApiError,hmacHex,readJson,requireKeys,requireText,requireUuid,respond} from './security.js';
 import {clientAccessEnabled,readSecretCookie,randomSecret,secretCookie,secretPattern,sessionSeconds,changeClientCookie} from './client-access.js';
 
+import {loginPattern,recoveryHash,retiredAccessHash} from './privileged-access.js';
+
 const browserCookie='__Host-dvolada-passkey';
 const challengeSeconds=300;
 const algorithms=[-7,-257];
-const eligible=`u.status='active' AND (u.account_role='customer' OR
- (u.account_role='courier' AND EXISTS(SELECT 1 FROM courier_profiles p WHERE p.user_id=u.id AND p.active=1)))`;
-const accountQuery=`SELECT c.user_id,c.login_name,c.revision,u.admin_version,u.display_name
- FROM client_credentials c JOIN users u ON u.id=c.user_id WHERE ${eligible} AND `;
+const privilegedEligibility=`(SELECT 1 FROM privileged_passkey_accounts a WHERE a.user_id=u.id AND
+ (a.invitation_expires_at IS NULL OR a.invitation_expires_at>unixepoch()) AND (
+ (a.access_role='platform_admin' AND u.account_role='platform_admin') OR
+ (a.access_role='owner' AND u.account_role='customer' AND EXISTS(SELECT 1 FROM restaurant_memberships m
+  WHERE m.user_id=u.id AND m.restaurant_id=a.restaurant_id AND m.staff_role='owner' AND m.active=1))))`;
+const eligible=`u.status='active' AND (EXISTS${privilegedEligibility} OR (
+ NOT EXISTS(SELECT 1 FROM privileged_passkey_accounts WHERE user_id=u.id) AND
+ (u.account_role='customer' OR (u.account_role='courier' AND EXISTS(
+ SELECT 1 FROM courier_profiles p WHERE p.user_id=u.id AND p.active=1)))))`;
+const accountQuery=`SELECT c.user_id,c.login_name,c.revision,u.admin_version,u.display_name,a.invitation_expires_at
+ FROM client_credentials c JOIN users u ON u.id=c.user_id
+ LEFT JOIN privileged_passkey_accounts a ON a.user_id=u.id WHERE ${eligible} AND `;
 const now=()=>Math.floor(Date.now()/1000);
 const browserHash=(env,secret)=>hmacHex(env.SESSION_PEPPER,'client-passkey-browser:v1:'+secret);
-const recoveryHash=(env,code)=>hmacHex(env.SESSION_PEPPER,'client-recover:v1:'+code);
 
 async function begin(req,env,mode,input,rpID){
  requireKeys(input,mode==='register'?['login','displayName']:mode==='recover'?['login','code']:['login']);
  const login=typeof input.login==='string'?input.login.trim().toLowerCase():'';
- if(!/^[a-z0-9][a-z0-9._-]{3,39}$/.test(login))throw new ApiError(400,'CLIENT_CREDENTIAL_FORMAT');
+ if(!loginPattern.test(login))throw new ApiError(400,'CLIENT_CREDENTIAL_FORMAT');
  const birth=now();
  const ip=await hmacHex(env.SESSION_PEPPER,'client-passkey-rate:v1:'+(req.headers.get('cf-connecting-ip')||'unknown'));
  const limit=await env.DB.prepare(`INSERT INTO client_auth_throttle(source_hash,time_bucket,attempts)
@@ -48,7 +57,7 @@ async function begin(req,env,mode,input,rpID){
   env.DB.prepare('DELETE FROM client_passkey_challenges WHERE id IN (SELECT id FROM client_passkey_challenges WHERE expires_at<=? LIMIT 32)').bind(birth),
   env.DB.prepare(`INSERT INTO client_passkey_challenges(id,browser_hash,mode,challenge,user_id,login_name,display_name,revision,admin_version,expires_at)
    VALUES(?,?,?,?,?,?,?,?,?,?)`).bind(id,await browserHash(env,browser),mode,options.challenge,userID,login,name,
-   account?.revision??null,account?.admin_version??null,birth+challengeSeconds)
+   account?.revision??null,account?.admin_version??null,Math.min(birth+challengeSeconds,account?.invitation_expires_at??Infinity))
  ]);
  return secretCookie(respond(req,env,200,{id,options}),browserCookie,browser,challengeSeconds);
 }
@@ -68,11 +77,12 @@ async function verifyLogin(env,assertion,expected,login){
 }
 
 async function session(env,user,token,credentialId,revision,adminVersion,issued,{guardChanges=false,recovery=null}={}){
- return env.DB.prepare(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at)
-  SELECT ?,u.id,?,? FROM users u JOIN client_credentials c ON c.user_id=u.id
-   JOIN client_passkeys p ON p.user_id=u.id
+ return env.DB.prepare(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at,staff_restaurant_id,privileged_passkey)
+  SELECT ?,u.id,?,?+CASE WHEN a.user_id IS NULL THEN ${sessionSeconds} ELSE 28800 END,
+   a.restaurant_id, a.user_id IS NOT NULL FROM users u JOIN client_credentials c ON c.user_id=u.id
+   JOIN client_passkeys p ON p.user_id=u.id LEFT JOIN privileged_passkey_accounts a ON a.user_id=u.id
   WHERE u.id=? AND p.credential_id=? AND c.revision=? AND u.admin_version=? AND ${eligible} ${guardChanges?'AND changes()>0':''} ${recovery?'AND c.recovery_hash=?':''}`)
-  .bind(crypto.randomUUID(),await hmacHex(env.SESSION_PEPPER,'session:v1:'+token),issued+sessionSeconds,
+  .bind(crypto.randomUUID(),await hmacHex(env.SESSION_PEPPER,'session:v1:'+token),issued,
    user,credentialId,revision,adminVersion,...(recovery?[recovery]:[]));
 }
 
@@ -83,7 +93,7 @@ async function setupPasskey(env,flow,assertion,expected,token,issued){
  if(!verified.verified||!verified.registrationInfo)throw new ApiError(401,'PASSKEY_INVALID');
  const credential=verified.registrationInfo.credential;
  const pub=isoBase64URL.fromBuffer(credential.publicKey),recovery=randomSecret();
- const nextRecovery=await recoveryHash(env,recovery),retired=await hmacHex(env.SESSION_PEPPER,'retired-client-access:'+randomSecret());
+ const nextRecovery=await recoveryHash(env,recovery),retired=await retiredAccessHash(env);
  const user=flow.user_id;
  try{
   if(flow.mode==='register'){
@@ -106,6 +116,8 @@ async function setupPasskey(env,flow,assertion,expected,token,issued){
      .bind(credential.id,pub,credential.counter,user,nextRecovery),
     env.DB.prepare(`UPDATE auth_sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL
      AND EXISTS(SELECT 1 FROM client_credentials WHERE user_id=? AND recovery_hash=?)`).bind(issued,user,user,nextRecovery),
+    env.DB.prepare(`UPDATE privileged_passkey_accounts SET invitation_expires_at=NULL WHERE user_id=?
+     AND EXISTS(SELECT 1 FROM client_credentials WHERE user_id=? AND recovery_hash=?)`).bind(user,user,nextRecovery),
     await session(env,user,token,credential.id,flow.revision+1,flow.admin_version,issued,{recovery:nextRecovery})
    ]);
    if(!updated.meta.changes)throw new ApiError(401,'CLIENT_CODE_INVALID');

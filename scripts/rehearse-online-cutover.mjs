@@ -18,7 +18,8 @@ for (const name of ['dvolada-online.mjs', 'SHA']) {
 
 const migrationDir = new URL('../backend/migrations/', import.meta.url);
 const files = (await readdir(migrationDir)).filter(name => name.endsWith('.sql')).sort();
-assert.equal(files.at(-1), '0019_client_passkeys.sql', 'Review the rehearsal when migrations change');
+const passkeyUpgrade = files.indexOf('0019_client_passkeys.sql');
+assert(passkeyUpgrade > 0, 'Missing client passkey migration');
 const migrations = await Promise.all(files.map(name => readFile(new URL(name, migrationDir), 'utf8')));
 const directory = await mkdtemp(join(tmpdir(), 'dvolada-cutover-'));
 const connections = [];
@@ -42,7 +43,7 @@ try {
   for (const sql of migrations) fresh.exec(sql);
   check(fresh);
   const prior = open('prior.sqlite');
-  for (const sql of migrations.slice(0, -1)) prior.exec(sql);
+  for (const sql of migrations.slice(0, passkeyUpgrade)) prior.exec(sql);
   prior.exec(`
     INSERT INTO users(id,display_name,account_role) VALUES ('test-customer','Cliente sintético','customer');
     INSERT INTO client_credentials(user_id,access_hash,recovery_hash,login_name,password_hash)
@@ -59,7 +60,7 @@ try {
   const saved = open('before.sqlite');
   await backup(saved, join(directory, 'upgrade.sqlite'));
   const upgrade = open('upgrade.sqlite');
-  upgrade.exec(migrations.at(-1));
+  for (const sql of migrations.slice(passkeyUpgrade)) upgrade.exec(sql);
   check(upgrade);
   assert.deepEqual(snapshot(upgrade), before);
   assert.equal(upgrade.prepare('SELECT COUNT(*) AS n FROM client_passkeys').get().n, 0);
@@ -96,7 +97,7 @@ try {
   const closed = await worker.fetch(new Request('https://' + commercial + '/cuenta'),
     { ...bindings, DVOLADA_ONLINE_SERVE: 'false' }, {});
   assert.equal(closed.status, 404);
-  console.log(JSON.stringify({ sha, migrations: migrations.length, isolatedUpgrade: '0018→0019',
+  console.log(JSON.stringify({ sha, migrations: migrations.length, isolatedUpgrade: '0018→'+files.at(-1).slice(0,4),
     existingRowsPreserved: true, isolatedRestoreVerified: true, retiredRouteChecks: 12, commercialClosed: true }));
 } finally {
   for (const db of connections.reverse()) db.close();

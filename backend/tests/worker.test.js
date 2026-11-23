@@ -9,7 +9,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -1192,11 +1192,13 @@ function virtualPasskey(){
   }
  };
 }
-function passkeyRequest(f,path,body,{cookie,account,origin=passkeyOrigin,url=passkeyOrigin,method=body?'POST':'GET'}={}){
+function passkeyRequest(f,path,body,{cookie,account,origin=passkeyOrigin,url=passkeyOrigin,method=body?'POST':'GET',key,restaurantId}={}){
  const headers={Origin:origin};
  if(body)headers['Content-Type']='application/json';
  if(cookie)headers.Cookie=cookie;
  if(account)headers['X-Client-Account']=account;
+ if(key)headers['Idempotency-Key']=key;
+ if(restaurantId)headers['X-Restaurant-ID']=restaurantId;
  return worker.fetch(new Request(url+'/api/v1/'+path,{method,headers,body:body&&JSON.stringify(body)}),f.env);
 }
 const partCookie=response=>response.headers.get('set-cookie')?.split(';')[0];
@@ -1277,4 +1279,74 @@ test('passkey options honor QA and explicit production origin and rate-limit req
  f.env.CLIENT_PASSKEYS_ENABLED='true';
  for(let i=0;i<24;i++)assert.equal((await request()).status,200);
  assert.equal((await request()).status,429);
+});
+
+async function usePrivilegedKey(f,action,login,authenticator,code){
+ const start=await beginKey(f,action,{login,...code&&{code}});
+ assert.equal(start.status,200);
+ const {id,options}=await start.json();
+ const response=action==='login'?authenticator.assertion(options):authenticator.registration(options);
+ return finishKey(f,action,id,response,partCookie(start));
+}
+
+test('invited administrators and owners authenticate with passkeys and retain separate privileges',async()=>{
+ const f=await fixture();
+ Object.assign(f.env,{CORS_ORIGINS:passkeyOrigin,QA_CLIENT_ACCESS:'true',QA_RESTAURANT_COMMERCIAL:'true'});
+ const admin=f.tokens.platformAdmin.id,login='qa.global.admin',code=randomBytes(32).toString('base64url');
+ const db=f.DB.db;
+ db.prepare('INSERT INTO client_credentials(user_id,login_name,access_hash,recovery_hash) VALUES(?,?,?,?)')
+  .run(admin,login,'bootstrap-disabled-old-access',await hmacHex(PEPPER,'client-recover:v1:'+code));
+ db.prepare("INSERT INTO privileged_passkey_accounts(user_id,access_role,invitation_expires_at) VALUES(?,'platform_admin',unixepoch()-1)").run(admin);
+ assert.equal((await beginKey(f,'recover',{login,code})).status,401);
+ db.prepare('UPDATE privileged_passkey_accounts SET invitation_expires_at=unixepoch()+30 WHERE user_id=?').run(admin);
+
+ const adminKey=virtualPasskey(),activated=await usePrivilegedKey(f,'recover',login,adminKey,code);
+ assert.equal(activated.status,200);
+ assert.equal((await beginKey(f,'recover',{login,code})).status,401);
+ const adminCookie=partCookie(activated),adminOptions={cookie:adminCookie,account:admin};
+ const {recovery:adminRecovery}=await activated.json();
+ assert.equal((await passkeyRequest(f,'admin/overview',undefined,adminOptions)).status,200);
+ assert.equal((await passkeyRequest(f,'admin/overview',undefined,{cookie:adminCookie,account:f.tokens.customer.id})).status,401);
+ assert.equal((await passkeyRequest(f,'customer/orders',undefined,adminOptions)).status,403);
+ const [rA,rB]=f.restaurants;
+ const ownerLogin='qa.owner.one',invitePath='admin/restaurants/'+rA+'/owner-invitations',ownerBody={login:ownerLogin,displayName:'Titular de prueba'};
+ const customer=await enrollPasskey(f,'qa.customer.negative');
+ assert.equal((await passkeyRequest(f,invitePath,ownerBody,{...customer,key:randomUUID()})).status,403);
+ assert.equal((await passkeyRequest(f,invitePath,ownerBody,{...adminOptions,key:randomUUID(),origin:'https://other.example'})).status,403);
+ const invited=await passkeyRequest(f,invitePath,ownerBody,{...adminOptions,key:randomUUID()});
+ assert.equal(invited.status,201);
+ const owner=await invited.json();
+ assert.equal(db.prepare("SELECT COUNT(*) AS n FROM control_audit WHERE subject=? AND action='owner_invited'").get(owner.userId).n,1);
+ const ownerKey=virtualPasskey(),claimed=await usePrivilegedKey(f,'recover',ownerLogin,ownerKey,owner.invitation);
+ assert.equal(claimed.status,200);
+ const {recovery:ownerRecovery}=await claimed.json();
+ const ownerOptions={cookie:partCookie(claimed),account:owner.userId};
+ const {restaurants}=await (await passkeyRequest(f,'auth/me',undefined,ownerOptions)).json();
+ assert.deepEqual(restaurants.map(item=>[item.restaurant_id,item.staff_role]),[[rA,'owner']]);
+ assert.equal((await passkeyRequest(f,'admin/overview',undefined,ownerOptions)).status,403);
+ db.prepare("INSERT INTO restaurant_memberships(restaurant_id,user_id,staff_role) VALUES(?,?,'manager')").run(rB,owner.userId);
+ assert.equal((await passkeyRequest(f,'restaurant/staff-access',undefined,{...ownerOptions,restaurantId:rA})).status,200);
+ assert.equal((await passkeyRequest(f,'restaurant/staff-access',undefined,{...ownerOptions,restaurantId:rB})).status,403);
+ const staffInvite=await passkeyRequest(f,'restaurant/staff-access',{displayName:'Cocina sintética',role:'kitchen'},
+  {...ownerOptions,restaurantId:rA,key:randomUUID()});
+ assert.equal(staffInvite.status,200);
+ assert.equal((await usePrivilegedKey(f,'login',ownerLogin,ownerKey)).status,204);
+ const recovered=await usePrivilegedKey(f,'recover',ownerLogin,virtualPasskey(),ownerRecovery);
+ assert.equal(recovered.status,200);
+ assert.equal((await passkeyRequest(f,'auth/me',undefined,ownerOptions)).status,401);
+ assert.equal((await usePrivilegedKey(f,'login',ownerLogin,ownerKey)).status,401);
+
+ const replacement=virtualPasskey();
+ const adminRecovered=await usePrivilegedKey(f,'recover',login,replacement,adminRecovery);
+ assert.equal(adminRecovered.status,200);
+ assert.equal((await passkeyRequest(f,'auth/me',undefined,adminOptions)).status,401);
+ const logged=await usePrivilegedKey(f,'login',login,replacement);
+ assert.equal(logged.status,204);
+ const session={cookie:partCookie(logged),account:admin};
+ assert.equal((await passkeyRequest(f,'auth/revoke-sessions',undefined,{...session,method:'POST'})).status,204);
+ for(const cookie of [session.cookie,partCookie(adminRecovered)])
+  assert.equal((await passkeyRequest(f,'auth/me',undefined,{cookie})).status,401);
+ const again=await usePrivilegedKey(f,'login',login,replacement);
+ assert.equal(again.status,204);
+ assert.equal((await passkeyRequest(f,'auth/logout',undefined,{cookie:partCookie(again),account:admin,method:'POST'})).status,204);
 });

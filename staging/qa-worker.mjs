@@ -1,3 +1,4 @@
+import {betaGate} from '../backend/src/beta-gate.js';
 import api from '../backend/src/index.js';
 import { qaPushAppId } from '../backend/src/qa-push-identity.js';
 import { drainQaOrderPush, qaOrderPushConfigured } from '../backend/src/qa-order-push.js';
@@ -12,14 +13,23 @@ const headers = {
 
 export default {
   async scheduled(_event, env) {
-    if (env.QA_PUSH_ALLOWED === 'true') await drainQaOrderPush(env);
+    if (!env.DVOLADA_BETA_HOST && !env.BETA_DB && env.QA_PUSH_ALLOWED === 'true') await drainQaOrderPush(env);
   },
   async fetch(request, env, ctx) {
     const { hostname, pathname, protocol } = new URL(request.url);
     const qa = hostname === 'dvolada-qa.dvoladanexora.workers.dev' && env.DVOLADA_QA_HOST === hostname;
-    const production = !qa && hostname !== 'dvolada-qa.dvoladanexora.workers.dev' &&
+    const betaHost = hostname === 'dvolada-beta.dvoladanexora.workers.dev';
+    if (betaHost) {
+      if (protocol !== 'https:' || env.DVOLADA_BETA_HOST !== hostname || !env.BETA_DB) return new Response(null,{status:404});
+      const denied = await betaGate(request,env.BETA_DB);
+      if (denied) return denied;
+      if (request.headers.has('authorization') || /^\/pruebas(?:\/|$)/.test(pathname)) return new Response(null,{status:403});
+      env = {...env, DB:env.BETA_DB, DVOLADA_ONLINE_HOST:hostname, CLIENT_PASSKEYS_ENABLED:'true',
+        QA_PUSH_ALLOWED:'false', QA_CLIENT_ACCESS:'false', QA_RESTAURANT_COMMERCIAL:'true'};
+    }
+    const production = !betaHost && !qa && hostname !== 'dvolada-qa.dvoladanexora.workers.dev' &&
       env.DVOLADA_ONLINE_HOST === hostname && env.DVOLADA_ONLINE_SERVE === 'true';
-    if (protocol !== 'https:' || (!qa && !production) || (production && /^\/pruebas(?:\/|$)/.test(pathname))) return new Response(null, { status: 404 });
+    if (protocol !== 'https:' || (!betaHost && !qa && !production) || (production && /^\/pruebas(?:\/|$)/.test(pathname))) return new Response(null, { status: 404 });
     if (production) env = {...env, QA_CLIENT_ACCESS:'false', QA_PUSH_ALLOWED:'false',
       QA_FLASH:env.FLASH_ENABLED, QA_RESTAURANT_COMMERCIAL:env.RESTAURANT_COMMERCIAL_ENABLED};
     if (production && request.headers.has('authorization') && pathname.startsWith('/api/v1/'))

@@ -3,7 +3,7 @@ export {betaHash};
 import {randomSecret,readSecretCookie,secretCookie,secretPattern} from './client-access.js';
 
 const cookie='__Host-dvolada-beta';
-const headers={'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex',
+const headers={'Cache-Control':'no-store','Referrer-Policy':'same-origin','X-Robots-Tag':'noindex',
  'Content-Security-Policy':"default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"};
 const fail=status=>new Response(null,{status,headers});
 export async function betaGate(req,db){

@@ -12,6 +12,7 @@ test('closed beta invitation is single-use, independent of app roles, expires an
   const db={prepare(sql){return {bind(...args){return {async first(){return sqlite.prepare(sql).get(...args)}}}}}};
   const origin='https://beta.example.test';
   const request=(path,options)=>betaGate(new Request(origin+path,options),db);
+  assert.equal((await request('/beta/activar')).headers.get('referrer-policy'),'same-origin');
   const code=randomSecret();
   sqlite.prepare("INSERT INTO closed_beta_invitations(id,invitation_hash,expires_at) VALUES('customer',?,unixepoch()+3600)").run(await betaHash(code));
   const claim=(from=origin)=>request('/beta/activar',{method:'POST',headers:{origin:from},body:new URLSearchParams({code})});

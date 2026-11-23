@@ -13,6 +13,10 @@ test('closed beta invitation is single-use, independent of app roles, expires an
   const origin='https://beta.example.test';
   const request=(path,options)=>betaGate(new Request(origin+path,options),db);
   assert.equal((await request('/beta/activar')).headers.get('referrer-policy'),'same-origin');
+  const activation=await request('/beta/activar');
+  assert.equal(activation.status,200);
+  assert.match(await activation.text(),/name="role" value="restaurant"/);
+  assert.match(activation.headers.get('content-security-policy'),/style-src 'sha256-/);
   const code=randomSecret();
   sqlite.prepare("INSERT INTO closed_beta_invitations(id,invitation_hash,expires_at) VALUES('customer',?,unixepoch()+3600)").run(await betaHash(code));
   const claim=(from=origin)=>request('/beta/activar',{method:'POST',headers:{origin:from},body:new URLSearchParams({code})});
@@ -20,6 +24,15 @@ test('closed beta invitation is single-use, independent of app roles, expires an
   assert.equal((await claim('https://other.example')).status,403);
   const attempts=await Promise.all([claim(),claim()]);
   assert.deepEqual(attempts.map(x=>x.status).sort(),[303,403]);
+  assert.equal(attempts.find(x=>x.status===303).headers.get('location'),'/cuenta?beta_rol=customer');
+  const courierCode=randomSecret();
+  sqlite.prepare("INSERT INTO closed_beta_invitations(id,invitation_hash,expires_at) VALUES('courier',?,unixepoch()+3600)").run(await betaHash(courierCode));
+  const courierClaim=role=>request('/beta/activar',{method:'POST',headers:{origin},body:new URLSearchParams({code:courierCode,role})});
+  assert.equal((await courierClaim('platform_admin')).status,400);
+  const courierResult=await courierClaim('courier');
+  assert.equal(courierResult.status,303);
+  assert.equal(courierResult.headers.get('location'),'/cuenta?beta_rol=courier');
+  assert.equal((await courierClaim('restaurant')).status,403);
   const cookie=attempts.find(x=>x.status===303).headers.get('set-cookie').split(';')[0];
   const access=()=>request('/cuenta',{headers:{cookie}});
   assert.equal(await access(),null);

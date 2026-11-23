@@ -63,12 +63,14 @@ export async function assignMember(req,env,actor,restaurantId){
 }
 export async function enrollCourier(req,env,actor){
  requireRole(actor,'platform_admin');
- const body=await readJson(req);requireKeys(body,['userId']);
+ const body=await readJson(req);requireKeys(body,['userId','applicationCreatedAt']);
  const userId=requireUuid(body.userId,'userId');
+ if(body.applicationCreatedAt!==undefined&&(!Number.isSafeInteger(body.applicationCreatedAt)||body.applicationCreatedAt<1))throw new ApiError(400,'INVALID_INPUT');
  if(actor.userId===userId)throw new ApiError(403,'CANNOT_ENROLL_SELF');
  const [approved]=await env.DB.batch([
   env.DB.prepare(`UPDATE users SET account_role='courier' WHERE id=? AND account_role='customer' AND status='active'
-   AND NOT EXISTS(SELECT 1 FROM restaurant_memberships WHERE user_id=users.id)`).bind(userId),
+   AND NOT EXISTS(SELECT 1 FROM restaurant_memberships WHERE user_id=users.id)
+   AND (? IS NULL OR EXISTS(SELECT 1 FROM courier_applications WHERE user_id=users.id AND created_at=?))`).bind(userId,body.applicationCreatedAt??null,body.applicationCreatedAt??null),
   env.DB.prepare(`INSERT INTO courier_profiles(user_id,active,max_active_orders,available)
    SELECT ?,1,2,0 WHERE changes()>0
    ON CONFLICT(user_id) DO UPDATE SET active=1,max_active_orders=2,available=0`).bind(userId),

@@ -1,4 +1,5 @@
-import {ApiError,idempotencyKey,readJson,requireKeys,requireRole,requireText,requireUuid,respond} from './security.js';
+import {controlAudit} from './control-center.js';
+import {ApiError,requireInteger,idempotencyKey,readJson,requireKeys,requireRole,requireText,requireUuid,respond} from './security.js';
 
 export async function courierProfile(env,actor){
  requireRole(actor,'courier');
@@ -31,6 +32,21 @@ export async function courierApplication(req,env,actor){
    throw new ApiError(403,'ROLE_FORBIDDEN');
  }
  return {requested:Boolean(await env.DB.prepare('SELECT 1 FROM courier_applications WHERE user_id=?').bind(actor.userId).first())};
+}
+
+export async function rejectCourierApplication(req,env,actor){
+ requireRole(actor,'platform_admin');
+ const data=await readJson(req);
+ requireKeys(data,['userId','createdAt']);
+ const id=requireUuid(data.userId);
+ const createdAt=requireInteger(data.createdAt,1,Number.MAX_SAFE_INTEGER,'createdAt');
+ const [removed]=await env.DB.batch([
+  env.DB.prepare(`DELETE FROM courier_applications WHERE user_id=? AND created_at=?
+   AND EXISTS(SELECT 1 FROM users WHERE id=? AND account_role='customer' AND status='active')`).bind(id,createdAt,id),
+  controlAudit(env,actor,'courier_application_rejected',id,{createdAt})
+ ]);
+ if(!removed.meta.changes)throw new ApiError(409,'APPLICATION_CHANGED');
+ return {rejected:true};
 }
 
 export async function pendingCouriers(env,actor){

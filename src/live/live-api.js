@@ -106,6 +106,7 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
   courierHistory:cursor=>request('/api/v1/courier/history'+(cursor?'?cursor='+s(cursor):'')),
   revokeCourierSessions:()=>request('/api/v1/courier/revoke-sessions',{method:'POST',body:{}}),
   courierApplication:submit=>request('/api/v1/customer/courier-application',submit?{method:'POST',body:{}}:{}),
+  rejectCourierApplication:(userId,createdAt)=>request('/api/v1/admin/courier-applications/reject',{method:'POST',body:{userId,createdAt}}),
   courierApplications:()=>request('/api/v1/admin/courier-applications'),
   courierOrders:()=>request('/api/v1/courier/orders'),
   courierOffer:(order,action,key)=>request('/api/v1/courier/orders/'+s(order.id)+'/offer',
@@ -123,6 +124,6 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
   adminAssignMember:(id,body)=>request('/api/v1/admin/restaurants/'+s(id)+'/members',{method:'POST',body}),
   control:(path,options)=>request('/api/v1/admin/control/'+path,options),
   setFlashActive:(id,active)=>request('/api/v1/admin/flash/'+s(id),{method:'PATCH',body:{active}}),
-  adminEnrollCourier:userId=>request('/api/v1/admin/couriers',{method:'POST',body:{userId}})
+  adminEnrollCourier:(userId,applicationCreatedAt)=>request('/api/v1/admin/couriers',{method:'POST',body:{userId,applicationCreatedAt}})
  };
 }

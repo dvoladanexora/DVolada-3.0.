@@ -1025,6 +1025,14 @@ test('QA courier application, platform validation and global session revocation'
  for(let i=0;i<2;i++)assert.equal((await req('customer/courier-application',{},{cookie,account})).status,200);
  assert.equal((await f.call('/api/v1/admin/courier-applications')).status,403);
  assert.deepEqual((await f.call('/api/v1/admin/courier-applications',{by:'platformAdmin'})).body.applications.map(x=>x.user_id),[account]);
+ const pending=f.DB.db.prepare('SELECT created_at FROM courier_applications WHERE user_id=?').get(account);
+ const decision={userId:account,createdAt:pending.created_at};
+ const reject=by=>f.call('/api/v1/admin/courier-applications/reject',{by,method:'POST',body:decision});
+ assert.equal((await reject('customer')).status,403);
+ assert.equal((await reject('platformAdmin')).status,200);
+ assert.equal((await reject('platformAdmin')).status,409);
+ assert.equal((await f.call('/api/v1/admin/couriers',{by:'platformAdmin',method:'POST',body:{userId:account,applicationCreatedAt:pending.created_at}})).status,409);
+ assert.equal(f.DB.db.prepare("SELECT count(*) AS n FROM control_audit WHERE subject=? AND action='courier_application_rejected'").get(account).n,1);
  assert.equal((await f.call('/api/v1/admin/couriers',{by:'platformAdmin',method:'POST',body:{userId:account}})).status,201);
  const current=await (await req('auth/me',undefined,{cookie})).json();
  assert.equal(current.user.role,'courier');

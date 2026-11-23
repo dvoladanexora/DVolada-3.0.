@@ -1,5 +1,5 @@
 import {controlRoute} from './control-center.js';
-import {courierProfile,courierAvailability,courierApplication,pendingCouriers,revokeCourierSessions,courierHistory,courierRestaurantChat} from './courier-workspace.js';
+import {courierProfile,courierAvailability,courierApplication,rejectCourierApplication,pendingCouriers,revokeCourierSessions,courierHistory,courierRestaurantChat} from './courier-workspace.js';
 import {restaurantProfile,menuOption,savePhoto,publicPhoto,staffRoster,restaurantCash,restaurantReport} from './restaurant-operations.js';
 import {
  ApiError,requireUuid,identity,assertConfiguration,assertAllowedOrigin,respond,preflight,
@@ -199,6 +199,8 @@ async function route(req,env){
   return respond(req,env,200,await courierApplication(req,env,actor));
  if(method==='GET'&&path==='/api/v1/admin/courier-applications')
   return respond(req,env,200,await pendingCouriers(env,actor));
+ if(method==='POST'&&path==='/api/v1/admin/courier-applications/reject')
+  return respond(req,env,200,await rejectCourierApplication(req,env,actor));
  if(method==='POST'&&path==='/api/v1/admin/couriers')
   return respond(req,env,201,await enrollCourier(req,env,actor));
  if(commercial){

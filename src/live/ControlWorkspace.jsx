@@ -1,6 +1,6 @@
 import React,{useEffect,useState} from 'react';
 
-const tabs={operations:'Pedidos',accounts:'Cuentas',claims:'Reclamos',coupons:'Cupones',rates:'Tarifas',
+const tabs={operations:'Pedidos',accounts:'Participantes y cuentas',claims:'Reclamos',coupons:'Cupones',rates:'Tarifas',
  reports:'Reportes',audit:'Auditoría',business:'Alta y afiliación',flash:'Flash y regalos',settlements:'Liquidaciones'};
 const statuses=['Pendiente','Aceptado','Preparando','Listo','Recogido','En camino','En ubicación','Entregado','Cancelado','Rechazado'];
 const claims={open:'Recibido',review:'En atención',resolved:'Resuelto'};

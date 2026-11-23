@@ -794,6 +794,16 @@ export default function LiveApp(){
     <ControlNavigation section={controlSection} setSection={setControlSection} flash={flashEnabled} commercial={commercial}/>
     {!['business','flash','settlements'].includes(controlSection)&&<ControlWorkspace key={controlSection} section={controlSection}
      api={api} restaurants={adminRestaurants} offline={offline} busy={busy} run={run} money={price} errorLabel={errorLabel}/>}
+    {controlSection==='accounts'&&<>
+     <section className="dvl-panel"><h2>Invitar propietario</h2>
+      <label>Restaurante<select value={adminSelectedId} onChange={e=>setAdminSelectedId(e.target.value)}>
+       <option value="">Seleccionar</option>{adminRestaurants.filter(r=>r.plan!=='LOCAL').map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
+     {session.user.privilegedPasskey&&adminSelectedId&&<OwnerInvitation key={adminSelectedId}
+      restaurantId={adminSelectedId} disabled={busy||offline}
+      invite={(id,body)=>run(()=>api.adminInviteOwner(id,body,newKey()),{refresh:false})}/>}
+     </section>
+     <CourierApplications api={api} run={run} busy={busy} offline={offline} errorLabel={errorLabel}/>
+    </>}
     {controlSection==='business'&&<>
     <section className="dvl-panel"><h2>Negocios afiliados</h2><div className="dvl-stack">{adminRestaurants.map(r=><div className="dvl-row" key={r.id}>
      <strong>{r.name}</strong><span>{r.plan} · {r.subscription_status} · {r.online_state} · {r.order_count} pedidos</span></div>)}</div></section>
@@ -825,9 +835,6 @@ export default function LiveApp(){
        onClick={async()=>{if(await action(()=>api.adminUpdateRestaurant(r.id,{deliveryFeeMinor:Math.round(Number(adminFee)*100)})))setAdminFee('')}}>
        Guardar tarifa</Action>
      </div>)}
-     {session.user.privilegedPasskey&&adminSelectedId&&<OwnerInvitation key={adminSelectedId}
-      restaurantId={adminSelectedId} disabled={busy||offline}
-      invite={(id,body)=>run(()=>api.adminInviteOwner(id,body,newKey()),{refresh:false})}/>}
      <div className="dvl-grid dvl-editor">
       <label>ID de usuario registrado<input value={adminMemberId} onChange={e=>setAdminMemberId(e.target.value)} placeholder="UUID del usuario"/></label>
       <label>Rol del empleado<select value={adminStaffRole} onChange={e=>setAdminStaffRole(e.target.value)}>
@@ -842,7 +849,7 @@ export default function LiveApp(){
        onClick={()=>action(()=>api.adminEnrollCourier(adminCourierId.trim()))}>Habilitar repartidor</Action>
      </div>
     </section>
-    <CourierApplications api={api} run={run} busy={busy} offline={offline} errorLabel={errorLabel}/>
+
     </>}
     {controlSection==='flash'&&flashEnabled&&<FlashAdmin api={api} restaurants={adminRestaurants} busy={busy} offline={offline} run={run}/>}
     {controlSection==='settlements'&&commercial&&<section className="dvl-panel"><label>Restaurante para liquidaciones

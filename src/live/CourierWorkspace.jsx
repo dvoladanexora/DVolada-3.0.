@@ -44,9 +44,13 @@ export function CourierApplications({api,run,busy,offline,errorLabel}){
   {applications?.map(person=><div className="dvl-row" key={person.user_id}>
    <span>{person.display_name} · {date(person.created_at)}</span>
    <Button secondary disabled={busy||offline} onClick={async()=>{
-    const done=await run(()=>api.adminEnrollCourier(person.user_id));
+    const done=await run(()=>api.adminEnrollCourier(person.user_id,person.created_at));
     if(done)setApplications(rows=>rows.filter(row=>row.user_id!==person.user_id));
    }}>Habilitar cuenta</Button>
+   <Button secondary disabled={busy||offline} onClick={async()=>{
+    const done=await run(()=>api.rejectCourierApplication(person.user_id,person.created_at));
+    if(done)setApplications(rows=>rows.filter(row=>row.user_id!==person.user_id));
+   }}>Rechazar solicitud</Button>
   </div>)}
  </section>;
 }

@@ -2,7 +2,8 @@ import React,{useState} from 'react';
 
 const actions={login:'Ingresar',register:'Crear cuenta',recover:'Recuperar acceso'};
 export default function ClientAccess({authenticate,offline,busy}){
- const [mode,setMode]=useState('login'),[login,setLogin]=useState(''),[name,setName]=useState(''),[code,setCode]=useState('');
+ const intent=location.hostname==='dvolada-beta.dvoladanexora.workers.dev'?new URLSearchParams(location.search).get('beta_rol'):null;
+ const [mode,setMode]=useState(intent==='restaurant'?'recover':['customer','courier'].includes(intent)?'register':'login'),[login,setLogin]=useState(''),[name,setName]=useState(''),[code,setCode]=useState('');
  async function submit(event){
   event.preventDefault();
   if(busy||offline)return;
@@ -14,6 +15,8 @@ export default function ClientAccess({authenticate,offline,busy}){
  }
  return <form className="dvl-panel dvl-login" onSubmit={submit}>
   <h2>Cuenta Dvolada</h2>
+  {intent==='restaurant'&&<p>Para activar tu restaurante, usá la invitación del propietario. Si ya tenés llave, elegí Ingresar.</p>}
+  {intent==='courier'&&<p>Creá tu cuenta o ingresá con tu llave. Después, en Trabajá como repartidor, solicitá la aprobación.</p>}
   <div className="dvl-inline dvl-client-modes" aria-label="Acceso a la cuenta">
    {Object.entries(actions).map(([key,label])=><button key={key} type="button" disabled={busy} aria-pressed={key===mode}
     className={'dvl-action '+(key===mode?'':'secondary')} onClick={()=>{setMode(key);setCode('')}}>{label}</button>)}

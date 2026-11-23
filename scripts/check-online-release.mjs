@@ -25,3 +25,20 @@ for(const [host,bindings] of [[qa,env],[production,ready]]){
  assert.deepEqual(await push.json(),{enabled:false,appId:null});
 }
 console.log('Artefacto validado: mismo SHA en ambos entornos, producción cerrada por defecto y ruta QA aislada.');
+
+// Exercise the packaged gate, including the artwork and the stylesheet allowed by CSP.
+const betaHost='dvolada-beta.dvoladanexora.workers.dev';
+const betaEnv={DVOLADA_BETA_HOST:betaHost,BETA_DB:{}};
+const {createHash}=await import('node:crypto');
+const activation=await get(betaHost,'/beta/activar',betaEnv);
+assert.equal(activation.status,200);
+const html=await activation.text();
+for(const role of ['customer','restaurant','courier'])assert(html.includes('value="'+role+'"'));
+assert(!html.includes('value="platform_admin"'));
+const artwork=html.match(/data:image\/webp;base64,([a-zA-Z0-9+/=]+)/);
+assert(artwork && Buffer.from(artwork[1],'base64').subarray(8,12).toString()==='WEBP');
+const style=html.match(/<style>([\s\S]*?)<\/style>/)[1];
+const digest=createHash('sha256').update(style).digest('base64');
+assert(activation.headers.get('content-security-policy').includes("'sha256-"+digest+"'"));
+for(const path of ['/version.json','/cuenta','/beta/paneles','/api/v1/admin/overview'])
+ assert.equal((await get(betaHost,path,betaEnv)).status,403,path);

@@ -1523,4 +1523,17 @@ test('one delivery crosses four separate passkey sessions from enrollment throug
  const shift=(await merchant('cash/open',{openingMinor:0})).shift.id;
  assert.equal((await merchant('cash/sale',{shiftId:shift,orderId:id,method:'cash'})).sale.total_minor,5500);
  assert.equal((await request(admin,'admin/overview')).orders.delivered,1);
+ await merchant('cash/close',{shiftId:shift,countedMinor:5500});
+ const now=Math.floor(Date.now()/1000);
+ await request(admin,'admin/settlement-rules/'+rid,{body:{effectiveAt:now-100,commissionBps:500,courierBps:8000}});
+ // Settlement periods end in the past. Advance the test clock boundary by one second.
+ await new Promise(resolve=>setTimeout(resolve,1100));
+ const period=(await merchant('settlements',{from:now-60,until:now+1})).settlement;
+ await merchant('settlements/'+period.id+'/calculate',{});
+ const ledger=await merchant('settlements/'+period.id);
+ assert.equal(ledger.lines.length,1);
+ assert.equal(ledger.lines[0].order_id,id);
+ const history=await request(driver,'courier/history');
+ assert.equal(history.orders[0].id,id);
+ assert.equal(history.orders[0].settlementId,period.id);
 });

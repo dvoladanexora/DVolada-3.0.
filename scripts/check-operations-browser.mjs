@@ -25,7 +25,7 @@ try{
     '/api/v1/admin/overview':{orders:{total:0,active:0,delivered:0},restaurants:{total:0},couriers:{active:0}}
    };
    const data=fixtures[path]??{restaurants:[],orders:[],products:[],couriers:[],
-    profile:{available:false,max_active_orders:2},enabled:false,counts:[],applications:[],rules:[],campaigns:[],settlements:[]};
+    profile:{available:0,active:1,capacity:2},enabled:false,counts:[],applications:[],rules:[],campaigns:[],settlements:[]};
    return route.fulfill({json:data});
   });
   await page.goto('http://127.0.0.1:4184/cuenta');
@@ -33,6 +33,7 @@ try{
   const title={owner:'Restaurante',kitchen:'Cocina',courier:'Repartidor',platform_admin:'Centro de Control'}[role];
   await page.getByRole('heading',{level:1,name:title,exact:true}).waitFor();
   if(role==='kitchen')await page.locator('.dv-kitchen-lane-preparing').waitFor();
+  if(role==='courier')await page.getByText(/0 de 2 espacios ocupados/).waitFor();
   for(const width of [360,390,430,768,1440]){
    await page.setViewportSize({width,height:width<768?844:960});
    for(const theme of ['light','dark']){

@@ -35,6 +35,6 @@
   "devDependencies": {
     "esbuild": "^0.25.12",
     "sharp": "^0.35.5",
-    "vite": "^6.0.5"
+    "vite": "^8.3.8"
   }
 }

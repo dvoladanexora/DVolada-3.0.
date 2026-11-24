@@ -184,16 +184,47 @@ async function route(req,env){
   return respond(req,env,method==='POST'?201:200,await adminFlash(req,env,actor,flashAdmin[1]));
  if(method==='GET'&&path==='/api/v1/admin/overview'){
   if(actor.role!=='platform_admin')throw new ApiError(403,'ROLE_FORBIDDEN');
-  const [restaurants,orders,couriers]=await Promise.all([
-   env.DB.prepare(`SELECT COUNT(*) AS total,SUM(CASE WHEN online_state='open' THEN 1 ELSE 0 END) AS open
-      FROM restaurants WHERE plan IN ('ONLINE','PLUS')`).first(),
+  // Honduras is UTC-06 throughout the year. Count activity by local day.
+  const now=Math.floor(Date.now()/1000),start=Math.floor((now-21600)/86400)*86400+21600,end=start+86400;
+  const [restaurants,orders,couriers,today,accounts,alerts]=await Promise.all([
+   env.DB.prepare(`SELECT COUNT(*) AS total,SUM(CASE WHEN online_state='open' AND subscription_status='active' THEN 1 ELSE 0 END) AS open,
+      SUM(CASE WHEN subscription_status='active' THEN 1 ELSE 0 END) AS affiliated FROM restaurants WHERE plan IN ('ONLINE','PLUS')`).first(),
    env.DB.prepare(`SELECT COUNT(*) AS total,
      SUM(CASE WHEN status NOT IN ('Entregado','Cancelado','Rechazado') THEN 1 ELSE 0 END) AS active,
      SUM(CASE WHEN status='Entregado' THEN 1 ELSE 0 END) AS delivered FROM online_orders`).first(),
-   env.DB.prepare('SELECT COUNT(*) AS active FROM courier_profiles WHERE active=1').first()
+   env.DB.prepare(`SELECT COUNT(*) AS active,COALESCE(SUM(CASE WHEN c.available=1 THEN 1 ELSE 0 END),0) AS available
+    FROM courier_profiles c JOIN users u ON u.id=c.user_id WHERE c.active=1 AND u.status='active' AND u.admin_locked=0`).first(),
+   env.DB.prepare(`SELECT COUNT(*) AS orders,COALESCE(SUM(CASE WHEN status='Entregado' THEN 1 ELSE 0 END),0) AS delivered,
+     COALESCE(SUM(CASE WHEN status IN ('Cancelado','Rechazado') THEN 1 ELSE 0 END),0) AS cancelled
+     FROM online_orders WHERE created_at>=? AND created_at<?`).bind(start,end).first(),
+   env.DB.prepare(`SELECT
+    (SELECT COUNT(*) FROM users u JOIN client_credentials c ON c.user_id=u.id WHERE u.account_role IN ('customer','courier') AND c.login_name IS NOT NULL) AS registered,
+    (SELECT COUNT(DISTINCT s.user_id) FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.created_at>=? AND s.created_at<? AND u.account_role IN ('customer','courier')) AS signedInToday,
+    (SELECT COUNT(DISTINCT s.user_id) FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.expires_at>? AND s.revoked_at IS NULL AND u.status='active' AND u.account_role IN ('customer','courier')) AS activeSessions`).bind(start,end,now).first(),
+   env.DB.prepare(`SELECT
+    (SELECT COUNT(*) FROM order_claims WHERE status!='resolved') AS claims,
+    (SELECT COUNT(*) FROM courier_applications a JOIN users u ON u.id=a.user_id WHERE u.account_role='customer' AND u.status='active') AS courierRequests,
+    (SELECT COUNT(*) FROM online_orders WHERE courier_response='offered' AND courier_offer_expires_at<=? AND status NOT IN ('Entregado','Cancelado','Rechazado')) AS expiredOffers,
+    (SELECT COUNT(*) FROM online_orders WHERE pin_attempts>=5 AND status='En ubicación') AS lockedPins`).bind(now).first()
   ]);
-  return respond(req,env,200,{restaurants:{total:restaurants.total,open:restaurants.open??0},
-   orders:{total:orders.total,active:orders.active??0,delivered:orders.delivered??0},couriers:{active:couriers.active}});
+  return respond(req,env,200,{restaurants:{total:restaurants.total,open:restaurants.open??0,affiliated:restaurants.affiliated??0},
+   orders:{total:orders.total,active:orders.active??0,delivered:orders.delivered??0},couriers:{active:couriers.active,available:couriers.available},
+   today,accounts,alerts,dayStart:start,asOf:now});
+ }
+ if(method==='GET'&&path==='/api/v1/admin/courier-directory'){
+  if(actor.role!=='platform_admin')throw new ApiError(403,'ROLE_FORBIDDEN');
+  const q=(url.searchParams.get('q')||'').trim(),after=url.searchParams.get('after')||'';
+  if(q.length>80)throw new ApiError(400,'INVALID_SEARCH');
+  if(after)requireUuid(after);
+  const {results=[]}=await env.DB.prepare(`SELECT u.id,u.display_name,u.phone_e164,u.status,u.admin_locked,u.created_at,
+    c.active,c.available,c.max_active_orders,
+    (SELECT COUNT(*) FROM online_orders o WHERE o.courier_id=u.id AND o.status='Entregado') AS delivered,
+    (SELECT COUNT(*) FROM online_orders o WHERE o.courier_id=u.id AND o.status NOT IN ('Entregado','Cancelado','Rechazado')) AS active_orders
+    FROM courier_profiles c JOIN users u ON u.id=c.user_id
+    WHERE u.account_role='courier' AND (?='' OR u.id>?) AND (?='' OR instr(lower(u.display_name),lower(?))>0 OR instr(coalesce(u.phone_e164,''),?)>0)
+    ORDER BY u.id LIMIT 51`).bind(after,after,q,q,q).all();
+  const couriers=results.slice(0,50);
+  return respond(req,env,200,{couriers,next:results.length>50?couriers.at(-1).id:null});
  }
  if(method==='GET'&&path==='/api/v1/admin/restaurants'){
   if(actor.role!=='platform_admin')throw new ApiError(403,'ROLE_FORBIDDEN');

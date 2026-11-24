@@ -505,7 +505,7 @@ export default function LiveApp({CustomerHome}){
  }
  async function recoverCheckout(){
   const result=await run(()=>api.checkoutStatus(pendingKey),{refresh:false});
-  if(result)confirmCheckout(result);
+  if(result){confirmCheckout(result);return true}return false;
  }
  async function reorder(order){
   return run(async()=>{
@@ -582,8 +582,37 @@ export default function LiveApp({CustomerHome}){
  useEffect(()=>{
   if(cartAccount&&customerSection)document.getElementById(customerSection)?.scrollIntoView();
  },[cartAccount,customerSection]);
- if(CustomerHome&&cartAccount&&!qaView&&!customerSection&&!newCodes&&!new URLSearchParams(window.location.search).has('intent')){
-  return <>{error&&<WaitOrError message={error} warning/>}<CustomerHome key={cartAccount} connected customerId={cartAccount} onSignOut={()=>logout()}/></>;
+ if(CustomerHome&&cartAccount&&!qaView){
+  const resetDiscount=()=>{setAppliedCoupon(null);setCouponText('');setFlashSelection(null)};
+  const changeDraft=(draft)=>{
+   if(busy||offline||pendingKey)return false;
+   if(!writeCart(cartAccount,{restaurantId:draft.restaurantId,items:draft.items}))return false;
+   setCartRestaurantId(draft.restaurantId);setCart(draft.items);resetDiscount();return true;
+  };
+  const initialPage=customerSection==='carrito'?'cart':customerSection==='mis-pedidos'?'orders':
+   new URLSearchParams(window.location.search).get('intent')==='courier'?'account':'home';
+  const liveCustomer={
+   cart,restaurantId:cartRestaurantId,restaurant,restaurants,orders,subtotal,fee,discount,money:price,
+   busy,offline,pendingKey,replaceCart,deliveryMethod,setDeliveryMethod,phone,setPhone,deliveryAddress,setDeliveryAddress,
+   eligibleFlash,activeFlash,flashSelection,couponText,orderNote,setOrderNote,error,checkout,recoverCheckout,
+   changeDraft,favoriteIds,toggleFavorite,flashOffers:offline?[]:flashOffers,
+   quantity:(id,delta)=>{if(pendingKey||busy||offline)return;setCart(current=>{const item=current.find(p=>p.productId===id);return item?updateQuantity(current,item,delta):current});resetDiscount()},
+   keepCart:()=>setReplaceCart(null),
+   replace:()=>{if(replaceCart&&changeDraft(replaceCart))setReplaceCart(null)},
+   importGuest:()=>{const draft=readCart('guest');if(!cart.length&&draft.items.length&&changeDraft(draft))writeCart('guest',{items:[]})},
+   selectFlash:id=>{setFlashSelection(eligibleFlash.find(item=>item.id===id)||null);setAppliedCoupon(null);setCouponText('')},
+   changeCoupon:value=>{setCouponText(value);setAppliedCoupon(null);setFlashSelection(null)},
+   applyCoupon:async()=>{const result=await run(()=>api.coupon(cartRestaurantId,couponText),{refresh:false});if(result){setAppliedCoupon(result);setFlashSelection(null)}},
+   selectedPin,showOrder:showCustomerOrder,hidePin:()=>setSelectedPin(null),reorder,
+   support:(order,mode)=>setSupport({id:order.id,mode,order}),
+   cancelOrder:o=>action(()=>api.cancelOrder(o,newKey())),
+   supportView:support&&(support.order||orders.some(o=>o.id===support.id))?<ClientSupport key={support.id+support.mode} mode={support.mode} order={support.order||orders.find(o=>o.id===support.id)} api={api} offline={offline} close={()=>setSupport(null)} onSessionError={handleSessionError}/>:null,
+   displayName:session.user.displayName,rename:async name=>{const data=await run(()=>api.renameClient(name),{refresh:false});if(data)setSession(old=>({...old,user:{...old.user,displayName:name}}))},
+   logout:()=>logout(),application:accountEnabled?<CourierApplication api={api} busy={busy} offline={offline} account={cartAccount} run={run}/>:null,
+   notifications:pushConfig?.enabled?<div className="dvl-inline"><Action kind="secondary" disabled={busy||offline} onClick={()=>setQaPush(!pushEnabled)}>{pushEnabled?'Desactivar notificaciones':'Activar notificaciones'}</Action></div>:null,
+   notice:<><ClientCodes codes={newCodes} close={()=>setNewCodes(null)}/>{offline&&<WaitOrError message="Sin conexión. No se pueden enviar pedidos." warning/>}<WaitOrError message={error} warning/><WaitOrError message={status}/><WaitOrError message={refreshWarning}/></>
+  };
+  return <CustomerHome key={cartAccount} connected customerId={cartAccount} initialPage={initialPage} liveCustomer={liveCustomer} onSignOut={()=>logout()}/>;
  }
  return <div className={session?"dvl-app dvl-account-shell":"dvl-app"}>
   <header className="dvl-header"><div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada" /><div><strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>

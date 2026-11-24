@@ -8,7 +8,7 @@ export const retiredAccessHash=env=>hmacHex(env.SESSION_PEPPER,'retired-client-a
 
 export async function inviteOwner(req,env,actor,restaurantId){
  requireRole(actor,'platform_admin');
- if(!actor.privilegedPasskey)throw new ApiError(403,'ROLE_FORBIDDEN');
+ if(!actor.privilegedPasskey&&!actor.googleAdmin)throw new ApiError(403,'ROLE_FORBIDDEN');
  const input=await readJson(req);
  requireKeys(input,['login','displayName']);
  const name=requireText(input.displayName,2,80,'displayName');

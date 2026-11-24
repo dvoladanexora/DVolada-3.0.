@@ -9,7 +9,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -1549,4 +1549,45 @@ test('one delivery crosses four separate passkey sessions from enrollment throug
  const history=await request(driver,'courier/history');
  assert.equal(history.orders[0].id,id);
  assert.equal(history.orders[0].settlementId,period.id);
+});
+
+test('Google control consumes the nonce atomically and isolates privileged sessions',async t=>{
+ const f=await fixture(),origin='https://dvolada-qa.dvoladanexora.workers.dev';
+ const email='authorized@gmail.com';
+ Object.assign(f.env,{CORS_ORIGINS:origin,DVOLADA_QA_HOST:new URL(origin).hostname,
+  GOOGLE_ADMIN_CLIENT_ID:'control-test.apps.googleusercontent.com',GOOGLE_ADMIN_EMAILS:email});
+ const {publicKey,privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});
+ const jwk={...publicKey.export({format:'jwk'}),kid:'test',alg:'RS256'};
+ t.mock.method(globalThis,'fetch',async url=>{
+  assert.equal(url,'https://www.googleapis.com/oauth2/v3/certs');
+  return Response.json({keys:[jwk]});
+ });
+ const req=(path,options)=>passkeyRequest(f,path,options?.body,{origin,url:origin,...options});
+ const challenge=await req('auth/control/challenge',{body:{}});
+ assert.equal(challenge.status,200);
+ const {nonce}=await challenge.json(),browser=partCookie(challenge);
+ const makeToken=(claims={},signature=undefined)=>{
+  const now=Math.floor(Date.now()/1000);
+  const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
+  const input=encode({kid:'test',alg:'RS256'})+'.'+encode({iss:'https://accounts.google.com',
+   aud:f.env.GOOGLE_ADMIN_CLIENT_ID,email,email_verified:true,sub:'google-test-id',nonce,iat:now-1,exp:now+300,...claims});
+  return input+'.'+(signature??sign('sha256',Buffer.from(input),privateKey).toString('base64url'));
+ };
+ const login=credential=>req('auth/control/login',{cookie:browser,body:{credential}});
+ assert.equal((await login(makeToken({email:'unlisted@gmail.com'}))).status,403);
+ assert.equal((await login(makeToken({exp:1}))).status,401);
+ assert.equal((await login(makeToken({},'AAAA'))).status,401);
+ const valid=makeToken();
+ const first=await login(valid);
+ assert.equal(first.status,204);
+ const cookie=first.headers.getSetCookie().find(value=>value.startsWith('__Host-dvolada-control=')).split(';')[0];
+ const admin=(path,method='GET')=>worker.fetch(new Request(origin+'/api/v1/'+path,
+  {method,headers:{Origin:origin,Cookie:cookie,'X-Dvolada-Admin':'1'}}),f.env);
+ assert.equal((await admin('admin/overview')).status,200);
+ assert.equal((await req('admin/overview',{cookie})).status,401);
+ assert.equal((await admin('customer/orders')).status,403);
+ assert.equal((await admin('auth/revoke-sessions','POST')).status,204);
+ assert.equal((await admin('admin/overview')).status,401);
+ f.DB.db.prepare("DELETE FROM auth_sessions WHERE device_label='Centro de Control Google'").run();
+ assert.equal((await login(valid)).status,403);
 });

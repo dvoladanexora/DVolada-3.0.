@@ -43,20 +43,26 @@ export async function googleControlAuth(req,env,action){
  const body=await readJson(req,18000);requireKeys(body,['credential']);
  const claims=await verifyGoogleAdminIdentity(body.credential,env,match[1]);
  const subject='google-admin:'+claims.subject;
- const token=randomSecret(),sessionId=await hash(env,'consumed-nonce:'+match[1]);
+ const token=randomSecret(),sessionId=crypto.randomUUID();
+ const nonceHash=await hash(env,'consumed-nonce:'+match[1]);
  // Keep the legacy admin and customer identities untouched. The Google subject is immutable.
  // Session hash has its own namespace, so the normal auth cookie/bearer cannot use it.
  const results=await env.DB.batch([
   env.DB.prepare(`INSERT INTO users(id,display_name,account_role,firebase_uid,verified_email)
     VALUES(?,?,'platform_admin',?,?) ON CONFLICT(firebase_uid) DO NOTHING`).bind(crypto.randomUUID(),claims.email,subject,claims.email),
+  env.DB.prepare(`DELETE FROM google_admin_consumed_nonces WHERE nonce_hash IN
+    (SELECT nonce_hash FROM google_admin_consumed_nonces WHERE expires_at<=? LIMIT 32)`).bind(now),
+  env.DB.prepare(`INSERT INTO google_admin_consumed_nonces(nonce_hash,expires_at)
+    SELECT ?,? WHERE NOT EXISTS(SELECT 1 FROM auth_sessions WHERE id=?)
+    ON CONFLICT(nonce_hash) DO NOTHING`).bind(nonceHash,Number(match[2]),nonceHash),
   env.DB.prepare(`INSERT INTO auth_sessions(id,user_id,token_hash,device_label,expires_at)
     SELECT ?,id,?,'Centro de Control Google',? FROM users WHERE firebase_uid=? AND verified_email=?
-    AND account_role='platform_admin' AND status='active' AND admin_locked=0
+    AND account_role='platform_admin' AND status='active' AND admin_locked=0 AND changes()=1
     ON CONFLICT(id) DO NOTHING`).bind(sessionId,await hash(env,'session:'+token),now+sessionSeconds,subject,claims.email),
   env.DB.prepare(`INSERT INTO control_audit(actor_id,subject,action,detail)
     SELECT user_id,user_id,'google_admin_login','{}' FROM auth_sessions WHERE id=? AND changes()>0`).bind(sessionId)
  ]);
- if(results[1].meta.changes!==1)throw new ApiError(403,'GOOGLE_ADMIN_FORBIDDEN');
+ if(results[3].meta.changes!==1)throw new ApiError(403,'GOOGLE_ADMIN_FORBIDDEN');
  return secretCookie(secretCookie(respond(req,env,204),cookie,token,sessionSeconds),nonceCookie,'',0);
 }
 

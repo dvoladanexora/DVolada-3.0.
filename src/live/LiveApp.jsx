@@ -899,7 +899,7 @@ export default function LiveApp({CustomerHome}){
       <p className="dvl-muted">Seleccioná el restaurante y generá una invitación privada para su propietario.</p>
       <label>Restaurante<select value={adminSelectedId} onChange={e=>setAdminSelectedId(e.target.value)}>
        <option value="">Seleccionar</option>{adminRestaurants.filter(r=>r.plan!=='LOCAL').map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-     {session.user.privilegedPasskey&&selectedAdminBusiness&&selectedAdminBusiness.plan!=='LOCAL'&&<OwnerInvitation key={adminSelectedId}
+     {(session.user.privilegedPasskey||session.user.googleAdmin)&&selectedAdminBusiness&&selectedAdminBusiness.plan!=='LOCAL'&&<OwnerInvitation key={adminSelectedId}
       restaurantId={adminSelectedId} disabled={busy||offline}
       invite={(id,body)=>run(()=>api.adminInviteOwner(id,body,newKey()),{refresh:false})}/>}
     </section>}

@@ -59,3 +59,16 @@ test('tampered signatures, unknown keys and unsigned tokens fail closed',async()
  await assert.rejects(verify(await sign(base,{alg:'none',kid:'test-key'})));
  await assert.rejects(verify(token,{fetchImpl:async()=>new Response('',{status:503})}));
 });
+
+// Workerd's native fetch requires the global receiver, unlike Node's fetch.
+test('default Google key fetch preserves the Worker global receiver',async t=>{
+ const original=globalThis.fetch;
+ t.after(()=>{globalThis.fetch=original});
+ globalThis.fetch=async function(url,options){
+  assert.equal(this,globalThis);
+  assert.equal(options.headers['User-Agent'],'Dvolada-Control/1.0');
+  return fetchImpl(url);
+ };
+ assert.deepEqual(await verifyGoogleAdminIdentity(await sign(),env,nonce,{now}),
+  {subject:'12345',email:'founder.one@gmail.com'});
+});

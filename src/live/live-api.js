@@ -48,6 +48,7 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
   },
   products:id=>request('/api/v1/catalog/restaurants/'+s(id)+'/products',{auth:false}),
   searchProducts:(term,signal)=>request('/api/v1/catalog/search?q='+s(term),{auth:false,signal}),
+  foodFeed:({term='',after,signal}={})=>request('/api/v1/catalog/feed?'+new URLSearchParams({...term&&{q:term},...after&&{after}}),{auth:false,signal}),
   exchange:(idToken,deviceLabel)=>request('/api/v1/auth/exchange',{auth:false,method:'POST',body:{idToken,deviceLabel}}),
   me:(cookie=false)=>request('/api/v1/auth/me',{cookie}),
   clientAccess:()=>request('/api/v1/auth/client/config',{auth:false}),

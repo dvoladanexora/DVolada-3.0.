@@ -2,8 +2,13 @@ import React,{useState} from 'react';
 
 const actions={login:'Ingresar',register:'Crear cuenta',recover:'Recuperar acceso'};
 export default function ClientAccess({authenticate,offline,busy}){
- const intent=location.hostname==='dvolada-beta.dvoladanexora.workers.dev'?new URLSearchParams(location.search).get('beta_rol'):null;
- const [mode,setMode]=useState(intent==='restaurant'?'recover':['customer','courier'].includes(intent)?'register':'login'),[login,setLogin]=useState(''),[name,setName]=useState(''),[code,setCode]=useState('');
+ const params=new URLSearchParams(location.search);
+ const betaIntent=location.hostname==='dvolada-beta.dvoladanexora.workers.dev'?params.get('beta_rol'):null;
+ const intent=['restaurant','courier'].includes(params.get('intent'))?params.get('intent'):betaIntent;
+ // UI preference only. Authentication and roles are always verified by the server.
+ const requestedMode=params.get('mode');
+ const initialMode=Object.hasOwn(actions,requestedMode)?requestedMode:intent==='restaurant'?'recover':['customer','courier'].includes(intent)?'register':'login';
+ const [mode,setMode]=useState(initialMode),[login,setLogin]=useState(''),[name,setName]=useState(''),[code,setCode]=useState('');
  async function submit(event){
   event.preventDefault();
   if(busy||offline)return;

@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {LayoutDashboard,Store,Package,Users,Wallet,Tag,ShieldCheck,MoreHorizontal,ChevronRight,Bike,Clock,CheckCircle2,DoorOpen,Plus,UserPlus} from 'lucide-react';
+import {LayoutDashboard,Store,Package,Users,Wallet,Tag,ShieldCheck,MoreHorizontal,ChevronRight,Bike,Clock,CheckCircle2,DoorOpen,Plus,UserPlus,Megaphone,ChartNoAxesCombined,Settings,AlertTriangle} from 'lucide-react';
 
 const tabs={operations:'Seguimiento de pedidos',accounts:'Participantes y cuentas',claims:'Reclamos',coupons:'Cupones',rates:'Tarifas',
  reports:'Reportes',audit:'Auditoría',business:'Alta y afiliación',flash:'Flash y regalos',settlements:'Liquidaciones'};
@@ -23,7 +23,7 @@ function exportReport(data){
   ...data.allocations.map(row=>['Liquidación '+row.id,row.name,periodStates[row.status],'','','',
    amount(row.restaurant_minor),amount(row.courier_minor),amount(row.dvolada_minor),amount(row.commission_minor),amount(row.adjustment_minor)]),
   ...data.balances.map(row=>['Repartidor',row.display_name,periodStates[row.status],'','','','',amount(row.courier_minor)])];
- const csv=records.map(row=>header.map((_,index)=>index>=3?String(row[index]??''):esc(row[index])).join(',')).join('\r\n');
+ const csv=records.map(row=>header.map((_,index)=>index>=4?String(row[index]??''):esc(row[index])).join(',')).join('\r\n');
  const url=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
  const a=document.createElement('a');a.href=url;a.download='dvolada-reporte-operativo.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
@@ -46,13 +46,12 @@ const endpoints={operations:'orders',accounts:'accounts',claims:'claims',coupons
 
 // One navigation model, shared across the desktop sidebar and mobile bar.
 const controlGroups=[
- {id:'summary',label:'Resumen',icon:LayoutDashboard,sections:[['summary','Vista general']]},
- {id:'business',label:'Negocios',icon:Store,sections:[['business','Restaurantes']]},
- {id:'operations',label:'Pedidos',icon:Package,sections:[['operations','Seguimiento'],['claims','Reclamos']]},
- {id:'access',label:'Accesos',icon:Users,sections:[['accounts','Cuentas'],['owners','Propietarios'],['couriers','Repartidores'],['staff','Personal']]},
- {id:'finance',label:'Finanzas',icon:Wallet,sections:[['settlements','Liquidaciones'],['rates','Tarifas y comisiones'],['reports','Reportes']]},
- {id:'promos',label:'Promociones',icon:Tag,sections:[['coupons','Cupones'],['flash','Flash y regalos']]},
- {id:'security',label:'Configuración',icon:ShieldCheck,sections:[['security','Mi acceso'],['audit','Auditoría'],['affiliationAudit','Actividad de afiliación']]}
+ {id:'summary',label:'Inicio',icon:LayoutDashboard,sections:[['summary','Vista general'],['operations','Pedidos'],['claims','Reclamos']]},
+ {id:'business',label:'Afiliados',icon:Store,sections:[['business','Restaurantes'],['owners','Propietarios'],['staff','Personal']]},
+ {id:'couriers',label:'Repartidores',icon:Bike,sections:[['courierDirectory','Directorio'],['couriers','Solicitudes']]},
+ {id:'advertising',label:'Publicidad',icon:Megaphone,sections:[['advertising','Spots'],['coupons','Cupones'],['flash','Flash y regalos']]},
+ {id:'statistics',label:'Estadísticas',icon:ChartNoAxesCombined,sections:[['reports','Reportes de actividad'],['settlements','Liquidaciones']]},
+ {id:'security',label:'Administrador',icon:Settings,sections:[['security','Mi acceso'],['accounts','Cuentas'],['rates','Tarifas y comisiones'],['audit','Auditoría'],['affiliationAudit','Actividad de afiliación']]}
 ];
 function visibleGroups(flash,commercial){
  return controlGroups.map(group=>({...group,sections:group.sections.filter(([id])=>(id!=='flash'||flash)&&(id!=='settlements'||commercial))}));
@@ -69,7 +68,7 @@ export function ControlNavigation({section,setSection,flash,commercial}){
  },[more]);
  const choose=group=>{setMore(false);setSection(group.sections[0][0])};
  const navButton=(group,index)=>{const Icon=group.icon;return <button type="button" key={group.id}
-  className={'dvl-admin-nav-item '+(index>=3?'dvl-admin-nav-extra ':'')+(active===group.id?'active':'')}
+  className={'dvl-admin-nav-item '+(index>=4?'dvl-admin-nav-extra ':'')+(active===group.id?'active':'')}
   aria-current={active===group.id?'page':undefined} onClick={()=>choose(group)}>
   <Icon size={19} aria-hidden="true"/><span>{group.label}</span>
  </button>};
@@ -77,13 +76,13 @@ export function ControlNavigation({section,setSection,flash,commercial}){
   <div className="dvl-admin-sidebar-label">ESPACIO DE GESTIÓN</div>
   <nav className="dvl-shortcuts dvl-admin-nav" aria-label="Navegación principal">
    {groups.map(navButton)}
-   <button className={'dvl-admin-more '+(more||groups.slice(3).some(g=>g.id===active)?'active':'')} type="button"
+   <button className={'dvl-admin-more '+(more||groups.slice(4).some(g=>g.id===active)?'active':'')} type="button"
     aria-expanded={more} aria-controls="dvl-admin-more-menu" onClick={()=>setMore(v=>!v)}><MoreHorizontal size={21}/><span>Más</span></button>
   </nav>
   {more&&<><button className="dvl-admin-scrim" type="button" aria-label="Cerrar más opciones" onClick={()=>setMore(false)}/>
    <div className="dvl-admin-more-menu" id="dvl-admin-more-menu" role="group" aria-label="Más módulos">
     <div className="dvl-admin-more-title">Más opciones</div>
-    {groups.slice(3).map(group=>{const Icon=group.icon;return <button key={group.id} type="button" onClick={()=>choose(group)} aria-current={active===group.id?'page':undefined}><Icon size={20}/><span>{group.label}</span><ChevronRight size={16}/></button>})}
+    {groups.slice(4).map(group=>{const Icon=group.icon;return <button key={group.id} type="button" onClick={()=>choose(group)} aria-current={active===group.id?'page':undefined}><Icon size={20}/><span>{group.label}</span><ChevronRight size={16}/></button>})}
    </div></>}
   <div className="dvl-admin-sidebar-footer"><ShieldCheck size={15}/> Acceso administrativo</div>
  </aside>;
@@ -96,21 +95,34 @@ export function ControlSubnavigation({section,setSection,flash,commercial}){
 }
 export function ControlOverview({stats,setSection,commercial,flash}){
  const cards=[
-  ['Restaurantes',stats?.restaurants?.total,Store,'business'],
-  ['Abiertos',stats?.restaurants?.open,DoorOpen,'business'],
+  ['Pedidos de hoy',stats?.today?.orders,Package,'operations'],
+  ['Afiliados activos',stats?.restaurants?.affiliated,Store,'business'],
+  ['Cuentas registradas',stats?.accounts?.registered,Users,'accounts'],
+  ['Ingresaron hoy',stats?.accounts?.signedInToday,Clock,'accounts'],
+  ['Repartidores habilitados',stats?.couriers?.active,Bike,'courierDirectory'],
   ['Pedidos activos',stats?.orders?.active,Clock,'operations'],
-  ['Entregados',stats?.orders?.delivered,CheckCircle2,'operations'],
-  ['Repartidores habilitados',stats?.couriers?.active,Bike,'couriers']
+  ['Entregados de hoy',stats?.today?.delivered,CheckCircle2,'operations'],
+  ['Restaurantes abiertos',stats?.restaurants?.open,DoorOpen,'business']
+ ];
+ const alerts=[
+  ['Solicitudes de repartidores',stats?.alerts?.courierRequests,'couriers'],
+  ['Reclamos sin resolver',stats?.alerts?.claims,'claims'],
+  ['Ofertas de entrega vencidas',stats?.alerts?.expiredOffers,'operations'],
+  ['PIN de entrega bloqueado',stats?.alerts?.lockedPins,'operations']
  ];
  const links=[
   ['Nuevo negocio','Registrar y activar afiliados',Store,'newBusiness'],
   ['Invitar propietario','Gestionar acceso de restaurantes',UserPlus,'owners'],
-  ['Repartidores','Revisar solicitudes y cuentas',Bike,'couriers'],
+  ['Repartidores','Revisar solicitudes y cuentas',Bike,'courierDirectory'],
   ['Reclamos','Atender problemas de pedidos',Package,'claims'],
  ];
  return <div className="dvl-admin-overview" id="control">
-  <div className="dvl-admin-section-heading"><h2>Vista general</h2><span>Estado de la plataforma</span></div>
+  <div className="dvl-admin-section-heading"><h2>Vista general</h2><span>{stats?.asOf?'Actualizado '+time(stats.asOf):'Estado de la plataforma'} · Honduras</span></div>
   <div className="dvl-admin-kpis">{cards.map(([label,value,Icon,id])=><button key={label} type="button" className="dvl-admin-kpi" onClick={()=>setSection(id)}><span className="dvl-admin-kpi-label">{label}<Icon size={18} aria-hidden="true"/></span><strong>{value??'—'}</strong></button>)}</div>
+  <section className="dvl-panel dvl-stack"><div className="dvl-admin-section-heading"><h2>Alertas operativas</h2><span>Requieren revisión</span></div>
+   <div className="dvl-admin-alert-list">{alerts.map(([label,count,id])=><button type="button" key={label} onClick={()=>setSection(id)}><AlertTriangle size={17}/><span>{label}</span><strong>{count??'—'}</strong><ChevronRight size={16}/></button>)}</div>
+   <small className="dvl-muted">No incluye errores técnicos de Cloudflare; se muestran incidencias operativas registradas en el servidor.</small>
+  </section>
   <section className="dvl-panel dvl-admin-quick"><div className="dvl-admin-section-heading"><h2>Acciones rápidas</h2><span>Gestioná la operación desde un solo lugar</span></div><div className="dvl-admin-quick-grid">{links.map(([label,desc,Icon,id])=><button key={id} type="button" onClick={()=>setSection(id)}><span className="dvl-admin-quick-icon"><Icon size={20}/></span><span><strong>{label}</strong><small>{desc}</small></span><ChevronRight size={16}/></button>)}</div></section>
  </div>;
 }
@@ -294,4 +306,25 @@ export function ControlWorkspace({section,api,restaurants,offline,busy,run,money
    </details>)}
   </>}
  </section>;
+}
+
+export function CourierDirectory({api,run,busy,offline,errorLabel,setSection}){
+ const [q,setQ]=useState(''),[search,setSearch]=useState(''),[data,setData]=useState(null),[error,setError]=useState('');
+ useEffect(()=>{if(offline)return;let active=true;setData(null);
+  api.adminCourierDirectory(search).then(result=>{if(active){setData(result);setError('')}}).catch(e=>{if(active)setError(errorLabel(e))});
+  return()=>{active=false};
+ },[api,search,offline,errorLabel]);
+ const state=row=>row.admin_locked?'Bloqueado':row.status!=='active'||!row.active?'Inactivo':row.available?'Disponible':'No disponible';
+ return <section className="dvl-panel dvl-stack"><div className="dvl-admin-section-heading"><h2>Repartidores</h2><button className="dvl-action" type="button" onClick={()=>setSection('couriers')}>Solicitudes y altas</button></div>
+ <form className="dvl-grid dvl-editor" onSubmit={e=>{e.preventDefault();setSearch(q.trim())}}><label>Buscar repartidor<input type="search" maxLength={80} value={q} onChange={e=>setQ(e.target.value)} placeholder="Nombre o teléfono"/></label><button className="dvl-action secondary" disabled={busy||offline}>Buscar</button></form>
+ {error&&<p role="alert">{error}</p>}{!data&&!error&&<p role="status">{offline?'Sin conexión':'Cargando repartidores…'}</p>}
+ {data?.couriers.length===0&&<p>No hay repartidores para esta búsqueda.</p>}
+ <div className="dvl-admin-courier-grid">{data?.couriers.map(row=><article key={row.id} className="dvl-admin-courier-card"><div className="dvl-admin-identity"><span className="dvl-admin-avatar"><Bike size={21}/></span><div><strong>{row.display_name}</strong><small>{state(row)}</small></div></div>
+  <div className="dvl-admin-courier-stats"><div><strong>{row.delivered}</strong><small>Entregados</small></div><div><strong>{row.active_orders}/{row.max_active_orders}</strong><small>En curso</small></div></div>
+  <div className="dvl-stack"><small>Calificación: sin medición disponible</small><small>Plan y pago: sin registro de facturación</small></div>
+  {row.phone_e164&&/^\+504\d{8}$/.test(row.phone_e164)&&<a className="dvl-action secondary" href={'https://wa.me/'+row.phone_e164.slice(1)} target="_blank" rel="noopener noreferrer">Contactar por WhatsApp</a>}
+  <details><summary>Detalles del repartidor</summary><p>Registrado: {time(row.created_at)}</p><p style={{overflowWrap:'anywhere'}}>ID: {row.id}</p><button type="button" className="dvl-action secondary" onClick={()=>setSection('accounts')}>Administrar cuenta</button></details>
+ </article>)}</div>
+ {data?.next&&<button className="dvl-action secondary" disabled={busy||offline} onClick={async()=>{const next=await run(()=>api.adminCourierDirectory(search,data.next),{refresh:false});if(next)setData(old=>({...next,couriers:[...old.couriers,...next.couriers]}))}}>Cargar más repartidores</button>}
+ </section>
 }

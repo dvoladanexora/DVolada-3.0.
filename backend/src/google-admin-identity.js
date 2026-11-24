@@ -47,13 +47,19 @@ export async function verifyGoogleAdminIdentity(idToken,env,expectedNonce,{
   if(header.alg!=='RS256'||typeof header.kid!=='string'||! /^[A-Za-z0-9_-]{1,128}$/.test(header.kid)
     ||header.crit!==undefined)throw invalid();
   const signature=decodePart(signaturePart);
-  let keys;
-  try{
-    const response=await fetchImpl(jwksUrl,{redirect:'error',headers:{accept:'application/json','User-Agent':'Dvolada-Control/1.0'}});
-    if(!response.ok)throw new Error('JWKS unavailable');
-    keys=(await response.json()).keys;
-    if(!Array.isArray(keys)||keys.length>32)throw new Error('Unexpected JWKS');
-  }catch{throw new ApiError(503,'GOOGLE_ADMIN_KEYS_UNAVAILABLE')}
+  let keys, failure='network';
+  for(let attempt=0;attempt<2;attempt++){
+    try{
+      // Use the standard HTTPS request that succeeds in Workers. Never forward credentials.
+      const response=await fetchImpl(jwksUrl,{redirect:'follow',headers:{accept:'application/json'},signal:AbortSignal.timeout(5000)});
+      if(response.url&&response.url!==jwksUrl){failure='unexpected_redirect';continue}
+      if(!response.ok){failure='http_'+response.status;continue}
+      const data=await response.json();
+      if(!Array.isArray(data?.keys)||data.keys.length<1||data.keys.length>32){failure='invalid_jwks';continue}
+      keys=data.keys;break;
+    }catch(error){failure=error?.name==='TimeoutError'?'timeout':'network_or_json'}
+  }
+  if(!keys){console.warn('Google admin JWKS unavailable:',failure);throw new ApiError(503,'GOOGLE_ADMIN_KEYS_UNAVAILABLE')}
   const matches=keys.filter(k=>k.kid===header.kid&&k.kty==='RSA'&&(!k.alg||k.alg==='RS256')&&(!k.use||k.use==='sig'));
   if(matches.length!==1)throw invalid();
   let verified=false;

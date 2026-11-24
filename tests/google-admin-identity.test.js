@@ -66,9 +66,17 @@ test('default Google key fetch preserves the Worker global receiver',async t=>{
  t.after(()=>{globalThis.fetch=original});
  globalThis.fetch=async function(url,options){
   assert.equal(this,globalThis);
-  assert.equal(options.headers['User-Agent'],'Dvolada-Control/1.0');
+  assert.equal(options.redirect,'follow');
+  assert.equal(options.headers.accept,'application/json');
   return fetchImpl(url);
  };
  assert.deepEqual(await verifyGoogleAdminIdentity(await sign(),env,nonce,{now}),
   {subject:'12345',email:'founder.one@gmail.com'});
+});
+
+test('retries transient Google key failures but does not accept untrusted key sources',async()=>{
+ const token=await sign();let calls=0;
+ assert.deepEqual(await verify(token,{fetchImpl:async()=>++calls===1?new Response('',{status:503}):fetchImpl('https://www.googleapis.com/oauth2/v3/certs')}),{subject:'12345',email:'founder.one@gmail.com'});
+ assert.equal(calls,2);
+ await assert.rejects(verify(token,{fetchImpl:async()=>({ok:true,url:'https://example.com/keys',json:async()=>({keys:[jwk]})})}),{code:'GOOGLE_ADMIN_KEYS_UNAVAILABLE'});
 });

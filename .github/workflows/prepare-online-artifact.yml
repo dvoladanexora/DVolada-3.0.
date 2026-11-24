@@ -1,0 +1,98 @@
+name: Preparar artefacto verificable para Cloudflare
+# Transporte del candidato, no despliega ni cambia recursos Cloudflare.
+on:
+  push:
+    branches: [prelaunch/phase-3-live-integration]
+    paths:
+      - 'src/**'
+      - 'backend/**'
+      - 'staging/**'
+      - 'public/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'package*.json'
+      - 'vite.config.js'
+      - 'index.html'
+      - '.github/workflows/prepare-online-artifact.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: dvolada-online-artifact
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.repository == 'dvoladanexora/DVolada-3.0.' && github.ref == 'refs/heads/prelaunch/phase-3-live-integration'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:all
+      - run: node --experimental-sqlite --test backend/tests/worker.test.js backend/tests/beta-gate.test.js
+      - name: Construir candidato exacto
+        env:
+          DVOLADA_RELEASE_SHA: ${{ github.sha }}
+        run: bash scripts/build-online-release.sh
+      - run: node --experimental-sqlite scripts/rehearse-online-cutover.mjs online-release/dvolada-online.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-online
+          path: online-release/
+          if-no-files-found: error
+  transport:
+    needs: build
+    if: github.repository == 'dvoladanexora/DVolada-3.0.' && github.ref == 'refs/heads/prelaunch/phase-3-live-integration'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release-artifacts/online
+          path: transport
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-online
+          path: bundle
+      - name: Verificar y preparar transporte en el mismo repositorio
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd bundle && sha256sum -c SHA256SUMS)
+          test "$(cat bundle/SHA)" = "$EXPECTED_SHA"
+          python3 - <<'PY'
+          import base64, gzip, hashlib, json, os
+          from pathlib import Path
+          raw = Path('bundle/dvolada-online.mjs').read_bytes()
+          assert len(raw) < 5_000_000
+          compressed = gzip.compress(raw, mtime=0)
+          encoded = base64.b64encode(compressed).decode('ascii')
+          parts = [encoded[i:i+48000] for i in range(0,len(encoded),48000)]
+          out = Path('transport/.release-artifact')
+          out.mkdir(exist_ok=True)
+          for path in out.glob('part-*.txt'):
+              path.unlink()
+          for i,part in enumerate(parts):
+              (out / f'part-{i:03d}.txt').write_text(part, encoding='ascii')
+          manifest = {'sha':os.environ['EXPECTED_SHA'], 'moduleSha256':hashlib.sha256(raw).hexdigest(),
+                      'gzipSha256':hashlib.sha256(compressed).hexdigest(),'moduleBytes':len(raw),
+                      'encoding':'gzip+base64','parts':len(parts)}
+          (out/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
+          PY
+          cd transport
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A .release-artifact
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Verified online artifact for $EXPECTED_SHA"
+          git push origin HEAD:refs/heads/release-artifacts/online

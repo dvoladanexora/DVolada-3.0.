@@ -1,9 +1,11 @@
+import SlideConfirm from '../SlideConfirm.jsx';
+import {playOrderChirp} from '../order-chirp.js';
 import {ControlNavigation,ControlWorkspace} from './ControlWorkspace.jsx';
 import {CourierConsole,CourierApplication,CourierApplications} from './CourierWorkspace.jsx';
 import {StaffSignIn,StaffSecret,ManageStaffAccess,SettlementPanel} from './RestaurantCommercial.jsx';
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {ShoppingBag,Store,Bike,ShieldCheck,LogOut,RefreshCw,WifiOff,LockKeyhole,ArrowRight,Package,CheckCircle2} from 'lucide-react';
+import {ShoppingBag,Store,Bike,ShieldCheck,LogOut,RefreshCw,WifiOff,ArrowRight,Package,CheckCircle2} from 'lucide-react';
 import {createLiveApi,LiveApiError} from './live-api.js';
 import './live.css';
 import { enableQaPush, disableQaPush } from './onesignal-push.js';
@@ -494,7 +496,10 @@ export default function LiveApp(){
      throw error;
     }
    },{refresh:false});
-   if(result)confirmCheckout(result);
+   if(!result||!sessionRef.current)return false;
+   confirmCheckout(result);
+   try{if(JSON.parse(localStorage.getItem('dv_local_profile')||'{}').sound!==false)playOrderChirp()}catch{}
+   return true;
   }finally{checkoutInFlight.current=false}
  }
  async function recoverCheckout(){
@@ -679,8 +684,9 @@ export default function LiveApp(){
       <p className="dvl-muted">El servidor verificará precios y disponibilidad. Los cobros por tarjeta todavía no están habilitados.</p>
       {pendingKey&&<><p>Hay un intento pendiente. Buscá su confirmación o reintentá con los mismos datos.</p>
        <Action kind="secondary" disabled={busy||offline} onClick={recoverCheckout}>Buscar confirmación</Action></>}
-      <Action disabled={busy||offline||!restaurant||Boolean(replaceCart)} onClick={checkout}><LockKeyhole size={16}/>
-       {pendingKey?'Reintentar el mismo pedido':qaView?'Confirmar pedido de prueba':'Confirmar pedido'}</Action>
+      <SlideConfirm disabled={busy||offline||!restaurant||Boolean(replaceCart)} onConfirm={checkout}
+       label={pendingKey?'Deslizá para reintentar el mismo pedido':'Deslizá para confirmar'}
+       amount={price(subtotal+fee-discount)}/>
       </>}
     </section>
     <section className="dvl-panel dvl-span"><h2>Mis pedidos</h2>

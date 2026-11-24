@@ -42,3 +42,15 @@ const digest=createHash('sha256').update(style).digest('base64');
 assert(activation.headers.get('content-security-policy').includes("'sha256-"+digest+"'"));
 for(const path of ['/version.json','/cuenta','/beta/paneles','/api/v1/admin/overview'])
  assert.equal((await get(betaHost,path,betaEnv)).status,403,path);
+
+for(const [path,type] of [
+ ['/dvolada-slide-white.svg','image/svg+xml'],
+ ['/dvolada-d-symbol.svg','image/svg+xml'],
+ ['/icono%20D%20dvolada%20png.png','image/png'],
+ ['/file_0000000022ac820d8d3528d798a39488.png','image/png']
+]){
+ const asset=await get(qa,path);
+ assert.equal(asset.status,200,path);
+ assert.equal(asset.headers.get('content-type'),type,path);
+ assert((await asset.arrayBuffer()).byteLength>0,path);
+}

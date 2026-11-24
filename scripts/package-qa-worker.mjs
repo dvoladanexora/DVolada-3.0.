@@ -10,6 +10,7 @@ const types = {
   '.js': 'application/javascript; charset=utf-8',
   '.webmanifest': 'application/manifest+json',
   '.json': 'application/json',
+  '.svg': 'image/svg+xml',
   '.png': 'image/png',
 };
 const assets = {};
@@ -17,17 +18,19 @@ const files = [
   'index.html', 'sw.js', 'version.json', 'manifest-live.webmanifest',
   'push/onesignal/OneSignalSDKWorker.js',
   'icon-clean-192.png', 'icon-clean-512.png', 'logo.png',
+  'dvolada-slide-white.svg', 'dvolada-d-symbol.svg', 'dvolada-flash-dark.svg', 'dvolada-flash-light.svg',
+  'icono D dvolada png.png', 'file_0000000022ac820d8d3528d798a39488.png',
   'file_00000000e77081fd8cf8ee8349e461b6.png',
   ...(await readdir('dist/assets')).sort().map(name => 'assets/' + name),
 ];
 for (const name of files) {
   let bytes = await readFile('dist/' + name);
-  if (name === 'logo.png' || name.startsWith('file_')) {
+  if (name === 'logo.png' || name === 'icono D dvolada png.png' || name.startsWith('file_')) {
     bytes = await sharp(bytes).resize({ width: 320, withoutEnlargement: true }).png().toBuffer();
   }
   const type = types[extname(name)];
   if (!type) throw Error('Unknown asset type: ' + name);
-  assets['/' + name] = [type, gzipSync(bytes).toString('base64')];
+  assets['/' + encodeURI(name)] = [type, gzipSync(bytes).toString('base64')];
 }
 await build({
   stdin: {

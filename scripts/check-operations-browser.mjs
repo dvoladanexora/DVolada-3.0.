@@ -22,7 +22,8 @@ try{
      restaurants:business?[restaurant]:[]
     },
     '/api/v1/auth/client/config':{commercial:true,enabled:true},
-    '/api/v1/admin/overview':{orders:{total:0,active:0,delivered:0},restaurants:{total:1,open:0},couriers:{active:0}},
+    '/api/v1/admin/overview':{orders:{total:0,active:0,delivered:0},restaurants:{total:1,open:0,affiliated:0},couriers:{active:1,available:0},today:{orders:7,delivered:3},accounts:{registered:12,signedInToday:4},alerts:{claims:0,courierRequests:0,expiredOffers:0,lockedPins:0}},
+    '/api/v1/admin/courier-directory':{couriers:[{id:'33333333-3333-4333-8333-333333333333',display_name:'Repartidor de prueba',status:'active',active:1,available:0,delivered:6,active_orders:0,max_active_orders:2,created_at:1700000000}],next:null},
     '/api/v1/admin/restaurants':{restaurants:[{id:restaurant.restaurant_id,name:restaurant.name,plan:'ONLINE',subscription_status:'inactive',online_state:'closed',order_count:0,delivery_fee_minor:500}]},
     '/api/v1/admin/control/accounts':{accounts:[]},
     '/api/v1/admin/control/claims':{claims:[]},
@@ -52,7 +53,7 @@ try{
   if(role==='platform_admin'){
    await page.setViewportSize({width:390,height:844});
    const nav=page.getByRole('navigation',{name:'Navegación principal'});
-   assert.deepEqual(await nav.getByRole('button').allTextContents(),['Resumen','Negocios','Pedidos','Más']);
+   assert.deepEqual(await nav.getByRole('button').allTextContents(),['Inicio','Afiliados','Repartidores','Publicidad','Más']);
    await page.getByRole('heading',{name:'Vista general',exact:true}).waitFor();
    assert.equal(await page.getByText('Datos de vinculación',{exact:true}).count(),0);
    await page.getByRole('button',{name:/Nuevo negocio Registrar/}).click();
@@ -65,18 +66,22 @@ try{
    await page.screenshot({path:'visual-checks/admin-business-mobile.png'});
    await page.getByRole('button',{name:'Invitar propietario',exact:true}).click();
    await page.getByRole('heading',{name:'Invitar propietario',exact:true}).waitFor();
-   await page.getByRole('navigation',{name:'Opciones de Accesos'}).getByRole('button',{name:'Repartidores',exact:true}).click();
+   await nav.getByRole('button',{name:'Repartidores',exact:true}).click();
+   await page.getByText('Repartidor de prueba',{exact:true}).waitFor();
+   await page.getByRole('navigation',{name:'Opciones de Repartidores'}).getByRole('button',{name:'Solicitudes',exact:true}).click();
    await page.getByText('Vincular repartidor registrado',{exact:true}).waitFor();
    await nav.getByRole('button',{name:'Más',exact:true}).click();
-   await page.getByRole('group',{name:'Más módulos'}).getByRole('button',{name:'Finanzas',exact:true}).click();
-   await page.getByRole('navigation',{name:'Opciones de Finanzas'}).getByRole('button',{name:'Tarifas y comisiones',exact:true}).click();
+   await page.getByRole('group',{name:'Más módulos'}).getByRole('button',{name:'Administrador',exact:true}).click();
+   await page.getByRole('navigation',{name:'Opciones de Administrador'}).getByRole('button',{name:'Tarifas y comisiones',exact:true}).click();
    await page.getByRole('heading',{name:'Tarifas',exact:true}).waitFor();
-   await nav.getByRole('button',{name:'Pedidos',exact:true}).click();
+   await nav.getByRole('button',{name:'Inicio',exact:true}).click();
+   await page.getByRole('navigation',{name:'Opciones de Inicio'}).getByRole('button',{name:'Pedidos',exact:true}).click();
    await page.getByRole('heading',{name:'Seguimiento de pedidos',exact:true}).waitFor();
-   await page.getByRole('navigation',{name:'Opciones de Pedidos'}).getByRole('button',{name:'Reclamos',exact:true}).click();
+   await page.getByRole('navigation',{name:'Opciones de Inicio'}).getByRole('button',{name:'Reclamos',exact:true}).click();
    await page.getByRole('heading',{name:'Reclamos',exact:true}).waitFor();
-   await nav.getByRole('button',{name:'Más',exact:true}).click();
-   await page.getByRole('group',{name:'Más módulos'}).getByRole('button',{name:'Promociones',exact:true}).click();
+   await nav.getByRole('button',{name:'Publicidad',exact:true}).click();
+   await page.getByRole('heading',{name:'Spots publicitarios',exact:true}).waitFor();
+   await page.getByRole('navigation',{name:'Opciones de Publicidad'}).getByRole('button',{name:'Cupones',exact:true}).click();
    await page.getByRole('heading',{name:'Cupones',exact:true}).waitFor();
    await page.getByRole('button',{name:'Mi acceso',exact:true}).click();
    await page.getByRole('heading',{name:'Mi acceso',exact:true}).waitFor();
@@ -84,8 +89,8 @@ try{
    await page.getByRole('button',{name:'Cerrar todas mis sesiones',exact:true}).waitFor();
    await page.getByRole('button',{name:'Cerrar sesión',exact:true}).waitFor();
    await page.setViewportSize({width:1440,height:960});
-   await nav.getByRole('button',{name:'Configuración',exact:true}).waitFor();
-   await nav.getByRole('button',{name:'Resumen',exact:true}).click();
+   await nav.getByRole('button',{name:'Administrador',exact:true}).waitFor();
+   await nav.getByRole('button',{name:'Inicio',exact:true}).click();
    await page.getByRole('heading',{name:'Vista general',exact:true}).waitFor();
    console.log('Admin: módulos, navegación, negocio, invitación, repartidores, finanzas, pedidos, cupones y seguridad comprobados.');
   }

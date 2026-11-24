@@ -1,7 +1,7 @@
 name: Validar cambios Dvolada
 on:
   push:
-    branches: [prelaunch/phase-2-worker-d1, prelaunch/phase-3-live-integration]
+    branches: [main, prelaunch/phase-2-worker-d1, prelaunch/phase-3-live-integration]
   pull_request:
     branches: [main]
     paths-ignore:

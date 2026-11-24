@@ -128,6 +128,7 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
    {method:'POST',key,body:{expectedVersion:order.version,pin}}),
   adminAudit:()=>request('/api/v1/admin/audit'),
   adminOverview:()=>request('/api/v1/admin/overview'),
+  adminCourierDirectory:(q='',after='')=>request('/api/v1/admin/courier-directory?'+new URLSearchParams({q,after})),
   adminRestaurants:()=>request('/api/v1/admin/restaurants'),
   adminCreateRestaurant:body=>request('/api/v1/admin/restaurants',{method:'POST',body}),
   adminUpdateRestaurant:(id,body)=>request('/api/v1/admin/restaurants/'+s(id),{method:'PATCH',body}),

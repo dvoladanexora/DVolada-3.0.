@@ -53,6 +53,10 @@ const auditLabels={restaurant_created:'Alta de negocio',restaurant_updated:'Camb
  membership_assigned:'Vinculación de personal',courier_enrolled:'Alta de repartidor'};
 const newKey=()=>crypto.randomUUID();
 function errorLabel(error){
+ if(error?.name==='NotAllowedError')return 'No se completó la llave de acceso. Revisá que tu dispositivo tenga PIN, huella o desbloqueo configurado y volvé a intentarlo. Si cancelaste la ventana, podés abrirla otra vez.';
+ if(error?.name==='InvalidStateError')return 'Esta llave ya está registrada. Probá Ingresar o Recuperar acceso con tu código.';
+ if(error?.name==='SecurityError')return 'No se pudo utilizar la llave de acceso en esta dirección. Abrí Dvolada desde su enlace HTTPS autorizado.';
+ if(error?.name==='AbortError')return 'Se canceló la operación. Podés intentarlo de nuevo.';
  if(!(error instanceof LiveApiError))return error?.message||'No fue posible completar la acción.';
  const lookup={
   SIN_CONEXION:'Sin conexión con el servidor. No se confirmó la operación; revisá el estado antes de intentar nuevamente.',

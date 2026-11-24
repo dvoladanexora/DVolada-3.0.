@@ -244,3 +244,26 @@
  .dvl-admin-header-actions{gap:4px}
  .dvl-admin-icon-button{width:38px;height:40px}
 }
+
+
+/* Operación empresarial: cuatro módulos de uso frecuente, estadísticas y administración. */
+.dvl-admin-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+.dvl-admin-alert-list{display:grid;gap:6px}
+.dvl-admin-alert-list button{display:flex;gap:10px;align-items:center;min-height:44px;text-align:left;background:var(--control-bg);color:var(--control-ink);border:1px solid var(--control-line);border-radius:9px;padding:9px 12px;cursor:pointer}
+.dvl-admin-alert-list button span{flex:1;min-width:0}
+.dvl-admin-alert-list button svg{color:var(--control-muted);flex-shrink:0}
+.dvl-admin-alert-list button strong{font-variant-numeric:tabular-nums}
+.dvl-admin-courier-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,245px),1fr));gap:12px}
+.dvl-admin-courier-card{display:flex;flex-direction:column;gap:13px;padding:15px;border:1px solid var(--control-line);background:var(--control-bg);border-radius:12px;min-width:0}
+.dvl-admin-courier-card small{color:var(--control-muted);font-size:12px}
+.dvl-admin-courier-stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.dvl-admin-courier-stats>div{padding:10px;border:1px solid var(--control-line);border-radius:9px;background:var(--control-surface)}
+.dvl-admin-courier-stats strong,.dvl-admin-courier-stats small{display:block}
+.dvl-admin-courier-stats strong{font-size:21px}
+.dvl-admin-courier-card summary{cursor:pointer;min-height:44px;padding:12px 0}
+@media(max-width:900px){
+ .dvl-admin-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .dvl-admin-kpi:last-child{grid-column:auto}
+ .dvl-admin-sidebar .dvl-admin-nav button{font-size:10px;padding-inline:1px}
+ .dvl-admin-sidebar .dvl-admin-nav button span{max-width:100%;overflow-wrap:normal;white-space:nowrap}
+}

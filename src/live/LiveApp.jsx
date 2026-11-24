@@ -589,7 +589,9 @@ export default function LiveApp({CustomerHome}){
    if(!writeCart(cartAccount,{restaurantId:draft.restaurantId,items:draft.items}))return false;
    setCartRestaurantId(draft.restaurantId);setCart(draft.items);resetDiscount();return true;
   };
+  const hashPage=window.location.hash.slice(1);
   const initialPage=customerSection==='carrito'?'cart':customerSection==='mis-pedidos'?'orders':
+   ['home','cart','orders','account','restaurants','favorites','invite','install'].includes(hashPage)?hashPage:
    new URLSearchParams(window.location.search).get('intent')==='courier'?'account':'home';
   const liveCustomer={
    cart,restaurantId:cartRestaurantId,restaurant,restaurants,orders,subtotal,fee,discount,money:price,

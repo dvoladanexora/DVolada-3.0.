@@ -571,7 +571,7 @@ export default function LiveApp({CustomerHome}){
  const setBoard=tab=>{setRestaurantTab(tab);setHistoryCursor(null);setNextHistory(null);setOrderDetail(null);setSupport(null);setOrders([])};
  const formattedUserId=session?.user?.id||'';
  const adminMode=Boolean(session&&scope==='admin');
- const selectControlSection=section=>{setControlSection(section);window.scrollTo({top:0,behavior:'instant'})};
+ const selectControlSection=section=>{if(section==='newBusiness'){setAdminCreateOpen(true);setControlSection('business')}else setControlSection(section);window.scrollTo({top:0,behavior:'auto'})};
  const selectedAdminBusiness=adminRestaurants.find(r=>r.id===adminSelectedId);
  const jump=id=>document.getElementById(id)?.scrollIntoView({block:'start'});
  const sectionAction=(change,value,id)=>()=>{change(value);requestAnimationFrame(()=>jump(id))};
@@ -929,14 +929,14 @@ export default function LiveApp({CustomerHome}){
        </div></div>}
       <label className="dvl-admin-search">Buscar negocio<input type="search" value={adminBusinessSearch} onChange={e=>setAdminBusinessSearch(e.target.value)} placeholder="Nombre del restaurante"/></label>
       <div className="dvl-admin-business-list">{adminRestaurants.filter(r=>r.name.toLowerCase().includes(adminBusinessSearch.trim().toLowerCase())).map(r=>
-       <button className={'dvl-admin-business-row '+(r.id===adminSelectedId?'selected':'')} type="button" key={r.id} aria-pressed={r.id===adminSelectedId} onClick={()=>{setAdminSelectedId(r.id);setAdminFee('')}}>
+       <button className={'dvl-admin-business-row '+(r.id===adminSelectedId?'selected':'')} type="button" key={r.id} aria-pressed={r.id===adminSelectedId} onClick={()=>{setAdminSelectedId(r.id);setAdminFee('');requestAnimationFrame(()=>document.getElementById('control-business-detail')?.scrollIntoView({block:'start'}))}}>
         <span className="dvl-admin-business-icon"><Store size={20}/></span><span className="dvl-admin-business-name"><strong>{r.name}</strong><small>{{ONLINE:'Cloud',LOCAL:'Local',PLUS:'Plus'}[r.plan]||r.plan} · {r.order_count??0} pedidos</small></span>
         <span className={'dvl-admin-state '+(r.subscription_status==='active'?'is-active':'')}>{r.subscription_status==='active'?'Activo':'Inactivo'}</span><ArrowRight size={16} aria-hidden="true"/>
        </button>)}
        {!adminRestaurants.some(r=>r.name.toLowerCase().includes(adminBusinessSearch.trim().toLowerCase()))&&<p className="dvl-muted">No hay negocios para esta búsqueda.</p>}
       </div>
      </section>
-     {selectedAdminBusiness&&<section className="dvl-panel dvl-stack dvl-admin-business-detail">
+     {selectedAdminBusiness&&<section className="dvl-panel dvl-stack dvl-admin-business-detail" id="control-business-detail">
       <div className="dvl-admin-section-heading"><h2>{selectedAdminBusiness.name}</h2><button className="dvl-action secondary" type="button" onClick={()=>{setAdminSelectedId('');setAdminFee('')}}>Cerrar</button></div>
       <div className="dvl-admin-business-meta"><span>Suscripción: {selectedAdminBusiness.subscription_status==='active'?'Activa':'Inactiva'}</span><span>Operación: {{open:'Abierto',paused:'En pausa',closed:'Cerrado'}[selectedAdminBusiness.online_state]||selectedAdminBusiness.online_state}</span></div>
       <div className="dvl-inline dvl-control-actions">
@@ -948,7 +948,7 @@ export default function LiveApp({CustomerHome}){
       <details className="dvl-admin-details"><summary>Tarifa de envío</summary>
        <div className="dvl-grid dvl-editor">
         <label>Tarifa de envío (L)<input value={adminFee} type="number" min="0" max="1000000" step=".01"
-         placeholder={(selectedAdminBusiness.delivery_fee_minor/100).toFixed(2)} onChange={event=>setAdminFee(event.target.value)}/></label>
+         placeholder={(Number(selectedAdminBusiness.delivery_fee_minor||0)/100).toFixed(2)} onChange={event=>setAdminFee(event.target.value)}/></label>
         <Action disabled={busy||offline||!/^\d{1,7}(?:\.\d{1,2})?$/.test(adminFee)||Number(adminFee)>1000000}
          onClick={async()=>{if(await action(()=>api.adminUpdateRestaurant(selectedAdminBusiness.id,{deliveryFeeMinor:Math.round(Number(adminFee)*100)})))setAdminFee('')}}>Guardar tarifa</Action>
        </div>

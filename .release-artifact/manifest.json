@@ -1,8 +1,8 @@
 {
-  "sha": "7c3a65876d8b379af60c2e3f644ceb7155e52ea7",
-  "moduleSha256": "a5e843337b2f5fc74046d8ff5ea065e359d3f2e5c3079d9577dc0b83b12f2ac0",
-  "gzipSha256": "3133b2eef4751379e00084844a4c02ce58d82e5c01efcdc55fa3f8d1e677018a",
-  "moduleBytes": 1132223,
+  "sha": "a02ab895a1fc56c0920522360f81d5d00638f2a9",
+  "moduleSha256": "aa2c07ec1df4fe95664e7adb273b07153b35595598c44d0bf6e34eb0050113db",
+  "gzipSha256": "0a5d089845e8b362403857063895341129c15d398a039db165cca6b10e263641",
+  "moduleBytes": 1132219,
   "encoding": "gzip+base64",
   "parts": 18
 }

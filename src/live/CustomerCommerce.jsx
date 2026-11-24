@@ -6,7 +6,7 @@ import {readCart} from './cart-draft.js';
 
 // These sections use the original application shell, original cart/order classes,
 // and the same authenticated controller as the server workspace. No demo orders.
-export function CustomerCart({c,places,onBrowse,onOrders}){
+export function CustomerCart({c,places,onBrowse,onOrders,savedAddresses=[],onSaveAddress,onSelectAddress,profile,customerBudget,setCustomerBudget,groupPeople,setGroupPeople,savedDraft,onSaveDraft,onRestoreDraft}){
  const [review,setReview]=useState(false);
  const editingLocked=c.busy||c.offline;
  const locked=editingLocked||Boolean(c.pendingKey);
@@ -14,6 +14,8 @@ export function CustomerCart({c,places,onBrowse,onOrders}){
  const submit=async()=>{const ok=await c.checkout();if(ok){setReview(false);onOrders()}return ok};
  return <section className="shell section narrow page-section" aria-label="Tu carrito">
   <div className="page-heading"><span className="kicker">TU COMPRA</span><h1>Tu carrito</h1><p>Revisá tus productos antes de continuar.</p></div>
+  <details className="dv-batch3-box"><summary>Pedido para varias personas · organización local</summary><label>Personas <input type="number" min="2" max="20" value={groupPeople} onChange={e=>setGroupPeople(Math.max(2,Math.min(20,Number(e.target.value)||2)))}/></label><p>Promedio orientativo por persona: {c.money(Math.round(total/groupPeople))}. El organizador confirma un único pedido.</p></details>
+  <details className="dv-batch3-box"><summary>Mi presupuesto y entrega o retiro</summary><label>Presupuesto máximo (L) <input type="number" min="1" value={customerBudget} onChange={e=>setCustomerBudget(Math.max(1,Number(e.target.value)||1))}/></label><p>Retiro estimado: {c.money(c.subtotal-c.discount)} · Domicilio estimado: {c.money(c.subtotal+(c.restaurant?.delivery_fee_minor||0)-c.discount)}</p>{total/100>customerBudget&&<p role="alert">Tu pedido supera tu presupuesto.</p>}<button className="secondary" disabled={locked||!c.cart.length} onClick={onSaveDraft}>Guardar carrito</button><button className="secondary" disabled={locked||!savedDraft?.items?.length} onClick={onRestoreDraft}>Recuperar carrito</button></details>
   {c.replaceCart&&<div className="surface"><h3>¿Cambiar de restaurante?</h3><p>El carrito actual será reemplazado.</p><button className="secondary" onClick={c.keepCart}>Conservar carrito</button><button className="primary" disabled={locked} onClick={c.replace}>Cambiar restaurante</button></div>}
   {!c.cart.length&&readCart('guest').items.length>0&&<button className="secondary wide" disabled={locked} onClick={c.importGuest}>Usar carrito de invitado</button>}
   {!c.cart.length?<div className="empty"><ShoppingBag size={38}/><h2>¡Todavía no hay nada para llevar de volada!</h2><p>Encontrá algo rico para empezar.</p><button className="primary" onClick={onBrowse}>Explorar restaurantes <ArrowRight size={17}/></button></div>:<>
@@ -26,7 +28,7 @@ export function CustomerCart({c,places,onBrowse,onOrders}){
     </div>})}
    </section><div className="totals"><div><span>Productos</span><b>{c.money(c.subtotal)}</b></div><div className="grand"><span>Subtotal</span><b>{c.money(c.subtotal)}</b></div></div></div>
    <button className="secondary wide" onClick={onBrowse}>Seguir comprando</button>
-   <button className="primary wide" disabled={c.busy||c.offline||Boolean(c.replaceCart)} onClick={()=>setReview(true)}>Continuar pedido <ArrowRight size={18}/></button>
+   <button className="primary wide" disabled={c.busy||c.offline||Boolean(c.replaceCart)} onClick={()=>{if(!c.pendingKey){if(!c.phone&&profile?.phone)c.setPhone(profile.phone.replace(/\D/g,'').slice(-8));if(!c.deliveryAddress&&profile?.address)c.setDeliveryAddress(profile.address)}setReview(true)}}>Continuar pedido <ArrowRight size={18}/></button>
   </>}
   {review&&c.cart.length>0&&<div className="modal-backdrop" onMouseDown={()=>setReview(false)}><div className="modal" role="dialog" aria-modal="true" aria-label="Confirmar pedido" onMouseDown={e=>e.stopPropagation()}>
    <div className="modal-head"><h2>Revisá y confirmá tu pedido</h2><button className="iconbtn" aria-label="Cerrar" onClick={()=>setReview(false)}><X/></button></div>
@@ -35,6 +37,7 @@ export function CustomerCart({c,places,onBrowse,onOrders}){
    <div className="switch-row"><button className={c.deliveryMethod==='pickup'?'selected':''} disabled={editingLocked} onClick={()=>c.setDeliveryMethod('pickup')}><Store size={18}/> Recoger</button><button className={c.deliveryMethod==='delivery'?'selected':''} disabled={editingLocked} onClick={()=>c.setDeliveryMethod('delivery')}><Bike size={18}/> A domicilio</button></div>
    <label>Teléfono de Honduras (+504)<input inputMode="numeric" autoComplete="tel-national" value={c.phone} disabled={editingLocked} onChange={e=>c.setPhone(e.target.value.replace(/\D/g,'').slice(0,8))}/></label>
    {c.deliveryMethod==='delivery'&&<label>Barrio, dirección y referencia<textarea autoComplete="street-address" rows={3} maxLength={300} value={c.deliveryAddress} disabled={editingLocked} onChange={e=>c.setDeliveryAddress(e.target.value)}/></label>}
+   {c.deliveryMethod==='delivery'&&<><label>Direcciones guardadas<select disabled={locked} value={savedAddresses.includes(c.deliveryAddress)?c.deliveryAddress:''} onChange={e=>{if(e.target.value)onSelectAddress(e.target.value)}}><option value="">Elegí una dirección</option>{savedAddresses.map(a=><option key={a} value={a}>{a}</option>)}</select></label><button className="secondary" disabled={locked||c.deliveryAddress.trim().length<8} onClick={()=>onSaveAddress(c.deliveryAddress)}>Guardar dirección</button><div className="dv-address-quick">{savedAddresses.slice(0,4).map((a,i)=><button type="button" disabled={locked} className={c.deliveryAddress===a?'active':''} key={a} onClick={()=>onSelectAddress(a)}>{i===0?'Casa':i===1?'Trabajo':'Otra dirección'} · {a}</button>)}</div></>}
    {c.eligibleFlash.length>0&&<label>Promoción Flash<select value={c.activeFlash?.id||''} disabled={locked} onChange={e=>c.selectFlash(e.target.value)}><option value="">Sin promoción Flash</option>{c.eligibleFlash.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>}
    {c.flashSelection&&!c.activeFlash&&<div role="alert">Esta promoción ya no está disponible. <button className="secondary" disabled={locked} onClick={()=>c.selectFlash('')}>Quitar promoción</button></div>}
    {c.activeFlash?.giftName&&<p>Regalo: {c.activeFlash.giftName}</p>}

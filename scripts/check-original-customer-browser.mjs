@@ -30,6 +30,7 @@ try{
    '/api/v1/catalog/restaurants':{restaurants:[restaurant],next:null},
    ['/api/v1/catalog/restaurants/'+rid+'/products']:{restaurant,products:[product]},
    '/api/v1/catalog/flash':{enabled:false,campaigns:[]},
+   '/api/v1/catalog/spots':{spots:[]},
    '/api/v1/customer/favorites':{ids:[]},
    '/api/v1/customer/courier-application':{requested:false},
   };

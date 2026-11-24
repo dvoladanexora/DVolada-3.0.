@@ -31,6 +31,7 @@ export default function DraggableChatFab({onOpen}){
   }
   return <button type="button" className="dv-chat-fab dv-chat-fab-draggable"
     style={position?{left:Math.min(position.x,Math.max(8,window.innerWidth-90)),top:Math.min(position.y,Math.max(8,window.innerHeight-65)),right:'auto',bottom:'auto'}:undefined}
+    onClick={event=>{if(event.detail===0)onOpen()}}
     onPointerDown={down} onPointerMove={move} onPointerUp={up}
     onPointerCancel={()=>{gesture.current=null}}
     aria-label="Abrir chat; mantené presionado y arrastrá para mover" title="Tocá para abrir o arrastrá para mover">

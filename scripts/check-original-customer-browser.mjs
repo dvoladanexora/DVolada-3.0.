@@ -71,6 +71,11 @@ try{
  await page.getByRole('heading',{name:'Mis pedidos',exact:true}).waitFor();
  await page.getByText('Orden DV-FIXTURE',{exact:true}).waitFor();
  assert.equal(created,1);
+ const bubble=page.getByRole('button',{name:/Abrir chat/});
+ await bubble.focus();
+ await bubble.press('Enter');
+ await page.getByRole('region',{name:'Elegir conversación'}).waitFor();
+ await page.getByRole('button',{name:'Cerrar conversaciones'}).click();
  await page.getByText('Ver todas las etapas del pedido',{exact:true}).click();
  assert.deepEqual(await page.locator('.order-timeline .order-step small').allTextContents(),['Pendiente','Aceptado','Preparando','Listo','Entregado']);
  await page.getByRole('button',{name:'Ver detalle',exact:true}).waitFor();

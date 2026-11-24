@@ -626,6 +626,13 @@ test('kitchen preparation is permitted while cancellations and platform audit ar
  const {body:{order}}=await f.create();
  assert.equal((await f.status(order.id,'kitchen','Aceptado',1)).status,403);
  assert.equal((await f.status(order.id,'staffA','Aceptado',1)).status,200);
+ const board=await f.call('/api/v1/restaurant/orders?view=active',{by:'kitchen',restaurantId:f.restaurants[0]});
+ assert.equal(board.status,200);
+ const ticket=board.body.orders.find(row=>row.id===order.id);
+ assert.equal(ticket.items[0].name,'Baleada');
+ assert.equal(ticket.items[0].qty,1);
+ assert.ok(ticket.stageAt>0);
+ for(const field of ['deliveryAddress','totalMinor','customerId','deliveryPin'])assert.equal(ticket[field],undefined);
  assert.equal((await f.status(order.id,'kitchen','Cancelado',2)).status,403);
  assert.equal((await f.status(order.id,'kitchen','Preparando',2)).status,200);
  assert.equal((await f.call('/api/v1/admin/audit',{by:'kitchen'})).status,403);

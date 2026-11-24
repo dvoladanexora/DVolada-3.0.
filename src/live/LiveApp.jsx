@@ -1,3 +1,5 @@
+import RestaurantKitchenDisplay from '../RestaurantKitchenDisplay.jsx';
+import {openKitchenTicket} from '../kitchen-operations.js';
 import SlideConfirm from '../SlideConfirm.jsx';
 import {playOrderChirp} from '../order-chirp.js';
 import {ControlNavigation,ControlWorkspace} from './ControlWorkspace.jsx';
@@ -631,8 +633,8 @@ export default function LiveApp({CustomerHome}){
   <WaitOrError message={status}/>
   <WaitOrError message={error} warning/>
   <WaitOrError message={refreshWarning}/>
-  {session&&<div className="dvl-id-note"><span>ID de vinculación: <code>{formattedUserId}</code></span><Action kind="text"
-   onClick={()=>navigator.clipboard?.writeText(formattedUserId).catch(()=>{})}>Copiar</Action></div>}
+  {session&&<details><summary>Datos de vinculación</summary><div className="dvl-id-note"><span>ID de vinculación: <code>{formattedUserId}</code></span><Action kind="text"
+   onClick={()=>navigator.clipboard?.writeText(formattedUserId).catch(()=>{})}>Copiar</Action></div></details>}
     {session?.user.privilegedPasskey&&<Action kind="text" disabled={busy||offline}
    onClick={()=>{if(window.confirm('¿Cerrar todas las sesiones de esta cuenta?'))logout(true)}}>Cerrar todas mis sesiones</Action>}
   {staffCredential&&<StaffSecret code={staffCredential} close={()=>setStaffCredential(null)} issued/>}
@@ -814,7 +816,21 @@ export default function LiveApp({CustomerHome}){
       onSaved={()=>load().catch(error=>setError(errorLabel(error)))}/>
      </div>)}</div>
     </section>}
-    {!cashRole&&(kitchenRole||['active','history'].includes(restaurantTab))&&<>
+    {kitchenRole&&<RestaurantKitchenDisplay serverBacked connected={!offline} busy={busy}
+     restaurantId={selectedRestaurantId} restaurantName={selectedBusiness.name}
+     orders={boardOrders.map(order=>({...order,kind:'food',placeId:selectedRestaurantId,orderNo:order.orderNumber,
+      delivery:order.deliveryMethod,createdAt:order.createdAt*1000,acceptedAt:order.stageAt*1000,
+      preparingAt:order.stageAt*1000,readyAt:order.stageAt*1000,
+      notes:[order.note,order.flashGiftName&&('Regalo: '+order.flashGiftName)].filter(Boolean).join(' · ')}))}
+     onChange={(order,next)=>action(()=>api.restaurantStatus(selectedRestaurantId,order,next,newKey()))}
+     onPrint={order=>{if(!openKitchenTicket(order,selectedBusiness.name))setError('Permití abrir la comanda para imprimirla.')}}
+     onDetail={showRestaurantOrder}/>}
+    {kitchenRole&&orderDetail?.restaurantId===selectedRestaurantId&&<section className="dvl-panel" aria-label="Detalle de la comanda">
+     <h2>Comanda {orderDetail.orderNumber}</h2>
+     <ul>{orderDetail.items.map((item,i)=><li key={i}>{item.quantity} × {item.name_snapshot}{item.optionNames?.map(name=>' · '+name)}</li>)}</ul>
+     {orderDetail.note&&<p>{orderDetail.note}</p>}<Action kind="secondary" onClick={()=>setOrderDetail(null)}>Cerrar detalle</Action>
+    </section>}
+    {!cashRole&&!kitchenRole&&['active','history'].includes(restaurantTab)&&<>
     <div className="dvl-grid">{boardOrders.map(o=><OrderCard key={o.id} order={o} kitchen={kitchenRole}>
       {o.flashGiftName&&<p>Regalo: {o.flashGiftName}</p>}
       <Action kind="secondary" disabled={busy||offline} onClick={()=>showRestaurantOrder(o)}>Ver comanda</Action>

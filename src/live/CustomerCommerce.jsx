@@ -1,5 +1,6 @@
 import React,{useState} from 'react';
 import {ArrowRight,ShoppingBag,Receipt,Plus,Minus,X,Store,Bike,MessageCircle,ShieldCheck,ShoppingCart,Check,UserRound} from 'lucide-react';
+import DraggableChatFab from '../DraggableChatFab.jsx';
 import SlideConfirm from '../SlideConfirm.jsx';
 import CourierStatusMotion from '../CourierStatusMotion.jsx';
 import {readCart} from './cart-draft.js';
@@ -57,6 +58,12 @@ const deliveryStages=['Pendiente','Aceptado','Preparando','Listo','Recogido','En
 const pickupStages=['Pendiente','Aceptado','Preparando','Listo','Entregado'];
 export function CustomerOrders({c,onBrowse,onCart}){
  const [tab,setTab]=useState('pending'),[query,setQuery]=useState('');
+ const [chooseChat,setChooseChat]=useState(false);
+ const activeOrders=c.orders.filter(order=>!closed.has(order.status));
+ function openChat(order,channel){
+  setChooseChat(false);
+  c.support(order,channel);
+ }
  const rows=c.orders.filter(o=>(tab==='history')===closed.has(o.status)&&(!query.trim()||String(o.orderNumber||'').toLowerCase().includes(query.toLowerCase())||String(c.restaurants.find(r=>r.id===o.restaurantId)?.name||'').toLowerCase().includes(query.toLowerCase())));
  return <section className="shell section page-section">
   <div className="page-heading"><span className="kicker">SEGUIMIENTO</span><h1>Mis pedidos</h1><p>Consultá tus pedidos activos y tu historial.</p><div className="dv-customer-filters"><input placeholder="Buscar número o restaurante" aria-label="Buscar pedido" value={query} onChange={e=>setQuery(e.target.value)}/></div></div>
@@ -75,6 +82,15 @@ export function CustomerOrders({c,onBrowse,onCart}){
     {o.status==='Pendiente'&&<button className="secondary dv-cancel-order" disabled={c.busy||c.offline} onClick={()=>{if(window.confirm('¿Cancelar este pedido?'))c.cancelOrder(o)}}>Cancelar pedido</button>}
     {o.status==='Entregado'&&<button className="primary" disabled={c.busy||c.offline||Boolean(c.pendingKey)} onClick={async()=>{if(await c.reorder(o))onCart()}}><ShoppingCart size={16}/> Volvé a pedir</button>}
    </article>})}</div>}
+  {!c.offline&&!c.supportView&&!chooseChat&&activeOrders.length>0&&<DraggableChatFab onOpen={()=>setChooseChat(true)}/>}
+  {chooseChat&&<section className="dv-chat-panel" aria-label="Elegir conversación">
+   <div className="dv-chat-header"><strong>Chat de tus pedidos</strong><button className="iconbtn" type="button" aria-label="Cerrar conversaciones" onClick={()=>setChooseChat(false)}><X/></button></div>
+   <div className="dv-chat-log">{activeOrders.map(order=><div key={order.id} className="surface">
+    <strong>Orden {order.orderNumber}</strong>
+    <button type="button" className="secondary" disabled={c.offline} onClick={()=>openChat(order,'restaurant')}>Chat con restaurante</button>
+    {order.courierResponse==='accepted'&&<button type="button" className="secondary" disabled={c.offline} onClick={()=>openChat(order,'courier')}>Chat con repartidor</button>}
+   </div>)}</div>
+  </section>}
   {c.supportView}
  </section>
 }

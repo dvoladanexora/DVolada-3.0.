@@ -10,7 +10,7 @@ const stages=[
  {key:'ready',title:'Listos',subtitle:'Para entrega o retiro',Icon:CheckCircle2,action:null,next:null},
 ];
 
-function KitchenOrderCard({order,stage,now,alertMinutes,connected,onChange,onPrint,onDetail}){
+function KitchenOrderCard({order,stage,now,alertMinutes,connected,busy,onChange,onPrint,onDetail}){
  const minutes=stageElapsedMinutes(order,stage.key,now),totalMinutes=elapsedMinutes(order,now),delayed=minutes!==null&&minutes>=alertMinutes&&stage.key!=='ready';
  const items=Array.isArray(order.items)?order.items:[];
  return <article className={'dv-kitchen-order '+(delayed?'is-delayed ':'')+'is-'+stage.key} aria-label={'Orden '+(order.orderNo||order.id)}>
@@ -22,14 +22,14 @@ function KitchenOrderCard({order,stage,now,alertMinutes,connected,onChange,onPri
   })}</ul>
   {(order.notes||order.comment)&&<div className="dv-kitchen-order-note"><AlertTriangle size={16}/><span>{order.notes||order.comment}</span></div>}
   <div className="dv-kitchen-order-actions"><button type="button" className="dv-kitchen-print" onClick={()=>onPrint(order)} aria-label={'Imprimir comanda de '+(order.orderNo||order.id)}><Printer size={17}/> Comanda</button><button type="button" className="dv-kitchen-details" onClick={()=>onDetail(order)}><UtensilsCrossed size={16}/> Detalle</button></div>
-  {stage.next&&<button type="button" className={'dv-kitchen-progress dv-kitchen-'+stage.key} disabled={!connected} onClick={()=>onChange(order,stage.next)}>{stage.key==='accepted'?<ChefHat size={19}/>:<CheckCheck size={19}/>} {stage.action} <ArrowRight size={17}/></button>}
+  {stage.next&&<button type="button" className={'dv-kitchen-progress dv-kitchen-'+stage.key} disabled={!connected||busy} onClick={()=>onChange(order,stage.next)}>{stage.key==='accepted'?<ChefHat size={19}/>:<CheckCheck size={19}/>} {stage.action} <ArrowRight size={17}/></button>}
   {!connected&&stage.next&&<small className="dv-kitchen-offline">Sin conexión: no se pueden cambiar estados.</small>}
   {stage.key==='ready'&&<div className="dv-kitchen-ready-message"><CheckCircle2 size={16}/> Esperando retiro o gestión del repartidor</div>}
  </article>;
 }
 
 export default function RestaurantKitchenDisplay({
- orders=[],restaurantId,restaurantName='Restaurante',now=Date.now(),alertMinutes=20,connected=true,query='',
+ orders=[],restaurantId,restaurantName='Restaurante',now=Date.now(),alertMinutes=20,connected=true,serverBacked=false,busy=false,query='',
  onChange=()=>{},onPrint=()=>{},onDetail=()=>{},onGoCashier=()=>{},
 }){
  const [visibleLimits,setVisibleLimits]=useState({accepted:20,preparing:20,ready:20});
@@ -55,10 +55,10 @@ export default function RestaurantKitchenDisplay({
     const page=kitchenVisibleBatch(items,visibleLimits[stage.key]);
     return <section key={stage.key} className={'dv-kitchen-lane dv-kitchen-lane-'+stage.key} aria-label={stage.title}>
      <header><div className="dv-kitchen-lane-icon"><Icon size={21}/></div><div><h3>{stage.title}</h3><span>{stage.subtitle}</span></div><strong className="dv-kitchen-count">{items.length}</strong></header>
-     <div className="dv-kitchen-lane-orders">{items.length?page.visible.map(o=><KitchenOrderCard key={o.id} order={o} stage={stage} now={now} alertMinutes={alertMinutes} connected={connected} onChange={onChange} onPrint={onPrint} onDetail={onDetail}/>):<div className="dv-kitchen-empty"><CheckCircle2 size={31}/><p>{query.trim()?'Sin coincidencias en esta etapa.':stage.key==='accepted'?'No hay pedidos esperando comenzar.':stage.key==='preparing'?'No hay platos en preparación.':'No hay órdenes listas por ahora.'}</p></div>}{page.remaining>0&&<button type="button" className="dv-kitchen-load-more" aria-label={'Mostrar 20 pedidos más en '+stage.title} onClick={()=>setVisibleLimits(old=>({...old,[stage.key]:old[stage.key]+20}))}>Mostrar 20 más · {page.shown} de {page.total} visibles</button>}</div>
+     <div className="dv-kitchen-lane-orders">{items.length?page.visible.map(o=><KitchenOrderCard key={o.id} order={o} stage={stage} now={now} alertMinutes={alertMinutes} connected={connected} busy={busy} onChange={onChange} onPrint={onPrint} onDetail={onDetail}/>):<div className="dv-kitchen-empty"><CheckCircle2 size={31}/><p>{query.trim()?'Sin coincidencias en esta etapa.':stage.key==='accepted'?'No hay pedidos esperando comenzar.':stage.key==='preparing'?'No hay platos en preparación.':'No hay órdenes listas por ahora.'}</p></div>}{page.remaining>0&&<button type="button" className="dv-kitchen-load-more" aria-label={'Mostrar 20 pedidos más en '+stage.title} onClick={()=>setVisibleLimits(old=>({...old,[stage.key]:old[stage.key]+20}))}>Mostrar 20 más · {page.shown} de {page.total} visibles</button>}</div>
     </section>;
    })}
   </div>
-  <p className="dv-kitchen-system-note">Vista preparada para pantalla o tablet. Por ahora los pedidos son locales a esta demostración: para recibir lo aceptado en Caja desde otro equipo se requiere la conexión segura del servidor.</p>
+  {!serverBacked&&<p className="dv-kitchen-system-note">Vista preparada para pantalla o tablet. Por ahora los pedidos son locales a esta demostración: para recibir lo aceptado en Caja desde otro equipo se requiere la conexión segura del servidor.</p>}
  </div>;
 }

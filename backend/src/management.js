@@ -1,5 +1,7 @@
 import {ApiError,readJson,requireUuid,requireText,requireKeys,requireInteger,requireRole,requireStaff} from './security.js';
 
+import {photoType} from './restaurant-operations.js';
+
 const plans=['ONLINE','LOCAL','PLUS'],roles=['owner','manager','kitchen','cashier'];
 function pick(value,allowed,field){
  if(!allowed.includes(value))throw new ApiError(400,'INVALID_INPUT','Invalid '+field);
@@ -82,18 +84,24 @@ export async function enrollCourier(req,env,actor){
 }
 export async function createProduct(req,env,actor,access){
  requireStaff(access.staff_role,['owner','manager']);
- const body=await readJson(req);requireKeys(body,['name','priceMinor','available','category']);
+ const body=await readJson(req,165000);requireKeys(body,['name','priceMinor','available','category','photoBase64']);
  const name=requireText(body.name,2,150,'name'),price=countMinor(body.priceMinor);
  if(body.available!==undefined&&typeof body.available!=='boolean')throw new ApiError(400,'INVALID_INPUT');
  const available=body.available===false?0:1;
  const id=crypto.randomUUID(),category=body.category===undefined?'':requireText(body.category,0,60,'category');
+ let mime=null;
+ if(body.photoBase64!==undefined){
+  if(typeof body.photoBase64==='string'&&body.photoBase64.length<=163840){try{mime=photoType(atob(body.photoBase64))}catch{}}
+  if(!mime)throw new ApiError(400,'INVALID_PHOTO');
+ }
  await env.DB.batch([
   env.DB.prepare('INSERT INTO products(id,restaurant_id,name,price_minor,available,category) VALUES(?,?,?,?,?,?)')
    .bind(id,access.restaurantId,name,price,available,category),
   env.DB.prepare(`INSERT INTO restaurant_audit(restaurant_id,actor_id,product_id,action)
-   VALUES(?,?,?,'product_created')`).bind(access.restaurantId,actor.userId,id)
+   VALUES(?,?,?,'product_created')`).bind(access.restaurantId,actor.userId,id),
+  ...(mime?[env.DB.prepare('INSERT INTO restaurant_product_photos(product_id,mime,image_base64) VALUES(?,?,?)').bind(id,mime,body.photoBase64),env.DB.prepare("INSERT INTO restaurant_operation_log(restaurant_id,actor_id,action,subject_id) VALUES(?,?,'photo_saved',?)").bind(access.restaurantId,actor.userId,id)]:[])
  ]);
- return {product:{id,restaurantId:access.restaurantId,name,priceMinor:price,available:Boolean(available)}};
+ return {product:{id,restaurantId:access.restaurantId,name,priceMinor:price,available:Boolean(available),category,...(mime?{photoUrl:'/api/v1/catalog/photos/'+id}:{})}};
 }
 export async function updateProduct(req,env,actor,access,productId){
  requireStaff(access.staff_role,['owner','manager']);

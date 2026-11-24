@@ -1388,3 +1388,20 @@ test('controlled checkout 20 restaurants and 100 clients',async()=>{
  assert.equal(f.DB.db.prepare('SELECT COUNT(*) n FROM online_orders').get().n,100);
  assert.equal(f.DB.db.prepare('SELECT COUNT(DISTINCT restaurant_id) n FROM online_orders').get().n,20);
 });
+
+test('public food feed contains only available products of active businesses and validates cursors',async()=>{
+ const f=await fixture();
+ const feed=async(query='')=>f.call('/api/v1/catalog/feed'+query);
+ const initial=await feed();
+ assert.equal(initial.status,200);
+ assert.equal(initial.body.next,null);
+ assert.deepEqual(new Set(initial.body.products.map(p=>p.id)),new Set(f.productIds));
+ assert.ok(initial.body.products.every(p=>p.photoUrl===null&&p.restaurant_name&&Number.isInteger(p.price_minor)));
+ assert.deepEqual((await feed('?q=bale')).body.products.map(p=>p.id),[f.productIds[0]]);
+ f.DB.db.prepare('UPDATE products SET available=0 WHERE id=?').run(f.productIds[0]);
+ assert.deepEqual((await feed('?q=bale')).body.products,[]);
+ f.DB.db.prepare("UPDATE restaurants SET subscription_status='inactive' WHERE id=?").run(f.restaurants[1]);
+ assert.deepEqual((await feed()).body.products,[]);
+ assert.equal((await feed('?after=invalid')).status,400);
+ assert.equal((await feed('?q='+encodeURIComponent('x'.repeat(61)))).status,400);
+});

@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from 'react';
+import {LayoutDashboard,Store,Package,Users,Wallet,Tag,ShieldCheck,MoreHorizontal,ChevronRight,Bike,Clock,CheckCircle2,DoorOpen,Plus,UserPlus} from 'lucide-react';
 
-const tabs={operations:'Pedidos',accounts:'Participantes y cuentas',claims:'Reclamos',coupons:'Cupones',rates:'Tarifas',
+const tabs={operations:'Seguimiento de pedidos',accounts:'Participantes y cuentas',claims:'Reclamos',coupons:'Cupones',rates:'Tarifas',
  reports:'Reportes',audit:'Auditoría',business:'Alta y afiliación',flash:'Flash y regalos',settlements:'Liquidaciones'};
 const statuses=['Pendiente','Aceptado','Preparando','Listo','Recogido','En camino','En ubicación','Entregado','Cancelado','Rechazado'];
 const claims={open:'Recibido',review:'En atención',resolved:'Resuelto'};
@@ -43,12 +44,77 @@ function Form({children,action,label,disabled}){
 const emptyFilters={operations:{q:'',status:'',restaurant:''},accounts:{q:'',role:''},claims:{q:'',status:''},coupons:{},audit:{subject:''}};
 const endpoints={operations:'orders',accounts:'accounts',claims:'claims',coupons:'coupons',audit:'audit'};
 
+// One navigation model, shared across the desktop sidebar and mobile bar.
+const controlGroups=[
+ {id:'summary',label:'Resumen',icon:LayoutDashboard,sections:[['summary','Vista general']]},
+ {id:'business',label:'Negocios',icon:Store,sections:[['business','Restaurantes']]},
+ {id:'operations',label:'Pedidos',icon:Package,sections:[['operations','Seguimiento'],['claims','Reclamos']]},
+ {id:'access',label:'Accesos',icon:Users,sections:[['accounts','Cuentas'],['owners','Propietarios'],['couriers','Repartidores'],['staff','Personal']]},
+ {id:'finance',label:'Finanzas',icon:Wallet,sections:[['settlements','Liquidaciones'],['rates','Tarifas y comisiones'],['reports','Reportes']]},
+ {id:'promos',label:'Promociones',icon:Tag,sections:[['coupons','Cupones'],['flash','Flash y regalos']]},
+ {id:'security',label:'Configuración',icon:ShieldCheck,sections:[['security','Mi acceso'],['audit','Auditoría'],['affiliationAudit','Actividad de afiliación']]}
+];
+function visibleGroups(flash,commercial){
+ return controlGroups.map(group=>({...group,sections:group.sections.filter(([id])=>(id!=='flash'||flash)&&(id!=='settlements'||commercial))}));
+}
 export function ControlNavigation({section,setSection,flash,commercial}){
- return <nav className="dvl-panel dvl-inline dvl-control-nav" aria-label="Secciones del Centro de Control">
-  {Object.entries(tabs).filter(([key])=>key!=='flash'||flash).filter(([key])=>key!=='settlements'||commercial)
-   .map(([key,label])=><button type="button" className={'dvl-action '+(section===key?'':'secondary')}
-    key={key} aria-pressed={section===key} onClick={()=>setSection(key)}>{label}</button>)}
- </nav>;
+ const [more,setMore]=useState(false);
+ const groups=visibleGroups(flash,commercial);
+ const active=groups.find(group=>group.sections.some(([id])=>id===section))?.id||'summary';
+ useEffect(()=>{setMore(false)},[section]);
+ useEffect(()=>{
+  if(!more)return;
+  const close=event=>{if(event.key==='Escape')setMore(false)};
+  document.addEventListener('keydown',close);return()=>document.removeEventListener('keydown',close);
+ },[more]);
+ const choose=group=>{setMore(false);setSection(group.sections[0][0])};
+ const navButton=(group,index)=>{const Icon=group.icon;return <button type="button" key={group.id}
+  className={'dvl-admin-nav-item '+(index>=3?'dvl-admin-nav-extra ':'')+(active===group.id?'active':'')}
+  aria-current={active===group.id?'page':undefined} onClick={()=>choose(group)}>
+  <Icon size={19} aria-hidden="true"/><span>{group.label}</span>
+ </button>};
+ return <aside className="dvl-admin-sidebar">
+  <div className="dvl-admin-sidebar-label">ESPACIO DE GESTIÓN</div>
+  <nav className="dvl-shortcuts dvl-admin-nav" aria-label="Navegación principal">
+   {groups.map(navButton)}
+   <button className={'dvl-admin-more '+(more||groups.slice(3).some(g=>g.id===active)?'active':'')} type="button"
+    aria-expanded={more} aria-controls="dvl-admin-more-menu" onClick={()=>setMore(v=>!v)}><MoreHorizontal size={21}/><span>Más</span></button>
+  </nav>
+  {more&&<><button className="dvl-admin-scrim" type="button" aria-label="Cerrar más opciones" onClick={()=>setMore(false)}/>
+   <div className="dvl-admin-more-menu" id="dvl-admin-more-menu" role="group" aria-label="Más módulos">
+    <div className="dvl-admin-more-title">Más opciones</div>
+    {groups.slice(3).map(group=>{const Icon=group.icon;return <button key={group.id} type="button" onClick={()=>choose(group)} aria-current={active===group.id?'page':undefined}><Icon size={20}/><span>{group.label}</span><ChevronRight size={16}/></button>})}
+   </div></>}
+  <div className="dvl-admin-sidebar-footer"><ShieldCheck size={15}/> Acceso administrativo</div>
+ </aside>;
+}
+export function ControlSubnavigation({section,setSection,flash,commercial}){
+ const group=visibleGroups(flash,commercial).find(g=>g.sections.some(([id])=>id===section));
+ if(!group||group.sections.length<2)return null;
+ return <nav className="dvl-admin-subnav" aria-label={'Opciones de '+group.label}>{group.sections.map(([id,label])=>
+  <button key={id} type="button" aria-pressed={section===id} onClick={()=>setSection(id)}>{label}</button>)}</nav>;
+}
+export function ControlOverview({stats,setSection,commercial,flash}){
+ const cards=[
+  ['Restaurantes',stats?.restaurants?.total,Store,'business'],
+  ['Abiertos',stats?.restaurants?.open,DoorOpen,'business'],
+  ['Pedidos activos',stats?.orders?.active,Clock,'operations'],
+  ['Entregados',stats?.orders?.delivered,CheckCircle2,'operations'],
+  ['Repartidores habilitados',stats?.couriers?.active,Bike,'couriers']
+ ];
+ const links=[
+  ['Nuevo negocio','Registrar y activar afiliados',Store,'business'],
+  ['Invitar propietario','Gestionar acceso de restaurantes',UserPlus,'owners'],
+  ['Repartidores','Revisar solicitudes y cuentas',Bike,'couriers'],
+  ['Reclamos','Atender problemas de pedidos',Package,'claims'],
+  ['Reportes','Consultar ventas y operaciones',Wallet,'reports'],
+  ['Cupones','Gestionar descuentos',Tag,'coupons'],
+ ];
+ return <div className="dvl-admin-overview" id="control">
+  <div className="dvl-admin-section-heading"><h2>Vista general</h2><span>Estado de la plataforma</span></div>
+  <div className="dvl-admin-kpis">{cards.map(([label,value,Icon,id])=><button key={label} type="button" className="dvl-admin-kpi" onClick={()=>setSection(id)}><span className="dvl-admin-kpi-label">{label}<Icon size={18} aria-hidden="true"/></span><strong>{value??'—'}</strong></button>)}</div>
+  <section className="dvl-panel dvl-admin-quick"><div className="dvl-admin-section-heading"><h2>Acciones rápidas</h2><span>Gestioná la operación desde un solo lugar</span></div><div className="dvl-admin-quick-grid">{links.map(([label,desc,Icon,id])=><button key={id} type="button" onClick={()=>setSection(id)}><span className="dvl-admin-quick-icon"><Icon size={20}/></span><span><strong>{label}</strong><small>{desc}</small></span><ChevronRight size={16}/></button>)}</div></section>
+ </div>;
 }
 
 export function ControlWorkspace({section,api,restaurants,offline,busy,run,money,errorLabel}){

@@ -42,7 +42,7 @@ jobs:
       - run: npm run build
       - name: Impedir que se publique el Device Studio interno
         run: test ! -e dist/device-studio.html
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
   deploy:

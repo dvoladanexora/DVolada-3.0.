@@ -1443,3 +1443,77 @@ test('QA operator invitation enrolls one verified passkey, then uses ordinary pr
  const {recovery}=await activation.json();
  assert.equal((await beginKey(f,'recover',{login,code:recovery})).status,200);
 });
+
+test('operator promotion keeps the enrolled key and requires a fresh admin login',async()=>{
+ const f=await fixture(),login='test.operator';
+ const {account,cookie,authenticator}=await enrollPasskey(f,login);
+ const sql=readFileSync(new URL('../../scripts/operator/promote-enrolled-customer.sql',import.meta.url),'utf8')
+  .replace(/^--.*$/gm,'').split(';').map(s=>s.trim()).filter(Boolean);
+ const db=f.DB.db;
+ const execute=(text,name)=>db.prepare(text.replaceAll('?1',':id').replaceAll('?2',':login'))
+  .run({...text.includes('?1')&&{id:account},...text.includes('?2')&&{login:name}});
+ assert.equal(execute(sql[0],'wrong.alias').changes,0);
+ for(const [index,statement] of sql.entries()){
+  const result=execute(statement,login);
+  if(index===0||index===sql.length-1)assert.equal(result.changes,1);
+ }
+ assert.equal((await passkeyRequest(f,'auth/me',undefined,{cookie})).status,401);
+ const entered=await usePrivilegedKey(f,'login',login,authenticator);
+ assert.equal(entered.status,204);
+ const options={cookie:partCookie(entered),account};
+ assert.equal((await passkeyRequest(f,'admin/overview',undefined,options)).status,200);
+ assert.equal(execute(sql[0],login).changes,0);
+});
+
+test('one delivery crosses four separate passkey sessions from enrollment through cash',async()=>{
+ const f=await fixture();
+ f.env.QA_RESTAURANT_COMMERCIAL='true';
+ const adminLogin='test.control',admin=await enrollPasskey(f,adminLogin);
+ const db=f.DB.db;
+ db.prepare("INSERT INTO privileged_passkey_accounts(user_id,access_role) VALUES(?,'platform_admin')").run(admin.account);
+ db.prepare("UPDATE users SET account_role='platform_admin' WHERE id=?").run(admin.account);
+ admin.cookie=partCookie(await usePrivilegedKey(f,'login',adminLogin,admin.authenticator));
+ async function request(person,path,{body,method,restaurantId,key=randomUUID()}={}){
+  const res=await passkeyRequest(f,path,body,{...person,method:method||(body?'POST':'GET'),restaurantId,key});
+  const data=res.status===204?{}:await res.json();
+  assert.ok(res.ok,path+' '+res.status+' '+JSON.stringify(data.error));return data;
+ }
+ const rid=(await request(admin,'admin/restaurants',{body:{name:'Negocio aislado',plan:'ONLINE'}})).restaurant.id;
+ await request(admin,'admin/restaurants/'+rid,{method:'PATCH',body:{subscriptionStatus:'active',deliveryFeeMinor:500}});
+ const ownerLogin='test.propietario';
+ const invite=await request(admin,'admin/restaurants/'+rid+'/owner-invitations',{body:{login:ownerLogin,displayName:'Propietario de prueba'}});
+ const owner={account:invite.userId,cookie:partCookie(await usePrivilegedKey(f,'recover',ownerLogin,virtualPasskey(),invite.invitation))};
+ const merchant=(path,body,method)=>request(owner,'restaurant/'+path,{restaurantId:rid,body,method});
+ await merchant('availability',{state:'open'},'PATCH');
+ const photoBase64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aQ/cAAAAASUVORK5CYII=';
+ const product=(await merchant('products',{name:'Almuerzo',priceMinor:5000,available:true,photoBase64})).product;
+ const extra=randomUUID();
+ db.prepare("INSERT INTO product_options(id,product_id,name,kind,price_minor) VALUES(?,?,'Extra','extra',500)").run(extra,product.id);
+ db.prepare("INSERT INTO client_coupons(code,restaurant_id,discount_minor,starts_at,ends_at) VALUES('TEST-CUPON',?,500,unixepoch()-1,unixepoch()+3600)").run(rid);
+ const buyer=await enrollPasskey(f,'test.comprador'),driver=await enrollPasskey(f,'test.reparto');
+ await request(driver,'customer/courier-application',{body:{}});
+ await request(admin,'admin/couriers',{body:{userId:driver.account}});
+ await request(driver,'courier/availability',{method:'PATCH',body:{available:true}});
+ const menu=await request(buyer,'catalog/restaurants/'+rid+'/products');
+ assert.equal(menu.products[0].photoUrl,product.photoUrl);
+ const cart={restaurantId:rid,items:[{productId:product.id,quantity:1,optionIds:[extra]}],deliveryMethod:'delivery',phone:'+50400000003',deliveryAddress:'Barrio aislado, casa 10',coupon:'TEST-CUPON',expectedTotalMinor:5500};
+ const key=randomUUID(),sale=await request(buyer,'customer/orders',{body:cart,key});
+ const id=sale.order.id;
+ assert.equal((await request(buyer,'customer/orders',{body:cart,key})).order.id,id);
+ assert.ok((await merchant('orders')).orders.some(o=>o.id===id));
+ const thread='orders/'+id+'/chat/restaurant';
+ await request(buyer,thread,{body:{message:'Consulta del pedido'}});
+ assert.equal((await request(owner,thread,{restaurantId:rid})).messages[0].body,'Consulta del pedido');
+ for(const [index,status] of ['Aceptado','Preparando','Listo'].entries())
+  await merchant('orders/'+id+'/status',{expectedVersion:index+1,status},'PATCH');
+ await merchant('orders/'+id+'/assign',{expectedVersion:4,courierId:driver.account},'PATCH');
+ const delivery=(action,body,method)=>request(driver,'courier/orders/'+id+'/'+action,{body,method});
+ await delivery('offer',{action:'accept',expectedVersion:5});
+ for(const [index,status] of ['Recogido','En camino','En ubicación'].entries())
+  await delivery('status',{status,expectedVersion:6+index},'PATCH');
+ await delivery('deliver',{expectedVersion:9,pin:sale.deliveryPin});
+ assert.equal((await request(buyer,'customer/orders/'+id)).order.status,'Entregado');
+ const shift=(await merchant('cash/open',{openingMinor:0})).shift.id;
+ assert.equal((await merchant('cash/sale',{shiftId:shift,orderId:id,method:'cash'})).sale.total_minor,5500);
+ assert.equal((await request(admin,'admin/overview')).orders.delivered,1);
+});

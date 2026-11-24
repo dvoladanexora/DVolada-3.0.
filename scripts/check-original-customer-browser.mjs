@@ -83,14 +83,17 @@ try{
  await page.getByLabel('Texto grande',{exact:true}).check();
  await page.getByText('Mis direcciones guardadas',{exact:true}).waitFor();
  assert.equal(await page.locator('.dv-tools-header').count(),1);
+ await page.evaluate(()=>localStorage.setItem('dv_theme',JSON.stringify('system')));
  await mkdir('visual-checks',{recursive:true});
  for(const width of [360,390,430,768,1440]){
   await page.setViewportSize({width,height:width<768?844:960});
   for(const scheme of ['light','dark']){
    await page.emulateMedia({colorScheme:scheme});
-   await page.reload();
+   await page.goto(origin+'/cuenta?mode=login');
    await page.locator('.dv-tools-header').waitFor();
    assert.equal(await page.locator('.dvl-account-shell').count(),0);
+   await page.waitForFunction(expected=>document.documentElement.dataset.theme===expected,scheme);
+   assert.equal(await page.getByRole('heading',{name:'Mi cuenta',exact:true}).count(),0);
    const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
    assert.ok(overflow<=1,'Desborde horizontal a '+width+' px en '+scheme+': '+overflow);
    await page.screenshot({path:'visual-checks/inicio-'+width+'-'+scheme+'.png'});

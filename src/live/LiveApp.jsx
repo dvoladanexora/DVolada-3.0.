@@ -2,7 +2,7 @@ import RestaurantKitchenDisplay from '../RestaurantKitchenDisplay.jsx';
 import {openKitchenTicket} from '../kitchen-operations.js';
 import SlideConfirm from '../SlideConfirm.jsx';
 import {playOrderChirp} from '../order-chirp.js';
-import {ControlNavigation,ControlSubnavigation,ControlOverview,ControlWorkspace} from './ControlWorkspace.jsx';
+import {ControlNavigation,ControlSubnavigation,ControlOverview,ControlWorkspace,CourierDirectory} from './ControlWorkspace.jsx';
 import {CourierConsole,CourierApplication,CourierApplications} from './CourierWorkspace.jsx';
 import {StaffSignIn,StaffSecret,ManageStaffAccess,SettlementPanel} from './RestaurantCommercial.jsx';
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
@@ -899,6 +899,8 @@ export default function LiveApp({CustomerHome}){
       restaurantId={adminSelectedId} disabled={busy||offline}
       invite={(id,body)=>run(()=>api.adminInviteOwner(id,body,newKey()),{refresh:false})}/>}
     </section>}
+    {controlSection==='courierDirectory'&&<CourierDirectory api={api} run={run} busy={busy} offline={offline} errorLabel={errorLabel} setSection={selectControlSection}/>}
+    {controlSection==='advertising'&&<section className="dvl-panel dvl-stack"><h2>Spots publicitarios</h2><p className="dvl-muted">Todavía no existe un registro de contratos publicitarios conectado. No se muestran anunciantes ni ingresos inventados.</p><p>Las campañas de descuentos y regalos se gestionan en las pestañas de Cupones y Flash.</p></section>}
     {controlSection==='couriers'&&<>
      <CourierApplications api={api} run={run} busy={busy} offline={offline} errorLabel={errorLabel}/>
      <details className="dvl-panel dvl-admin-details"><summary>Vincular repartidor registrado</summary>
@@ -938,7 +940,7 @@ export default function LiveApp({CustomerHome}){
      </section>
      {selectedAdminBusiness&&<section className="dvl-panel dvl-stack dvl-admin-business-detail" id="control-business-detail">
       <div className="dvl-admin-section-heading"><h2>{selectedAdminBusiness.name}</h2><button className="dvl-action secondary" type="button" onClick={()=>{setAdminSelectedId('');setAdminFee('')}}>Cerrar</button></div>
-      <div className="dvl-admin-business-meta"><span>Suscripción: {selectedAdminBusiness.subscription_status==='active'?'Activa':'Inactiva'}</span><span>Operación: {{open:'Abierto',paused:'En pausa',closed:'Cerrado'}[selectedAdminBusiness.online_state]||selectedAdminBusiness.online_state}</span></div>
+      <div className="dvl-admin-business-meta"><span>Plan: {{ONLINE:'Cloud',LOCAL:'Local',PLUS:'Plus'}[selectedAdminBusiness.plan]||selectedAdminBusiness.plan}</span><span>Pago: sin registro de facturación</span><span>Suscripción: {selectedAdminBusiness.subscription_status==='active'?'Activa':'Inactiva'}</span><span>Operación: {{open:'Abierto',paused:'En pausa',closed:'Cerrado'}[selectedAdminBusiness.online_state]||selectedAdminBusiness.online_state}</span></div>
       <div className="dvl-inline dvl-control-actions">
        {selectedAdminBusiness.subscription_status!=='active'?<Action disabled={busy||offline} onClick={()=>action(()=>api.adminUpdateRestaurant(selectedAdminBusiness.id,{subscriptionStatus:'active'}))}>Activar suscripción</Action>:
         <Action kind="secondary" disabled={busy||offline} onClick={()=>{if(window.confirm('¿Suspender la suscripción de '+selectedAdminBusiness.name+'?'))action(()=>api.adminUpdateRestaurant(selectedAdminBusiness.id,{subscriptionStatus:'inactive'}))}}>Suspender</Action>}

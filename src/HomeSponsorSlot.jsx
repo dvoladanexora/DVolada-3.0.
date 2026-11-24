@@ -17,7 +17,7 @@ export default function HomeSponsorSlot({variant='carousel',items,onJoin}){
  const defaults=variant==='compact'?compactExamples:carouselExamples;
  const [clock,setClock]=useState(()=>Date.now()/1000);useEffect(()=>{const timer=setInterval(()=>setClock(Date.now()/1000),1000);return()=>clearInterval(timer)},[]);
  const eligible=Array.isArray(items)?items.filter(x=>x&&typeof x.title==='string'&&x.title.trim()&&(!x.ends_at||x.ends_at>clock)):defaults;
- const safeItems=eligible.length?eligible:defaults;
+ const safeItems=eligible;
  const [active,setActive]=useState(0),[userPaused,setUserPaused]=useState(false),[interacting,setInteracting]=useState(false),[inView,setInView]=useState(true),[visibleTab,setVisibleTab]=useState(true);
  const panelRef=useRef(null),touchStart=useRef(null);
  const index=safeItems.length?active%safeItems.length:0;
@@ -37,7 +37,7 @@ export default function HomeSponsorSlot({variant='carousel',items,onJoin}){
  },[]);
  useEffect(()=>{
   if(safeItems.length<2||userPaused||interacting||!inView||!visibleTab||typeof window==='undefined'||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
-  const timer=window.setInterval(()=>setActive(i=>(i+1)%safeItems.length),Math.max(5,Math.min(30,current?.duration_seconds||5))*1000);
+  const timer=window.setInterval(()=>setActive(i=>(i+1)%safeItems.length),current?.duration_seconds?Math.max(5,Math.min(30,current.duration_seconds))*1000:5000);
   return()=>window.clearInterval(timer);
  },[safeItems.length,userPaused,interacting,inView,visibleTab,active,current?.duration_seconds]);
  if(!current)return null;

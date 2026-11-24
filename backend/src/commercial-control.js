@@ -41,7 +41,7 @@ export async function publicSpots(req,env,id){
  return respond(req,env,200,{spots:data.map(x=>({...x,imageUrl:'/api/v1/catalog/spots/'+x.id+'/image'}))});
 }
 async function spots(req,env,actor,id){
- if(req.method==='GET'&&!id)return {spots:(await rows(env.DB.prepare('SELECT '+spotFields+' FROM commercial_spots ORDER BY created_at DESC LIMIT 200'))).map(x=>({...x,imageUrl:'/api/v1/admin/control/spots/'+x.id+'/image'}))};
+ if(req.method==='GET'&&!id)return {spots:(await rows(env.DB.prepare('SELECT '+spotFields+' FROM commercial_spots ORDER BY created_at DESC LIMIT 200')))};
  if(id&&req.method==='POST'){
   const body=await readJson(req);requireKeys(body,['action','version']);const version=requireInteger(body.version,1,2147483646,'version');
   const action=choice(body.action,['activate','pause','delete']);
@@ -68,14 +68,15 @@ async function contract(req,env,actor,id,payment){
   return {contract:current,payments,plan:restaurant.plan};
  }
  if(payment&&req.method==='POST'){
-  if(!current?.next_due)throw new ApiError(409,'CONTRACT_NO_PAYMENT_DUE');
   const d=await readJson(req);requireKeys(d,['id','version','paidDate','method','reference']);
   const paymentId=requireUuid(d.id),version=requireInteger(d.version,1,2147483646,'version'),paidDate=validDate(d.paidDate);
   const today=new Date(Date.now()-21600000).toISOString().slice(0,10);
-  if(paidDate>today||paidDate<current.start_date)return fail();
+  if(paidDate>today)return fail();
   const method=choice(d.method,['cash','transfer','external_card']),reference=requireText(d.reference??'',0,100,'reference');
   const prior=await env.DB.prepare('SELECT restaurant_id,paid_date,method,reference FROM restaurant_contract_payments WHERE id=?').bind(paymentId).first();
   if(prior){if(prior.restaurant_id!==id||prior.paid_date!==paidDate||prior.method!==method||prior.reference!==reference)throw new ApiError(409,'IDEMPOTENCY_KEY_REUSED');return {ok:true,replayed:true}}
+  if(!current?.next_due)throw new ApiError(409,'CONTRACT_NO_PAYMENT_DUE');
+  if(paidDate<current.start_date)return fail();
   const next=nextBillingDate(current.next_due,current.frequency,current.billing_day);
   const [saved]=await env.DB.batch([
    env.DB.prepare('INSERT INTO restaurant_contract_payments(id,restaurant_id,due_date,amount_minor,paid_date,method,reference,actor_id) SELECT ?,restaurant_id,next_due,amount_minor,?,?,?,? FROM restaurant_contracts WHERE restaurant_id=? AND version=? AND next_due=? ON CONFLICT(restaurant_id,due_date) DO NOTHING').bind(paymentId,paidDate,method,reference,actor.userId,id,version,current.next_due),

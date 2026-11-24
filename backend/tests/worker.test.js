@@ -9,7 +9,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql','0024_commercial_control.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -1590,4 +1590,44 @@ test('Google control consumes the nonce atomically and isolates privileged sessi
  assert.equal((await admin('admin/overview')).status,401);
  f.DB.db.prepare("DELETE FROM auth_sessions WHERE device_label='Centro de Control Google'").run();
  assert.equal((await login(valid)).status,403);
+});
+
+
+test('commercial spots are admin-only, scheduled, pausable and public without private prices',async()=>{
+ const f=await fixture(),root='/api/v1/admin/control/spots',now=Math.floor(Date.now()/1000);
+ const body={advertiser:'Comercio ficticio',title:'Anuncio de prueba',placement:'carousel',startsAt:now-60,endsAt:now+3600,durationSeconds:10,link:'https://example.com/',priceMinor:75000,paidMinor:25000,imageBase64:Buffer.from([255,216,255,217]).toString('base64')};
+ assert.equal((await f.call(root,{method:'POST',body})).status,403);
+ const create=await f.call(root,{by:'platformAdmin',method:'POST',body});assert.equal(create.status,200,JSON.stringify(create.body));
+ const id=create.body.id;
+ assert.equal((await f.call('/api/v1/catalog/spots')).body.spots.length,0);
+ assert.equal((await f.call(root+'/'+id,{by:'platformAdmin',method:'POST',body:{action:'activate',version:1}})).status,200);
+ const live=await f.call('/api/v1/catalog/spots');assert.equal(live.body.spots.length,1);assert.equal(live.body.spots[0].price_minor,undefined);
+ const image=await worker.fetch(new Request('https://api.example.test/api/v1/catalog/spots/'+id+'/image'),f.env);assert.equal(image.status,200);assert.equal(image.headers.get('content-type'),'image/jpeg');
+ assert.equal((await f.call(root+'/'+id,{by:'platformAdmin',method:'POST',body:{action:'pause',version:2}})).status,200);
+ assert.equal((await f.call('/api/v1/catalog/spots')).body.spots.length,0);
+});
+test('affiliate payment is unique per due date and advances billing date',async()=>{
+ const f=await fixture(),root='/api/v1/admin/control/contracts/'+f.restaurants[0];
+ const start='2026-01-01',due='2026-01-31';
+ const saved=await f.call(root,{by:'platformAdmin',method:'PATCH',body:{plan:'ONLINE',startDate:start,nextDue:due,frequency:'monthly',amountMinor:75000,version:0}});assert.equal(saved.status,200,JSON.stringify(saved.body));
+ assert.equal((await f.call(root)).status,403);
+ const p={id:randomUUID(),version:1,paidDate:due,method:'cash',reference:'ficticio'};
+ assert.equal((await f.call(root+'/payments',{by:'platformAdmin',method:'POST',body:p})).status,200);
+ assert.equal((await f.call(root+'/payments',{by:'platformAdmin',method:'POST',body:p})).status,200);
+ const c=await f.call(root,{by:'platformAdmin'});assert.equal(c.body.contract.next_due,'2026-02-28');assert.equal(c.body.payments.length,1);
+});
+test('courier ratings require a delivered order belonging to the caller and count only once',async()=>{
+ const f=await fixture(),order=await f.create({});assert.equal(order.status,201);
+ const id=order.body.order.id,root='/api/v1/customer/orders/'+id+'/courier-rating';
+ assert.equal((await f.call(root,{method:'POST',body:{stars:5}})).status,409);
+ f.DB.db.prepare("UPDATE online_orders SET status='Entregado',courier_id=?,courier_response='accepted' WHERE id=?").run(f.tokens.courier.id,id);
+ assert.equal((await f.call(root,{by:'customer2',method:'POST',body:{stars:5}})).status,409);
+ assert.equal((await f.call(root,{method:'POST',body:{stars:4}})).status,200);
+ assert.equal((await f.call(root,{method:'POST',body:{stars:4}})).status,200);
+ assert.equal((await f.call(root,{method:'POST',body:{stars:5}})).status,409);
+ const directory=await f.call('/api/v1/admin/courier-directory',{by:'platformAdmin'});assert.equal(directory.body.couriers[0].rating,4);assert.equal(directory.body.couriers[0].rating_count,1);
+});
+test('restaurant account filter is based on actual memberships',async()=>{
+ const f=await fixture();const r=await f.call('/api/v1/admin/control/accounts?role=restaurant',{by:'platformAdmin'});
+ assert.equal(r.status,200);assert.equal(r.body.accounts.length,2);assert(r.body.accounts.every(a=>a.memberships===1));
 });

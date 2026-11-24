@@ -39,7 +39,7 @@ export async function googleControlAuth(req,env,action){
  const raw=rawCookie(req,nonceCookie);
  const match=/^([A-Za-z0-9_-]{43})\.([0-9]{10})\.([a-f0-9]{64})$/.exec(raw);
  if(!match||Number(match[2])<=now||Number(match[2])>now+300||match[3]!==await hash(env,'nonce:'+match[1]+':'+match[2]))
-  throw new ApiError(401,'GOOGLE_ADMIN_TOKEN_INVALID');
+  throw new ApiError(401,'GOOGLE_ADMIN_CHALLENGE_EXPIRED');
  const body=await readJson(req,18000);requireKeys(body,['credential']);
  const claims=await verifyGoogleAdminIdentity(body.credential,env,match[1]);
  const subject='google-admin:'+claims.subject;
@@ -62,7 +62,7 @@ export async function googleControlAuth(req,env,action){
   env.DB.prepare(`INSERT INTO control_audit(actor_id,subject,action,detail)
     SELECT user_id,user_id,'google_admin_login','{}' FROM auth_sessions WHERE id=? AND changes()>0`).bind(sessionId)
  ]);
- if(results[3].meta.changes!==1)throw new ApiError(403,'GOOGLE_ADMIN_FORBIDDEN');
+ if(results[3].meta.changes!==1)throw new ApiError(403,'GOOGLE_ADMIN_SESSION_REJECTED');
  return secretCookie(secretCookie(respond(req,env,204),cookie,token,sessionSeconds),nonceCookie,'',0);
 }
 

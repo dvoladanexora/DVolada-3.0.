@@ -67,7 +67,7 @@ export function menuSummary(items=[]){
  return {total:all.length,active:all.filter(x=>x.available!==false&&x.soldOut!==true).length,soldOut:all.filter(x=>x.available===false||x.soldOut===true).length,missingPhoto:all.filter(x=>!safeCatalogImage(x.image)).length};
 }
 export const MAX_MENU_IMAGE_PIXELS=30_000_000;
-export function readPhotoAsThumbnail(file){
+export function readPhotoAsThumbnail(file,maxBytes=MENU_IMAGE_LIMIT){
  if(!file||!validImageMime.has(file.type)||!Number.isSafeInteger(file.size)
   ||file.size<1||file.size>MAX_MENU_IMAGE_FILE)
   return Promise.reject(Error('Elegí una foto JPG, PNG o WebP de máximo 5 MB.'));
@@ -104,7 +104,11 @@ export function readPhotoAsThumbnail(file){
      context.drawImage(img,0,0,canvas.width,canvas.height);
      data=canvas.toDataURL('image/jpeg',.55);
     }
-    if(!safeCatalogImage(data))throw Error('Foto demasiado grande. Probá otra imagen más sencilla.');
+    for(let attempt=0;data.split(',')[1]?.length>Math.floor(maxBytes/3)*4&&attempt<5;attempt++){
+     canvas.width=Math.max(1,Math.round(canvas.width*.75));canvas.height=Math.max(1,Math.round(canvas.height*.75));
+     context.drawImage(img,0,0,canvas.width,canvas.height);data=canvas.toDataURL('image/jpeg',.55);
+    }
+    if(!safeCatalogImage(data)||data.split(',')[1]?.length>Math.floor(maxBytes/3)*4)throw Error('Foto demasiado grande. Probá otra imagen más sencilla.');
     done(null,data);
    }catch(error){done(error)}
   };

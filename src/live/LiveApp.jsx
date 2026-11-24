@@ -128,7 +128,8 @@ function OrderCard({order,children,kitchen=false}){
  return <article className="dvl-order"><div className="dvl-order-head"><strong>#{order.orderNumber||order.id?.slice(0,8)}</strong><span>{orderLabel[order.status]||order.status}</span></div>
  <div className="dvl-order-foot">{!kitchen&&<span>{price(order.totalMinor)}</span>}<span>Versión {order.version}</span><span>{order.deliveryMethod==='delivery'?'Envío':'Recoger'}</span></div>{children}</article>
 }
-export default function LiveApp(){
+export default function LiveApp({CustomerHome}){
+ const [customerSection]=useState(()=>['#carrito','#mis-pedidos'].includes(window.location.hash)?window.location.hash.slice(1):null);
  const sessionRef=useRef(null),alive=useRef(true),checkoutInFlight=useRef(false),menuRequest=useRef(0);
  const [pushConfig,setPushConfig]=useState(null),[pushEnabled,setPushEnabled]=useState(false);
  const [commercial,setCommercial]=useState(false),[staffCredential,setStaffCredential]=useState(null);
@@ -578,6 +579,12 @@ export default function LiveApp(){
    ['Accesos',Users,sectionAction(setControlSection,'accounts','control-secciones')]
   ])
  ]:[];
+ useEffect(()=>{
+  if(cartAccount&&customerSection)document.getElementById(customerSection)?.scrollIntoView();
+ },[cartAccount,customerSection]);
+ if(CustomerHome&&cartAccount&&!qaView&&!customerSection&&!newCodes&&!new URLSearchParams(window.location.search).has('intent')){
+  return <>{error&&<WaitOrError message={error} warning/>}<CustomerHome key={cartAccount} connected customerId={cartAccount} onSignOut={()=>logout()}/></>;
+ }
  return <div className={session?"dvl-app dvl-account-shell":"dvl-app"}>
   <header className="dvl-header"><div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada" /><div><strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
    <div className="dvl-head-actions"><a className="dvl-action secondary" href="/">Inicio</a><label className="dvl-theme">Tema<select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy||offline} onClick={()=>logout()}><LogOut size={15}/> Salir</Action>}</div></header>

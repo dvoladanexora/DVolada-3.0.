@@ -10,7 +10,7 @@ test('live build is public and no longer requires Firebase',()=>{
  assert.match(main,/await liveApi\.restaurants\(\)/);
  assert.match(main,/await liveApi\.products\(r.id\)/);
  assert.match(main,/function placeOrder\(\)\{if\(connected\)return false/);
- assert.match(main,/writeLiveCart\('guest'/);
+ assert.match(main,/writeLiveCart\(cartOwner/);
  assert.doesNotMatch(publicView,/firebase|signInWithEmailAndPassword|createUserWithEmailAndPassword/i);
  assert.match(publicView,/api\.restaurants\(\)/);
  assert.match(publicView,/api\.products\(id\)/);

@@ -8,7 +8,8 @@ import {readCart} from './cart-draft.js';
 // and the same authenticated controller as the server workspace. No demo orders.
 export function CustomerCart({c,places,onBrowse,onOrders}){
  const [review,setReview]=useState(false);
- const locked=c.busy||c.offline||Boolean(c.pendingKey);
+ const editingLocked=c.busy||c.offline;
+ const locked=editingLocked||Boolean(c.pendingKey);
  const total=c.subtotal+c.fee-c.discount;
  const submit=async()=>{const ok=await c.checkout();if(ok){setReview(false);onOrders()}return ok};
  return <section className="shell section narrow page-section" aria-label="Tu carrito">
@@ -31,18 +32,18 @@ export function CustomerCart({c,places,onBrowse,onOrders}){
    <div className="modal-head"><h2>Revisá y confirmá tu pedido</h2><button className="iconbtn" aria-label="Cerrar" onClick={()=>setReview(false)}><X/></button></div>
    <button type="button" className="secondary dv-back-to-cart" onClick={()=>setReview(false)}>← Volver al carrito</button>
    <div className="dv-checkout-review"><div className="dv-checkout-restaurant"><strong>{c.restaurant?.name||'Restaurante'}</strong><span>{c.cart.reduce((n,i)=>n+i.quantity,0)} producto(s) · {c.money(c.subtotal)}</span></div></div>
-   <div className="switch-row"><button className={c.deliveryMethod==='pickup'?'selected':''} disabled={locked} onClick={()=>c.setDeliveryMethod('pickup')}><Store size={18}/> Recoger</button><button className={c.deliveryMethod==='delivery'?'selected':''} disabled={locked} onClick={()=>c.setDeliveryMethod('delivery')}><Bike size={18}/> A domicilio</button></div>
-   <label>Teléfono de Honduras (+504)<input inputMode="numeric" autoComplete="tel-national" value={c.phone} disabled={locked} onChange={e=>c.setPhone(e.target.value.replace(/\D/g,'').slice(0,8))}/></label>
-   {c.deliveryMethod==='delivery'&&<label>Barrio, dirección y referencia<textarea autoComplete="street-address" rows={3} maxLength={300} value={c.deliveryAddress} disabled={locked} onChange={e=>c.setDeliveryAddress(e.target.value)}/></label>}
+   <div className="switch-row"><button className={c.deliveryMethod==='pickup'?'selected':''} disabled={editingLocked} onClick={()=>c.setDeliveryMethod('pickup')}><Store size={18}/> Recoger</button><button className={c.deliveryMethod==='delivery'?'selected':''} disabled={editingLocked} onClick={()=>c.setDeliveryMethod('delivery')}><Bike size={18}/> A domicilio</button></div>
+   <label>Teléfono de Honduras (+504)<input inputMode="numeric" autoComplete="tel-national" value={c.phone} disabled={editingLocked} onChange={e=>c.setPhone(e.target.value.replace(/\D/g,'').slice(0,8))}/></label>
+   {c.deliveryMethod==='delivery'&&<label>Barrio, dirección y referencia<textarea autoComplete="street-address" rows={3} maxLength={300} value={c.deliveryAddress} disabled={editingLocked} onChange={e=>c.setDeliveryAddress(e.target.value)}/></label>}
    {c.eligibleFlash.length>0&&<label>Promoción Flash<select value={c.activeFlash?.id||''} disabled={locked} onChange={e=>c.selectFlash(e.target.value)}><option value="">Sin promoción Flash</option>{c.eligibleFlash.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>}
    {c.flashSelection&&!c.activeFlash&&<div role="alert">Esta promoción ya no está disponible. <button className="secondary" disabled={locked} onClick={()=>c.selectFlash('')}>Quitar promoción</button></div>}
    {c.activeFlash?.giftName&&<p>Regalo: {c.activeFlash.giftName}</p>}
    <label>Cupón<input value={c.couponText} maxLength={24} disabled={locked} onChange={e=>c.changeCoupon(e.target.value)}/></label>
    <button className="secondary" disabled={locked||c.couponText.trim().length<4} onClick={c.applyCoupon}>Aplicar cupón</button>
-   <label>Indicaciones para el restaurante<textarea value={c.orderNote} disabled={locked} maxLength={300} rows={2} onChange={e=>c.setOrderNote(e.target.value)}/></label>
+   <label>Indicaciones para el restaurante<textarea value={c.orderNote} disabled={editingLocked} maxLength={300} rows={2} onChange={e=>c.setOrderNote(e.target.value)}/></label>
    <div className="dv-checkout-breakdown"><div><span>Productos</span><strong>{c.money(c.subtotal)}</strong></div><div><span>Envío estimado</span><strong>{c.money(c.fee)}</strong></div>{c.discount>0&&<div><span>Descuento</span><strong>−{c.money(c.discount)}</strong></div>}<div className="dv-checkout-grand"><span>Total estimado</span><strong>{c.money(total)}</strong></div></div>
    <p className="info-line"><Check size={18}/> Efectivo {c.deliveryMethod==='pickup'?'al recoger':'al recibir'}. El servidor verifica disponibilidad y precio.</p>
-   {c.error&&<p role="alert">{c.error}</p>}{c.pendingKey&&<><p>Hay un intento pendiente. Buscá su confirmación antes de cambiar los datos.</p><button className="secondary" disabled={c.busy||c.offline} onClick={async()=>{if(await c.recoverCheckout()){setReview(false);onOrders()}}}>Buscar confirmación</button></>}
+   {c.error&&<p role="alert">{c.error}</p>}{c.pendingKey&&<><p>Hay un intento pendiente. Buscá su confirmación; si no existe, reingresá los mismos datos para reintentar sin duplicar el pedido.</p><button className="secondary" disabled={c.busy||c.offline} onClick={async()=>{if(await c.recoverCheckout()){setReview(false);onOrders()}}}>Buscar confirmación</button></>}
    <SlideConfirm disabled={c.busy||c.offline||!c.restaurant||Boolean(c.replaceCart)} onConfirm={submit} label={c.pendingKey?'Deslizá para reintentar el mismo pedido':'Deslizá para confirmar'} amount={c.money(total)}/>
   </div></div>}
  </section>

@@ -39,7 +39,9 @@ test('los pedidos y push de producción están cerrados por defecto',()=>{
 test('React QA y la demo pública continúan en vistas separadas',()=>{
  const entry=read('src/main.jsx');
  const open=read('src/live/OpenAccessApp.jsx');
- assert.match(entry,/showStagingPanels\?<LiveApp\/>:\(IS_LIVE_BUILD\?<OpenAccessApp\/>:demoView\)/);
+ assert.match(entry,/showStagingPanels\?<LiveApp\/>:\(IS_LIVE_BUILD\?<App connected\/>:demoView\)/);
+ assert.match(entry,/function placeOrder\(\)\{if\(connected\)return false/);
+ assert.match(entry,/connected\?\[\]:stored\('dv_orders',starterOrders\)/);
  assert.ok(open.includes('Pedidos reales desactivados'));
  assert.doesNotMatch(open,/api\.createOrder\(/);
 });

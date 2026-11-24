@@ -29,7 +29,7 @@ export function googleAdminConfiguration(env){
   const emails=typeof env?.GOOGLE_ADMIN_EMAILS==='string'
     ?env.GOOGLE_ADMIN_EMAILS.split(',').map(x=>x.trim().toLowerCase()):[];
   if(typeof clientId!=='string'||! /^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/.test(clientId)
-    ||emails.length!==2||new Set(emails).size!==2
+    ||emails.length<1||emails.length>2||new Set(emails).size!==emails.length
     ||emails.some(e=>! /^[a-z0-9.]+@gmail\.com$/.test(e)))throw configError();
   return {clientId,emails:new Set(emails)};
 }

@@ -10,16 +10,17 @@ export function validateApiOrigin(value){
   parsed.pathname!==''||parsed.search||parsed.hash)throw Error('La API requiere una dirección HTTPS segura');
  return parsed.origin;
 }
-export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null,fetchImpl=fetch}){
+export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null,controlAccess=false,fetchImpl=fetch}){
  const origin=validateApiOrigin(baseUrl);
  if(typeof getSessionToken!=='function')throw Error('Session provider required');
  async function request(path,{method='GET',body,auth=true,cookie=false,restaurantId,key,signal}={}){
   const token=auth?getSessionToken():null;
   const account=auth&&!token?getClientAccount():null;
-  if(auth&&!token&&!account&&!cookie)throw new LiveApiError('SESSION_REQUIRED',401);
+  if(auth&&!token&&!account&&!cookie&&!controlAccess)throw new LiveApiError('SESSION_REQUIRED',401);
   const headers={Accept:'application/json'};
   if(body!==undefined)headers['Content-Type']='application/json';
-  if(token)headers.Authorization='Bearer '+token;
+  if(controlAccess&&auth)headers['X-Dvolada-Admin']='1';
+  if(token&&!controlAccess)headers.Authorization='Bearer '+token;
   if(account)headers['X-Client-Account']=account;
   if(restaurantId)headers['X-Restaurant-ID']=restaurantId;
   if(key)headers['Idempotency-Key']=key;
@@ -35,6 +36,8 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
  const s=id=>encodeURIComponent(id);
  return {
   health:()=>request('/health',{auth:false}),
+  controlChallenge:()=>request('/api/v1/auth/control/challenge',{auth:false,method:'POST',body:{}}),
+  controlLogin:credential=>request('/api/v1/auth/control/login',{auth:false,method:'POST',body:{credential}}),
   async restaurants(){
    const rows=new Map();
    let next=null;

@@ -1,4 +1,5 @@
 import {controlRoute} from './control-center.js';
+import {googleControlAuth,googleControlActor,googleControlRequired,clearControlCookie} from './google-admin-session.js';
 import {courierProfile,courierAvailability,courierApplication,rejectCourierApplication,pendingCouriers,revokeCourierSessions,courierHistory,courierRestaurantChat} from './courier-workspace.js';
 import {restaurantProfile,menuOption,savePhoto,publicPhoto,staffRoster,restaurantCash,restaurantReport} from './restaurant-operations.js';
 import {
@@ -111,7 +112,11 @@ async function route(req,env){
  const commercial=env.QA_RESTAURANT_COMMERCIAL==='true';
  const staffLogin=/^\/api\/v1\/auth\/staff\/(claim|login)$/.exec(path);
  if(commercial&&method==='POST'&&staffLogin)return staffAuthenticate(req,env,staffLogin[1]);
- const token=!req.headers.has('authorization')&&readClientCookie(req,env);
+ const googleRoute=/^\/api\/v1\/auth\/control\/(challenge|login)$/.exec(path);
+ if(googleRoute)return googleControlAuth(req,env,googleRoute[1]);
+ const googleMode=req.headers.get('x-dvolada-admin')==='1';
+ if(googleMode&&!/^\/api\/v1\/(admin\/|auth\/(me|logout|revoke-sessions)$)/.test(path))throw new ApiError(403,'ROLE_FORBIDDEN');
+ const token=!googleMode&&!req.headers.has('authorization')&&readClientCookie(req,env);
  if(token){
   if(!/^\/api\/v1\/(customer\/|orders\/|restaurant\/|courier\/|admin\/|auth\/(me|logout|revoke-sessions)$)/.test(path))
    throw new ApiError(403,'ROLE_FORBIDDEN');
@@ -120,7 +125,8 @@ async function route(req,env){
   headers.set('authorization','Bearer '+token);
   req=new Request(req,{headers});
  }
- const actor=await identity(req,env);
+ const actor=googleMode?await googleControlActor(req,env):await identity(req,env);
+ if(actor.role==='platform_admin'&&!actor.googleAdmin&&googleControlRequired(req,env))throw new ApiError(403,'GOOGLE_ADMIN_REQUIRED');
  if(token&&((!['customer','courier'].includes(actor.role)&&!(actor.role==='platform_admin'&&actor.privilegedPasskey))||(path!=='/api/v1/auth/me'&&req.headers.get('x-client-account')!==actor.userId)))
   throw new ApiError(401,'SESSION_INVALID');
 
@@ -141,25 +147,25 @@ async function route(req,env){
   return respond(req,env,200,await issueQaPushIdentity(req,env,actor));
  }
  if(method==='GET'&&path==='/api/v1/auth/me'){
-  const {results=[]}=token&&!actor.staffRestaurantId?{}:await env.DB.prepare(`SELECT m.restaurant_id,m.staff_role,r.name
+  const {results=[]}=actor.googleAdmin||token&&!actor.staffRestaurantId?{}:await env.DB.prepare(`SELECT m.restaurant_id,m.staff_role,r.name
     FROM restaurant_memberships m JOIN restaurants r ON r.id=m.restaurant_id
     WHERE m.user_id=? AND m.active=1 AND (? IS NULL OR m.restaurant_id=?) ORDER BY r.name LIMIT 50`)
     .bind(actor.userId,actor.staffRestaurantId,actor.staffRestaurantId).all();
   return respond(req,env,200,{user:{id:actor.userId,displayName:actor.displayName,
-    role:actor.role, ...(actor.privilegedPasskey?{privilegedPasskey:true}:{})},restaurants:results});
+    role:actor.role, ...(actor.googleAdmin?{googleAdmin:true}:{}), ...(actor.privilegedPasskey?{privilegedPasskey:true}:{})},restaurants:results});
  }
  if(method==='POST'&&path==='/api/v1/auth/revoke-sessions'){
-  if(!actor.privilegedPasskey)throw new ApiError(403,'ROLE_FORBIDDEN');
+  if(!actor.privilegedPasskey&&!actor.googleAdmin)throw new ApiError(403,'ROLE_FORBIDDEN');
   await env.DB.batch([
    env.DB.prepare('UPDATE users SET admin_version=admin_version+1 WHERE id=?').bind(actor.userId),
    env.DB.prepare('UPDATE auth_sessions SET revoked_at=unixepoch() WHERE user_id=? AND revoked_at IS NULL').bind(actor.userId)
   ]);
-  return changeClientCookie(respond(req,env,204),'');
+  return actor.googleAdmin?clearControlCookie(respond(req,env,204)):changeClientCookie(respond(req,env,204),'');
  }
  if(method==='POST'&&path==='/api/v1/auth/logout'){
   await env.DB.prepare('UPDATE auth_sessions SET revoked_at=? WHERE id=? AND revoked_at IS NULL')
    .bind(Math.floor(Date.now()/1000),actor.sessionId).run();
-  return changeClientCookie(respond(req,env,204),'');
+  return actor.googleAdmin?clearControlCookie(respond(req,env,204)):changeClientCookie(respond(req,env,204),'');
  }
  const thread=/^\/api\/v1\/orders\/([0-9a-f-]+)\/chat\/(restaurant|courier|dispatch)$/i.exec(path);
  if(thread&&['GET','POST'].includes(method)){

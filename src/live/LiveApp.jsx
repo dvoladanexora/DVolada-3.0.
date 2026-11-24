@@ -13,6 +13,7 @@ import './live.css';
 import { enableQaPush, disableQaPush } from './onesignal-push.js';
 import {applyDvoladaTheme} from '../theme-policy.js';
 import ClientAccess,{ClientCodes} from './ClientAccess.jsx';
+import GoogleAdminSignIn from './GoogleAdminSignIn.jsx';
 import {FlashAdmin,FlashOffers} from './FlashCampaigns.jsx';
 import RestaurantCash from './RestaurantCash.jsx';
 import {RestaurantProfile,RestaurantStaff,ProductDetails} from './RestaurantSettings.jsx';
@@ -45,6 +46,7 @@ function OwnerInvitation({restaurantId,invite,disabled}){
 }
 
 const qaView=['/pruebas','/pruebas/'].includes(window.location.pathname);
+const controlView=['/cuenta','/cuenta/'].includes(window.location.pathname)&&new URLSearchParams(window.location.search).get('panel')==='control';
 const apiOrigin=import.meta.env.VITE_DVOLADA_API_URL||window.location.origin;
 const optionPrice=options=>(options||[]).reduce((total,option)=>total+option.price_minor,0);
 const optionsFromReceipt=item=>{try{return JSON.parse(item.options_json||'[]')}catch{return []}};
@@ -180,7 +182,7 @@ export default function LiveApp({CustomerHome}){
  const api=useMemo(()=>{
   if(!configured)return null;
   try{return createLiveApi({baseUrl:apiOrigin,getSessionToken:()=>sessionRef.current?.sessionToken,
-   getClientAccount:()=>sessionRef.current?.clientAccount})}
+   getClientAccount:()=>sessionRef.current?.clientAccount,controlAccess:controlView})}
   catch{return null}
  },[configured]);
 
@@ -218,8 +220,9 @@ export default function LiveApp({CustomerHome}){
     const config=await api.clientAccess();
     if(!active)return;
     setAccountEnabled(config.enabled);setCommercial(Boolean(config.commercial));
-    if(config.enabled){
+    if(config.enabled||controlView){
      const me=await api.me(true);
+     if(controlView&&!me.user.googleAdmin)return;
      if(active&&!sessionRef.current)openSession(me,true);
     }
    }catch(error){
@@ -287,10 +290,10 @@ export default function LiveApp({CustomerHome}){
  useEffect(()=>{
   if(!api||offline)return;
   let stopped=false;
-  fetch('/push-config',{cache:'no-store'}).then(r=>r.ok?r.json():null)
+  if(!controlView)fetch('/push-config',{cache:'no-store'}).then(r=>r.ok?r.json():null)
    .then(config=>{if(!stopped)setPushConfig(config)}).catch(()=>{});
   api.publicFlash().then(result=>{if(!stopped)setFlashEnabled(result.enabled)}).catch(()=>{});
-  api.restaurants().then(r=>{if(!stopped)setRestaurants(r.restaurants||[])}).catch(()=>{});
+  if(!controlView)api.restaurants().then(r=>{if(!stopped)setRestaurants(r.restaurants||[])}).catch(()=>{});
   return()=>{stopped=true};
  },[api,offline]);
  useEffect(()=>{
@@ -590,6 +593,7 @@ export default function LiveApp({CustomerHome}){
  useEffect(()=>{
   if(cartAccount&&customerSection)document.getElementById(customerSection)?.scrollIntoView();
  },[cartAccount,customerSection]);
+ if(controlView&&!session)return <div className="dvl-app dvl-account-shell"><main className="dvl-main">{!accessReady&&!offline?<p role="status">Verificando acceso…</p>:<GoogleAdminSignIn api={api} offline={offline} onSuccess={me=>openSession(me,true)}/>}</main></div>;
  if(CustomerHome&&cartAccount&&!qaView){
   const resetDiscount=()=>{setAppliedCoupon(null);setCouponText('');setFlashSelection(null)};
   const changeDraft=(draft)=>{
@@ -646,7 +650,7 @@ export default function LiveApp({CustomerHome}){
   <WaitOrError message={refreshWarning}/>
   {session&&(!adminMode||controlSection==='security')&&<details className={adminMode?'dvl-panel dvl-admin-details':undefined}><summary>Datos de vinculación</summary><div className="dvl-id-note"><span>ID de vinculación: <code>{formattedUserId}</code></span><Action kind="text"
    onClick={()=>navigator.clipboard?.writeText(formattedUserId).catch(()=>{})}>Copiar</Action></div></details>}
-    {session?.user.privilegedPasskey&&(!adminMode||controlSection==='security')&&<Action kind="text" disabled={busy||offline}
+    {(session?.user.privilegedPasskey||session?.user.googleAdmin)&&(!adminMode||controlSection==='security')&&<Action kind="text" disabled={busy||offline}
    onClick={()=>{if(window.confirm('¿Cerrar todas las sesiones de esta cuenta?'))logout(true)}}>Cerrar todas mis sesiones</Action>}
   {staffCredential&&<StaffSecret code={staffCredential} close={()=>setStaffCredential(null)} issued/>}
   {!session&&commercial&&accountEnabled&&<StaffSignIn authenticate={authenticateStaff} disabled={busy||offline}/>}

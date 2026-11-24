@@ -16,7 +16,7 @@ export default {
     if (!env.DVOLADA_BETA_HOST && !env.BETA_DB && env.QA_PUSH_ALLOWED === 'true') await drainQaOrderPush(env);
   },
   async fetch(request, env, ctx) {
-    const { hostname, pathname, protocol } = new URL(request.url);
+    const { hostname, pathname, protocol, searchParams } = new URL(request.url);
     const qa = hostname === 'dvolada-qa.dvoladanexora.workers.dev' && env.DVOLADA_QA_HOST === hostname;
     const betaHost = hostname === 'dvolada-beta.dvoladanexora.workers.dev';
     if (betaHost) {
@@ -65,6 +65,10 @@ export default {
       : new Blob([gzip]).stream().pipeThrough(new DecompressionStream('gzip'));
     return new Response(body, {
       headers: { ...headers, 'Content-Type': type,
+        ...(qa&&route==='/index.html'&&['/cuenta','/cuenta/'].includes(pathname)&&searchParams.get('panel')==='control'?{
+          'Cross-Origin-Opener-Policy':'same-origin-allow-popups',
+          'Content-Security-Policy': headers['Content-Security-Policy'].replace("script-src 'self'","script-src 'self' https://accounts.google.com/gsi/client").replace("style-src 'self'","style-src 'self' https://accounts.google.com/gsi/style").replace("connect-src 'self'","connect-src 'self' https://accounts.google.com/gsi/").replace("frame-ancestors 'none'","frame-src https://accounts.google.com/gsi/; frame-ancestors 'none'")
+        }:{}),
         'Cache-Control': route.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-store',
         ...(route === '/push/onesignal/OneSignalSDKWorker.js' ? {
           'Service-Worker-Allowed': '/push/onesignal/',

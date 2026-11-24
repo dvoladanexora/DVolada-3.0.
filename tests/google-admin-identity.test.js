@@ -35,8 +35,9 @@ test('only the two separately configured Google administrators qualify',async()=
  {subject:'67890',email:'founder.two@gmail.com'});
  await assert.rejects(verify(await sign({...base,email:'third@gmail.com'})));
 });
-test('configuration must contain exactly two distinct Gmail accounts and a valid client id',()=>{
- for(const config of [{},{...env,GOOGLE_ADMIN_EMAILS:'founder.one@gmail.com'},
+test('configuration accepts one confirmed account temporarily, at most two distinct accounts',()=>{
+ assert.equal(googleAdminConfiguration({...env,GOOGLE_ADMIN_EMAILS:'founder.one@gmail.com'}).emails.size,1);
+ for(const config of [{},
  {...env,GOOGLE_ADMIN_EMAILS:'a@gmail.com,A@gmail.com'},
  {...env,GOOGLE_ADMIN_EMAILS:'a@gmail.com,b@gmail.com,c@gmail.com'},
  {...env,GOOGLE_ADMIN_CLIENT_ID:'not-configured'}]){

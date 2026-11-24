@@ -15,7 +15,9 @@ const compactExamples=[
 
 export default function HomeSponsorSlot({variant='carousel',items,onJoin}){
  const defaults=variant==='compact'?compactExamples:carouselExamples;
- const safeItems=Array.isArray(items)?items.filter(x=>x&&typeof x.title==='string'&&x.title.trim()):defaults;
+ const [clock,setClock]=useState(()=>Date.now()/1000);useEffect(()=>{const timer=setInterval(()=>setClock(Date.now()/1000),1000);return()=>clearInterval(timer)},[]);
+ const eligible=Array.isArray(items)?items.filter(x=>x&&typeof x.title==='string'&&x.title.trim()&&(!x.ends_at||x.ends_at>clock)):defaults;
+ const safeItems=eligible.length?eligible:defaults;
  const [active,setActive]=useState(0),[userPaused,setUserPaused]=useState(false),[interacting,setInteracting]=useState(false),[inView,setInView]=useState(true),[visibleTab,setVisibleTab]=useState(true);
  const panelRef=useRef(null),touchStart=useRef(null);
  const index=safeItems.length?active%safeItems.length:0;
@@ -35,9 +37,9 @@ export default function HomeSponsorSlot({variant='carousel',items,onJoin}){
  },[]);
  useEffect(()=>{
   if(safeItems.length<2||userPaused||interacting||!inView||!visibleTab||typeof window==='undefined'||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
-  const timer=window.setInterval(()=>setActive(i=>(i+1)%safeItems.length),5000);
+  const timer=window.setInterval(()=>setActive(i=>(i+1)%safeItems.length),Math.max(5,Math.min(30,current?.duration_seconds||5))*1000);
   return()=>window.clearInterval(timer);
- },[safeItems.length,userPaused,interacting,inView,visibleTab,active]);
+ },[safeItems.length,userPaused,interacting,inView,visibleTab,active,current?.duration_seconds]);
  if(!current)return null;
  const move=delta=>setActive(i=>(i+delta+safeItems.length)%safeItems.length);
  return <aside ref={panelRef} className={'dv-sponsor-slot dv-sponsor-'+variant} aria-label="Espacio de publicidad en Dvolada"
@@ -45,10 +47,9 @@ export default function HomeSponsorSlot({variant='carousel',items,onJoin}){
   onFocusCapture={()=>setInteracting(true)} onBlurCapture={e=>{if(!e.currentTarget.contains(e.relatedTarget))setInteracting(false)}}
   onTouchStart={e=>{touchStart.current=e.touches[0]?.clientX??null}}
   onTouchEnd={e=>{if(touchStart.current===null)return;const distance=(e.changedTouches[0]?.clientX??touchStart.current)-touchStart.current;touchStart.current=null;if(Math.abs(distance)>48)move(distance<0?1:-1)}}>
-  <div className="dv-sponsor-head"><span><Megaphone size={14}/> PUBLICITÁ EN DVOLADA</span><small>{index+1} / {safeItems.length}</small></div>
+  <div className="dv-sponsor-head"><span><Megaphone size={14}/> {current.imageUrl?'PUBLICIDAD':'PUBLICITÁ EN DVOLADA'}</span><small>{index+1} / {safeItems.length}</small></div>
   <div className="dv-sponsor-content" key={current.id||index} aria-live="off">
-   <div className="dv-sponsor-message"><strong>{current.title}</strong><p>{current.description}</p><span className="dv-sponsor-note">Espacio disponible para anunciarte · consultá precios</span></div>
-   {typeof onJoin==='function'&&<button type="button" className="dv-sponsor-cta" onClick={onJoin}>Quiero anunciarme <ArrowUpRight size={16}/></button>}
+   {current.imageUrl?<div style={{width:'100%'}}><img src={current.imageUrl} alt={current.title} style={{width:'100%',maxHeight:240,objectFit:'contain',borderRadius:12}}/><div className="dv-sponsor-message"><strong>{current.title}</strong><p>{current.description}</p></div>{current.link&&<a className="dv-sponsor-cta" href={current.link} target="_blank" rel="noopener noreferrer">Más información <ArrowUpRight size={16}/></a>}</div>:<><div className="dv-sponsor-message"><strong>{current.title}</strong><p>{current.description}</p><span className="dv-sponsor-note">Espacio disponible para anunciarte · consultá precios</span></div>{typeof onJoin==='function'&&<button type="button" className="dv-sponsor-cta" onClick={onJoin}>Quiero anunciarme <ArrowUpRight size={16}/></button>}</>}
   </div>
   {safeItems.length>1&&<div className="dv-sponsor-controls">
    <button type="button" aria-label="Anuncio anterior" onClick={()=>move(-1)}><ChevronLeft size={18}/></button>

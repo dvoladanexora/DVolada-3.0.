@@ -1,4 +1,5 @@
 import {controlRoute} from './control-center.js';
+import {commercialControl,publicSpots,rateCourier} from './commercial-control.js';
 import {googleControlAuth,googleControlActor,googleControlRequired,clearControlCookie} from './google-admin-session.js';
 import {courierProfile,courierAvailability,courierApplication,rejectCourierApplication,pendingCouriers,revokeCourierSessions,courierHistory,courierRestaurantChat} from './courier-workspace.js';
 import {restaurantProfile,menuOption,savePhoto,publicPhoto,staffRoster,restaurantCash,restaurantReport} from './restaurant-operations.js';
@@ -34,6 +35,9 @@ async function route(req,env){
   await env.DB.prepare('SELECT 1').first();
   return respond(req,env,200,{status:'ok',service:'dvolada-online',version:1});
  }
+ if(method==='GET'&&path==='/api/v1/catalog/spots')return publicSpots(req,env);
+ const spotImage=/^\/api\/v1\/catalog\/spots\/([0-9a-f-]{36})\/image$/.exec(path);
+ if(method==='GET'&&spotImage)return publicSpots(req,env,spotImage[1]);
  if(method==='GET'&&path==='/api/v1/catalog/restaurants'){
   const afterName=url.searchParams.get('afterName'),afterId=url.searchParams.get('afterId');
   if((afterName===null)!==(afterId===null))throw new ApiError(400,'INVALID_CURSOR');
@@ -142,6 +146,9 @@ async function route(req,env){
  }else if(token&&path.startsWith('/api/v1/restaurant/'))throw new ApiError(403,'ROLE_FORBIDDEN');
 
  if(['POST','PATCH'].includes(method))await mutationRateLimit(env,actor);
+ if(/^\/api\/v1\/admin\/control\/(spots|contracts)(?:\/|$)/.test(path))return commercialControl(req,env,actor,path.slice('/api/v1/admin/control/'.length));
+ const courierRating=/^\/api\/v1\/customer\/orders\/([0-9a-f-]{36})\/courier-rating$/.exec(path);
+ if(method==='POST'&&courierRating)return respond(req,env,200,await rateCourier(req,env,actor,courierRating[1]));
  if(path.startsWith('/api/v1/admin/control/'))return controlRoute(req,env,actor,path.slice('/api/v1/admin/control/'.length));
  if(method==='POST'&&path==='/api/v1/push/identity'){
   return respond(req,env,200,await issueQaPushIdentity(req,env,actor));
@@ -224,6 +231,8 @@ async function route(req,env){
   if(after)requireUuid(after);
   const {results=[]}=await env.DB.prepare(`SELECT u.id,u.display_name,u.phone_e164,u.status,u.admin_locked,u.created_at,
     c.active,c.available,c.max_active_orders,
+    (SELECT AVG(stars) FROM courier_ratings cr WHERE cr.courier_id=u.id) AS rating,
+    (SELECT COUNT(*) FROM courier_ratings cr WHERE cr.courier_id=u.id) AS rating_count,
     (SELECT COUNT(*) FROM online_orders o WHERE o.courier_id=u.id AND o.status='Entregado') AS delivered,
     (SELECT COUNT(*) FROM online_orders o WHERE o.courier_id=u.id AND o.status NOT IN ('Entregado','Cancelado','Rechazado')) AS active_orders
     FROM courier_profiles c JOIN users u ON u.id=c.user_id

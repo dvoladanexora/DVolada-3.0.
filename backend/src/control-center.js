@@ -43,13 +43,13 @@ async function orders(env,url){
 
 async function accounts(env,url){
  const q=filter(url,'q',80),role=filter(url,'role',16);
- if(role)choice(role,['customer','courier']);
+ if(role)choice(role,['customer','courier','restaurant']);
  const result=await rows(env.DB.prepare(`SELECT u.id,u.display_name,u.account_role,u.status,u.admin_locked,u.admin_version,
   c.active AS courier_active,
   (SELECT COUNT(*) FROM restaurant_memberships m WHERE m.user_id=u.id AND m.active=1) AS memberships,
   (SELECT COUNT(*) FROM auth_sessions s WHERE s.user_id=u.id AND s.revoked_at IS NULL AND s.expires_at>unixepoch()) AS sessions
   FROM users u LEFT JOIN courier_profiles c ON c.user_id=u.id
-  WHERE u.account_role IN ('customer','courier') AND (?='' OR u.account_role=?)
+  WHERE u.account_role IN ('customer','courier') AND (?='' OR CASE WHEN EXISTS(SELECT 1 FROM restaurant_memberships m WHERE m.user_id=u.id AND m.active=1) THEN 'restaurant' ELSE u.account_role END=?)
   AND (?='' OR u.id=? OR instr(lower(u.display_name),lower(?))>0)
   ORDER BY u.created_at DESC,u.id LIMIT 51`).bind(role,role,q,q,q));
  return {accounts:result.slice(0,50),limited:result.length>50};

@@ -384,7 +384,9 @@ export async function customerOrders(env,actor){
  requireRole(actor,'customer');
  const {results=[]}=await env.DB.prepare(`${dataOrder} WHERE customer_id=? ORDER BY created_at DESC,id DESC LIMIT 30`)
   .bind(actor.userId).all();
- return {orders:results.map(x=>orderDto(x))};
+ const ratings=await env.DB.prepare('SELECT order_id,stars FROM courier_ratings WHERE customer_id=? ORDER BY created_at DESC LIMIT 100').bind(actor.userId).all();
+ const byOrder=new Map((ratings.results||[]).map(x=>[x.order_id,x.stars]));
+ return {orders:results.map(x=>({...orderDto(x),courierRating:byOrder.get(x.id)||null}))};
 }
 export async function customerCheckoutStatus(req,env,actor){
  requireRole(actor,'customer');

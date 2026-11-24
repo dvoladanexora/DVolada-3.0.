@@ -6,7 +6,7 @@ const tabs={operations:'Seguimiento de pedidos',accounts:'Participantes y cuenta
 const statuses=['Pendiente','Aceptado','Preparando','Listo','Recogido','En camino','En ubicación','Entregado','Cancelado','Rechazado'];
 const claims={open:'Recibido',review:'En atención',resolved:'Resuelto'};
 const periodStates={pending:'Pendiente',calculated:'Calculada',approved:'Aprobada',paid:'Pagada'};
-const roles={customer:'Cliente',courier:'Repartidor'};
+const roles={customer:'Cliente',courier:'Repartidor',restaurant:'Restaurante'};
 const states={active:'Activa',suspended:'Suspendida',locked:'Bloqueada',revoke:'Revocar sesiones'};
 const time=value=>new Date(value*1000).toLocaleString('es-HN',{timeZone:'America/Tegucigalpa'});
 const epoch=value=>Math.floor(Date.parse(value+'-06:00')/1000);
@@ -127,7 +127,7 @@ export function ControlOverview({stats,setSection,commercial,flash}){
  </div>;
 }
 
-export function ControlWorkspace({section,api,restaurants,offline,busy,run,money,errorLabel}){
+export function ControlWorkspace({section,api,restaurants,offline,busy,run,money,errorLabel,setSection}){
  const [data,setData]=useState(null),[error,setError]=useState(''),[filters,setFilters]=useState(emptyFilters[section]||{});
  const [selection,setSelection]=useState(null),[simulation,setSimulation]=useState(null),[courierRules,setCourierRules]=useState(null);
  const disabled=offline||busy;
@@ -177,6 +177,7 @@ export function ControlWorkspace({section,api,restaurants,offline,busy,run,money
    </>}
   </>}
   {section==='accounts'&&<>
+   <div className="dvl-inline"><button type="button" className="dvl-action" disabled={disabled} onClick={()=>setSection('owners')}>+ Crear cuenta de restaurante</button><small>El acceso de propietario se vincula a un negocio afiliado mediante invitación privada.</small></div>
    <Form label="Buscar cuentas" action={values=>{setSelection(null);setFilters(values)}} disabled={disabled}>
     <label>Nombre o ID<input name="q" maxLength={80}/></label>
     <label>Rol<select name="role"><option value="">Todos</option>{Object.entries(roles).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
@@ -321,7 +322,7 @@ export function CourierDirectory({api,run,busy,offline,errorLabel,setSection}){
  {data?.couriers.length===0&&<p>No hay repartidores para esta búsqueda.</p>}
  <div className="dvl-admin-courier-grid">{data?.couriers.map(row=><article key={row.id} className="dvl-admin-courier-card"><div className="dvl-admin-identity"><span className="dvl-admin-avatar"><Bike size={21}/></span><div><strong>{row.display_name}</strong><small>{state(row)}</small></div></div>
   <div className="dvl-admin-courier-stats"><div><strong>{row.delivered}</strong><small>Entregados</small></div><div><strong>{row.active_orders}/{row.max_active_orders}</strong><small>En curso</small></div></div>
-  <div className="dvl-stack"><small>Calificación: sin medición disponible</small><small>Plan y pago: sin registro de facturación</small></div>
+  <div className="dvl-stack"><div aria-label={row.rating_count?row.rating.toFixed(1)+' de 5 estrellas':'Sin calificaciones'} style={{display:'flex',gap:4,alignItems:'center'}}>{Array.from({length:5},(_,i)=><span key={i} aria-hidden="true" style={{position:'relative',fontSize:23,lineHeight:1,color:'#a16207'}}>☆<span style={{position:'absolute',left:0,top:0,overflow:'hidden',width:Math.max(0,Math.min(1,(row.rating||0)-i))*100+'%',color:'#eab308'}}>★</span></span>)}<small>{row.rating_count?row.rating.toFixed(1)+' / 5 ('+row.rating_count+')':'Sin valoraciones'}</small></div><small>Plan y pago: sin registro de facturación</small></div>
   {row.phone_e164&&/^\+504\d{8}$/.test(row.phone_e164)&&<a className="dvl-action secondary" href={'https://wa.me/'+row.phone_e164.slice(1)} target="_blank" rel="noopener noreferrer">Contactar por WhatsApp</a>}
   <details><summary>Detalles del repartidor</summary><p>Registrado: {time(row.created_at)}</p><p style={{overflowWrap:'anywhere'}}>ID: {row.id}</p><button type="button" className="dvl-action secondary" onClick={()=>setSection('accounts')}>Administrar cuenta</button></details>
  </article>)}</div>

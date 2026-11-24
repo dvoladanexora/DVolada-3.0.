@@ -67,6 +67,8 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
   pushIdentity:()=>request('/api/v1/push/identity',{method:'POST'}),
   revokeAccessSessions:()=>request('/api/v1/auth/revoke-sessions',{method:'POST'}),
   logout:()=>request('/api/v1/auth/logout',{method:'POST'}),
+  publicSpots:()=>request('/api/v1/catalog/spots',{auth:false}),
+  rateCourier:(id,stars)=>request('/api/v1/customer/orders/'+s(id)+'/courier-rating',{method:'POST',body:{stars}}),
   publicFlash:()=>request('/api/v1/catalog/flash',{auth:false}),
   customerFlash:()=>request('/api/v1/customer/flash'),
   adminFlash:()=>request('/api/v1/admin/flash'),

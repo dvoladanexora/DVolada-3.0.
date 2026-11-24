@@ -14,6 +14,7 @@ import { enableQaPush, disableQaPush } from './onesignal-push.js';
 import {applyDvoladaTheme} from '../theme-policy.js';
 import ClientAccess,{ClientCodes} from './ClientAccess.jsx';
 import GoogleAdminSignIn from './GoogleAdminSignIn.jsx';
+import {SpotManager,RestaurantContract} from './CommercialControl.jsx';
 import {FlashAdmin,FlashOffers} from './FlashCampaigns.jsx';
 import RestaurantCash from './RestaurantCash.jsx';
 import {RestaurantProfile,RestaurantStaff,ProductDetails} from './RestaurantSettings.jsx';
@@ -618,6 +619,7 @@ export default function LiveApp({CustomerHome}){
    changeCoupon:value=>{setCouponText(value);setAppliedCoupon(null);setFlashSelection(null)},
    applyCoupon:async()=>{const result=await run(()=>api.coupon(cartRestaurantId,couponText),{refresh:false});if(result){setAppliedCoupon(result);setFlashSelection(null)}},
    selectedPin,showOrder:showCustomerOrder,hidePin:()=>setSelectedPin(null),reorder,
+   rateCourier:(order,stars)=>action(()=>api.rateCourier(order.id,stars)),
    support:(order,mode)=>setSupport({id:order.id,mode,order}),
    cancelOrder:o=>action(()=>api.cancelOrder(o,newKey())),
    supportView:support&&(support.order||orders.some(o=>o.id===support.id))?<ClientSupport key={support.id+support.mode} mode={support.mode} order={support.order||orders.find(o=>o.id===support.id)} api={api} offline={offline} close={()=>setSupport(null)} onSessionError={handleSessionError}/>:null,
@@ -887,7 +889,7 @@ export default function LiveApp({CustomerHome}){
     <ControlSubnavigation section={controlSection} setSection={selectControlSection} flash={flashEnabled} commercial={commercial}/>
     {controlSection==='summary'&&<ControlOverview stats={adminStats} setSection={selectControlSection}/>}
     {['operations','accounts','claims','coupons','rates','reports','audit'].includes(controlSection)&&<ControlWorkspace key={controlSection} section={controlSection}
-     api={api} restaurants={adminRestaurants} offline={offline} busy={busy} run={run} money={price} errorLabel={errorLabel}/>}
+     api={api} restaurants={adminRestaurants} offline={offline} busy={busy} run={run} money={price} errorLabel={errorLabel} setSection={selectControlSection}/>}
     {controlSection==='security'&&<section className="dvl-panel dvl-stack">
      <h2>Mi acceso</h2><div className="dvl-admin-identity"><span className="dvl-admin-avatar"><ShieldCheck size={23}/></span><div><strong>{session.user.displayName}</strong><small>Administrador global</small></div></div>
      <p className="dvl-muted">Administrá tu sesión y tus preferencias de acceso.</p>
@@ -904,7 +906,7 @@ export default function LiveApp({CustomerHome}){
       invite={(id,body)=>run(()=>api.adminInviteOwner(id,body,newKey()),{refresh:false})}/>}
     </section>}
     {controlSection==='courierDirectory'&&<CourierDirectory api={api} run={run} busy={busy} offline={offline} errorLabel={errorLabel} setSection={selectControlSection}/>}
-    {controlSection==='advertising'&&<section className="dvl-panel dvl-stack"><h2>Spots publicitarios</h2><p className="dvl-muted">Todavía no existe un registro de contratos publicitarios conectado. No se muestran anunciantes ni ingresos inventados.</p><p>Las campañas de descuentos y regalos se gestionan en las pestañas de Cupones y Flash.</p></section>}
+    {controlSection==='advertising'&&<SpotManager api={api} run={run} busy={busy} offline={offline} money={price} errorLabel={errorLabel}/>}
     {controlSection==='couriers'&&<>
      <CourierApplications api={api} run={run} busy={busy} offline={offline} errorLabel={errorLabel}/>
      <details className="dvl-panel dvl-admin-details"><summary>Vincular repartidor registrado</summary>
@@ -944,13 +946,14 @@ export default function LiveApp({CustomerHome}){
      </section>
      {selectedAdminBusiness&&<section className="dvl-panel dvl-stack dvl-admin-business-detail" id="control-business-detail">
       <div className="dvl-admin-section-heading"><h2>{selectedAdminBusiness.name}</h2><button className="dvl-action secondary" type="button" onClick={()=>{setAdminSelectedId('');setAdminFee('')}}>Cerrar</button></div>
-      <div className="dvl-admin-business-meta"><span>Plan: {{ONLINE:'Cloud',LOCAL:'Local',PLUS:'Plus'}[selectedAdminBusiness.plan]||selectedAdminBusiness.plan}</span><span>Pago: sin registro de facturación</span><span>Suscripción: {selectedAdminBusiness.subscription_status==='active'?'Activa':'Inactiva'}</span><span>Operación: {{open:'Abierto',paused:'En pausa',closed:'Cerrado'}[selectedAdminBusiness.online_state]||selectedAdminBusiness.online_state}</span></div>
+      <div className="dvl-admin-business-meta"><span>Plan: {{ONLINE:'Cloud',LOCAL:'Local',PLUS:'Plus'}[selectedAdminBusiness.plan]||selectedAdminBusiness.plan}</span><span>Suscripción: {selectedAdminBusiness.subscription_status==='active'?'Activa':'Inactiva'}</span><span>Operación: {{open:'Abierto',paused:'En pausa',closed:'Cerrado'}[selectedAdminBusiness.online_state]||selectedAdminBusiness.online_state}</span></div>
       <div className="dvl-inline dvl-control-actions">
        {selectedAdminBusiness.subscription_status!=='active'?<Action disabled={busy||offline} onClick={()=>action(()=>api.adminUpdateRestaurant(selectedAdminBusiness.id,{subscriptionStatus:'active'}))}>Activar suscripción</Action>:
         <Action kind="secondary" disabled={busy||offline} onClick={()=>{if(window.confirm('¿Suspender la suscripción de '+selectedAdminBusiness.name+'?'))action(()=>api.adminUpdateRestaurant(selectedAdminBusiness.id,{subscriptionStatus:'inactive'}))}}>Suspender</Action>}
        {selectedAdminBusiness.plan!=='LOCAL'&&<Action kind="secondary" onClick={()=>selectControlSection('owners')}>Invitar propietario</Action>}
        <Action kind="secondary" onClick={()=>selectControlSection('staff')}>Personal</Action>
       </div>
+      <RestaurantContract key={selectedAdminBusiness.id} restaurant={selectedAdminBusiness} api={api} run={run} busy={busy} offline={offline} money={price} errorLabel={errorLabel} onSaved={()=>load(scope,selectedRestaurantId)}/>
       <details className="dvl-admin-details"><summary>Tarifa de envío</summary>
        <div className="dvl-grid dvl-editor">
         <label>Tarifa de envío (L)<input value={adminFee} type="number" min="0" max="1000000" step=".01"

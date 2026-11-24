@@ -2,7 +2,7 @@ name: Preparar artefacto verificable para Cloudflare
 # Transporte del candidato, no despliega ni cambia recursos Cloudflare.
 on:
   push:
-    branches: [prelaunch/phase-3-live-integration]
+    branches: [main, prelaunch/phase-3-live-integration]
     paths:
       - 'src/**'
       - 'backend/**'
@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
-    if: github.repository == 'dvoladanexora/DVolada-3.0.' && github.ref == 'refs/heads/prelaunch/phase-3-live-integration'
+    if: github.repository == 'dvoladanexora/DVolada-3.0.' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prelaunch/phase-3-live-integration')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -53,7 +53,7 @@ jobs:
           if-no-files-found: error
   transport:
     needs: build
-    if: github.repository == 'dvoladanexora/DVolada-3.0.' && github.ref == 'refs/heads/prelaunch/phase-3-live-integration'
+    if: github.repository == 'dvoladanexora/DVolada-3.0.' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prelaunch/phase-3-live-integration')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

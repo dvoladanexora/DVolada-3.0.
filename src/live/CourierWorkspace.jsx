@@ -125,7 +125,7 @@ function CourierHistory({api,run,busy,offline,money,openChat}){
   const result=await run(()=>api.courierHistory(cursor),{refresh:false});
   if(result)setData(prev=>cursor?{...result,orders:[...prev.orders,...result.orders]}:result);
  }
- return <section className="dvl-panel dvl-stack">
+ return <section className="dvl-panel dvl-stack" id="historial-entregas">
   <h2>Entregas y liquidaciones</h2>
   <Button secondary disabled={busy||offline} onClick={()=>load()}>Consultar historial y ganancias</Button>
   {data?.orders.length===0&&<p>No hay entregas completadas.</p>}
@@ -153,7 +153,7 @@ export function CourierConsole({api,profile,orders,busy,offline,action,run,money
  const status=offline?'Sin conexión':!profile?'Consultando disponibilidad…':
   !profile.available?'Desconectado':booked>=profile.capacity?'Ocupado':'Disponible';
  return <div className="dvl-stack">
-  <section className="dvl-panel dvl-stack"><h2>Mis entregas</h2>
+  <section className="dvl-panel dvl-stack" id="entregas"><h2>Mis entregas</h2>
    <p role="status">{status}{profile&&' · '+booked+' de '+profile.capacity+' espacios ocupados'}</p>
    {profile&&<Button disabled={busy||offline} onClick={()=>action(()=>api.courierAvailability(!profile.available))}>
     {profile.available?'Dejar de recibir ofertas':'Conectarme para recibir ofertas'}

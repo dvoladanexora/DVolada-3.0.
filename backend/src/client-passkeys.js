@@ -1,6 +1,6 @@
 import {generateAuthenticationOptions,generateRegistrationOptions,verifyAuthenticationResponse,verifyRegistrationResponse} from '@simplewebauthn/server';
 import {isoBase64URL} from '@simplewebauthn/server/helpers';
-import {ApiError,hmacHex,readJson,requireKeys,requireText,requireUuid,respond} from './security.js';
+import {ApiError,hmacHex,sha256,readJson,requireKeys,requireText,requireUuid,respond} from './security.js';
 import {clientAccessEnabled,readSecretCookie,randomSecret,secretCookie,secretPattern,sessionSeconds,changeClientCookie} from './client-access.js';
 
 import {loginPattern,recoveryHash,retiredAccessHash} from './privileged-access.js';
@@ -43,6 +43,15 @@ async function begin(req,env,mode,input,rpID){
   if(typeof input.code!=='string'||!secretPattern.test(input.code))throw new ApiError(401,'CLIENT_CODE_INVALID');
   account=await env.DB.prepare(accountQuery+'c.recovery_hash=? AND (c.login_name=? OR c.login_name IS NULL)')
    .bind(await recoveryHash(env,input.code),login).first();
+  // Infrastructure can create a first-use verifier in QA without reading the session pepper.
+  // This verifier is never accepted for account recovery after a passkey has been enrolled.
+  if(!account&&rpID==='dvolada-qa.dvoladanexora.workers.dev'&&env.QA_CLIENT_ACCESS==='true'){
+   const verifier='operator-v1:'+await sha256(['dvolada-qa',login,input.code].join('|'));
+   account=await env.DB.prepare(accountQuery+`c.login_name=? AND c.recovery_hash=?
+    AND a.access_role='platform_admin' AND a.invitation_expires_at>? AND c.revision=1
+    AND NOT EXISTS(SELECT 1 FROM client_passkeys p WHERE p.user_id=c.user_id)`)
+    .bind(login,verifier,birth).first();
+  }
   if(!account)throw new ApiError(401,'CLIENT_CODE_INVALID');
   name=account.display_name;
  }

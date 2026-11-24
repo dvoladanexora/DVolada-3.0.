@@ -1425,3 +1425,21 @@ test('owner publishes food and photo atomically, invalid photo leaves no product
  assert.equal(response.status,200);
  assert.equal(Buffer.from(await response.arrayBuffer()).toString('base64'),image);
 });
+
+test('QA operator invitation enrolls one verified passkey, then uses ordinary protected recovery',async()=>{
+ const f=await fixture();
+ Object.assign(f.env,{CORS_ORIGINS:passkeyOrigin,QA_CLIENT_ACCESS:'true'});
+ const user=f.tokens.platformAdmin.id,login='operator.fixture',code=randomBytes(32).toString('base64url');
+ const verifier='operator-v1:'+createHash('sha256').update(['dvolada-qa',login,code].join('|')).digest('hex');
+ f.DB.db.prepare('INSERT INTO client_credentials(user_id,login_name,access_hash,recovery_hash) VALUES(?,?,?,?)').run(user,login,'retired',verifier);
+ f.DB.db.prepare("INSERT INTO privileged_passkey_accounts(user_id,access_role,invitation_expires_at) VALUES(?,'platform_admin',unixepoch()-1)").run(user);
+ assert.equal((await beginKey(f,'recover',{login,code})).status,401);
+ f.DB.db.prepare('UPDATE privileged_passkey_accounts SET invitation_expires_at=unixepoch()+1800 WHERE user_id=?').run(user);
+ assert.equal((await beginKey(f,'recover',{login,code:randomBytes(32).toString('base64url')})).status,401);
+ const activation=await usePrivilegedKey(f,'recover',login,virtualPasskey(),code);
+ assert.equal(activation.status,200);
+ assert.equal((await passkeyRequest(f,'admin/overview',undefined,{cookie:partCookie(activation),account:user})).status,200);
+ assert.equal((await beginKey(f,'recover',{login,code})).status,401);
+ const {recovery}=await activation.json();
+ assert.equal((await beginKey(f,'recover',{login,code:recovery})).status,200);
+});

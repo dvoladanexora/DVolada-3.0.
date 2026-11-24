@@ -5,7 +5,7 @@ import {CourierConsole,CourierApplication,CourierApplications} from './CourierWo
 import {StaffSignIn,StaffSecret,ManageStaffAccess,SettlementPanel} from './RestaurantCommercial.jsx';
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {ShoppingBag,Store,Bike,ShieldCheck,LogOut,RefreshCw,WifiOff,ArrowRight,Package,CheckCircle2} from 'lucide-react';
+import {ShoppingBag,Store,Bike,ShieldCheck,ShoppingCart,History,Users,Home,LogOut,RefreshCw,WifiOff,ArrowRight,Package,CheckCircle2} from 'lucide-react';
 import {createLiveApi,LiveApiError} from './live-api.js';
 import './live.css';
 import { enableQaPush, disableQaPush } from './onesignal-push.js';
@@ -564,9 +564,25 @@ export default function LiveApp(){
  const boardOrders=kitchenRole?[...orders].sort((a,b)=>a.createdAt-b.createdAt||a.orderNumber.localeCompare(b.orderNumber)):orders;
  const setBoard=tab=>{setRestaurantTab(tab);setHistoryCursor(null);setNextHistory(null);setOrderDetail(null);setSupport(null);setOrders([])};
  const formattedUserId=session?.user?.id||'';
- return <div className="dvl-app">
+ const jump=id=>document.getElementById(id)?.scrollIntoView({block:'start'});
+ const sectionAction=(change,value,id)=>()=>{change(value);requestAnimationFrame(()=>jump(id))};
+ const shortcuts=session?[
+  ['Inicio',Home,()=>window.location.assign('/')],
+  ...(scope==='customer'?[
+   ['Catálogo',Store,()=>jump('catalogo')],['Carrito',ShoppingCart,()=>jump('carrito')],['Pedidos',Package,()=>jump('mis-pedidos')]
+  ]:scope==='restaurant'?[
+   ['Pedidos',Package,sectionAction(setBoard,'active','negocio')],
+   ...(canManage?[['Menú',Store,sectionAction(setBoard,'menu','menu-negocio')],['Caja',ShoppingCart,sectionAction(setBoard,'cash','negocio')]]:[])
+  ]:scope==='courier'?[['Entregas',Bike,()=>jump('entregas')],['Historial',History,()=>jump('historial-entregas')]]:[
+   ['Resumen',ShieldCheck,()=>jump('control')],['Negocios',Store,sectionAction(setControlSection,'business','control-secciones')],
+   ['Accesos',Users,sectionAction(setControlSection,'accounts','control-secciones')]
+  ])
+ ]:[];
+ return <div className={session?"dvl-app dvl-account-shell":"dvl-app"}>
   <header className="dvl-header"><div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada" /><div><strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
    <div className="dvl-head-actions"><a className="dvl-action secondary" href="/">Inicio</a><label className="dvl-theme">Tema<select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy||offline} onClick={()=>logout()}><LogOut size={15}/> Salir</Action>}</div></header>
+  {session&&<nav className="dvl-shortcuts" aria-label="Navegación principal">{shortcuts.map(([label,Icon,action])=>
+   <button type="button" key={label} onClick={action}><Icon size={20} aria-hidden="true"/>{label}</button>)}</nav>}
   <main className="dvl-main">
   <div className="dvl-intro"><span className="dvl-kicker">NEXORA SYSTEMS · DVOLADA ONLINE</span>
    <h1>{session?(scope==='restaurant'&&selectedBusiness?.staff_role==='kitchen'?'Cocina':roles[scope]) :(qaView?'Dvolada · Entorno de pruebas':'Dvolada · Mi cuenta')}</h1>
@@ -606,7 +622,7 @@ export default function LiveApp(){
    {scope==='customer'&&<div className="dvl-columns">
     {accountEnabled&&<CourierApplication api={api} busy={busy} offline={offline} account={session.user.id} run={run}/>}
     <FlashOffers campaigns={offline?[]:flashOffers} money={price} open={viewProducts}/>
-    <section className="dvl-panel"><h2>Restaurantes afiliados</h2>
+    <section className="dvl-panel" id="catalogo"><h2>Restaurantes afiliados</h2>
      {!shoppingRestaurant?<div className="dvl-stack">
       <div className="dv-catalog-switch" role="group" aria-label="Cómo explorar Dvolada">
        <button type="button" aria-pressed={catalogView==='food'} className={catalogView==='food'?'active':''} onClick={()=>setCatalogView('food')}><ShoppingBag size={17}/> Ver comida</button>
@@ -689,7 +705,7 @@ export default function LiveApp(){
        amount={price(subtotal+fee-discount)}/>
       </>}
     </section>
-    <section className="dvl-panel dvl-span"><h2>Mis pedidos</h2>
+    <section className="dvl-panel dvl-span" id="mis-pedidos"><h2>Mis pedidos</h2>
       {orders.length?<div className="dvl-grid">{orders.map(o=><OrderCard key={o.id} order={o}>
       <Action kind="secondary" disabled={busy||offline} onClick={()=>showCustomerOrder(o)}>Ver detalle / PIN</Action>
       <Action kind="secondary" disabled={offline} onClick={()=>setSupport({id:o.id,mode:'restaurant'})}>Chat con restaurante</Action>
@@ -710,7 +726,7 @@ export default function LiveApp(){
     </section>
    </div>}
    {scope==='restaurant'&&<div className="dvl-stack">
-    <section className="dvl-panel"><div className="dvl-row"><h2>{kitchenRole?'Pantalla de cocina':cashRole?'Caja del restaurante':'Centro de pedidos'}</h2><label>Negocio<select value={selectedRestaurantId}
+    <section className="dvl-panel" id="negocio"><div className="dvl-row"><h2>{kitchenRole?'Pantalla de cocina':cashRole?'Caja del restaurante':'Centro de pedidos'}</h2><label>Negocio<select value={selectedRestaurantId}
      onChange={e=>{setBoard('active');setOrderDetail(null);setSupport(null);setOrders([]);setManageProducts([]);setRestaurantCapabilities(null);setCouriers([]);setEditPrices({});setCourierChoice({});setSelectedRestaurantId(e.target.value)}}>{session.restaurants?.map(r=><option key={r.restaurant_id} value={r.restaurant_id}>{r.name}</option>)}</select></label></div>
      {canManage&&<nav className="dvl-inline dvl-client-modes" aria-label="Secciones de Restaurante Cloud">
       {Object.entries({active:'Pedidos activos',history:'Historial',menu:'Subir comida y menú',settings:'Perfil y personal',cash:'Caja y ventas',...(commercial?{settlements:'Liquidaciones'}:{})}).map(([tab,label])=>
@@ -740,7 +756,7 @@ export default function LiveApp(){
        {state==='open'?'Abrir':state==='paused'?'Pausar':'Cerrar'}</Action>)}
      </div>
     </section>}
-    {canManage&&restaurantTab==='menu'&&<section className="dvl-panel"><h2>Menú del restaurante</h2>
+    {canManage&&restaurantTab==='menu'&&<section className="dvl-panel" id="menu-negocio"><h2>Menú del restaurante</h2>
      <PublishFood key={selectedRestaurantId} api={api} restaurantId={selectedRestaurantId} run={run} busy={busy} offline={offline}/>
      <div className="dvl-stack dvl-manage-menu">{manageProducts.map(p=><div className="dvl-stack" key={p.id}><div className="dvl-row">
       <div><strong>{p.name}</strong><small>{p.available?'Disponible':'Agotado'} · {price(p.price_minor)}</small></div>
@@ -796,14 +812,14 @@ export default function LiveApp(){
    {scope==='courier'&&<CourierConsole api={api} profile={courierProfile} orders={orders} busy={busy} offline={offline}
     action={action} run={run} money={price} errorLabel={errorLabel} endSession={endLocalSession}
     openChat={(order,mode)=>setSupport({id:order.id,order,mode})}/>}
-   {scope==='admin'&&<div className="dvl-stack"><section className="dvl-panel"><h2>Centro de Control</h2>
+   {scope==='admin'&&<div className="dvl-stack"><section className="dvl-panel" id="control"><h2>Centro de Control</h2>
     <p className="dvl-muted">Resumen operativo en el servidor. La autorización se comprueba en cada solicitud.</p>
     <div className="dvl-stats"><div><strong>{adminStats?.restaurants?.total??'—'}</strong><span>Restaurantes</span></div>
      <div><strong>{adminStats?.restaurants?.open??'—'}</strong><span>Abiertos</span></div>
      <div><strong>{adminStats?.orders?.active??'—'}</strong><span>Pedidos activos</span></div>
      <div><strong>{adminStats?.orders?.delivered??'—'}</strong><span>Entregados</span></div>
      <div><strong>{adminStats?.couriers?.active??'—'}</strong><span>Repartidores habilitados</span></div></div></section>
-    <ControlNavigation section={controlSection} setSection={setControlSection} flash={flashEnabled} commercial={commercial}/>
+    <div id="control-secciones"><ControlNavigation section={controlSection} setSection={setControlSection} flash={flashEnabled} commercial={commercial}/></div>
     {!['business','flash','settlements'].includes(controlSection)&&<ControlWorkspace key={controlSection} section={controlSection}
      api={api} restaurants={adminRestaurants} offline={offline} busy={busy} run={run} money={price} errorLabel={errorLabel}/>}
     {controlSection==='accounts'&&<>

@@ -45,6 +45,24 @@ async function route(req,env){
   const last=restaurants.at(-1);
   return respond(req,env,200,{restaurants,...results.length>100&&{next:{afterName:last.name,afterId:last.id}}});
  }
+ if(method==='GET'&&path==='/api/v1/catalog/feed'){
+  const cursor=url.searchParams.get('after');
+  const term=(url.searchParams.get('q')||'').trim();
+  if(term.length>60)throw new ApiError(400,'INVALID_SEARCH');
+  if(cursor!==null)requireUuid(cursor);
+  const where=cursor===null?'':' AND p.id>?';
+  const search=term?' AND (instr(lower(p.name),lower(?))>0 OR instr(lower(r.name),lower(?))>0 OR instr(lower(coalesce(p.category,\'\')),lower(?))>0)':'';
+  const bindings=[...(cursor===null?[]:[cursor]),...(term?[term,term,term]:[])];
+  const stmt=env.DB.prepare(`SELECT p.id,p.name,p.price_minor,p.category,r.id AS restaurant_id,
+   r.name AS restaurant_name,r.online_state,
+   EXISTS(SELECT 1 FROM restaurant_product_photos photo WHERE photo.product_id=p.id) AS has_photo
+   FROM products p JOIN restaurants r ON r.id=p.restaurant_id
+   WHERE p.available=1 AND r.plan IN ('ONLINE','PLUS') AND r.subscription_status='active'
+   AND r.online_state IN ('open','paused')`+where+search+' ORDER BY p.id LIMIT 25');
+  const {results=[]}=await (bindings.length?stmt.bind(...bindings):stmt).all();
+  const products=results.slice(0,24).map(({has_photo,...product})=>({...product,photoUrl:has_photo?'/api/v1/catalog/photos/'+product.id:null}));
+  return respond(req,env,200,{products,next:results.length>24?products.at(-1).id:null});
+ }
  if(method==='GET'&&path==='/api/v1/catalog/search'){
   const term=(url.searchParams.get('q')||'').trim();
   if(term.length<2||term.length>60)throw new ApiError(400,'INVALID_SEARCH');

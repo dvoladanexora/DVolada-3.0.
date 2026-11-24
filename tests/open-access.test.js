@@ -5,7 +5,12 @@ import {readFileSync} from 'node:fs';
 const file=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('live build is public and no longer requires Firebase',()=>{
  const main=file('src/main.jsx'),publicView=file('src/live/OpenAccessApp.jsx');
- assert.match(main,/IS_LIVE_BUILD\?<OpenAccessApp\/>/);
+ assert.match(main,/IS_LIVE_BUILD\?<App connected\/>/);
+ assert.match(main,/connected\?\[\]:stored\('dv_places',initialPlaces\)/);
+ assert.match(main,/await liveApi\.restaurants\(\)/);
+ assert.match(main,/await liveApi\.products\(r.id\)/);
+ assert.match(main,/function placeOrder\(\)\{if\(connected\)return false/);
+ assert.match(main,/writeLiveCart\('guest'/);
  assert.doesNotMatch(publicView,/firebase|signInWithEmailAndPassword|createUserWithEmailAndPassword/i);
  assert.match(publicView,/api\.restaurants\(\)/);
  assert.match(publicView,/api\.products\(id\)/);

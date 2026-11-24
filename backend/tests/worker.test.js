@@ -1358,3 +1358,17 @@ test('invited administrators and owners authenticate with passkeys and retain se
  assert.equal(again.status,204);
  assert.equal((await passkeyRequest(f,'auth/logout',undefined,{cookie:partCookie(again),account:admin,method:'POST'})).status,204);
 });
+
+test('catalog client pages through four hundred open restaurants with equal names',async()=>{
+ const f=await fixture();
+ const insert=f.DB.db.prepare("INSERT INTO restaurants(id,name,plan,subscription_status,online_state) VALUES(?,'Comedor & Café','ONLINE','active','open')");
+ for(let i=0;i<398;i++)insert.run(randomUUID());
+ const {createLiveApi}=await import('../../src/live/live-api.js');
+ let pages=0;
+ const api=createLiveApi({baseUrl:'https://dvolada.example',getSessionToken:()=>null,
+  fetchImpl:(url,options)=>{pages++;return worker.fetch(new Request(url,options),f.env)}});
+ const catalog=await api.restaurants();
+ assert.equal(pages,4);
+ assert.equal(catalog.restaurants.length,400);
+ assert.equal(new Set(catalog.restaurants.map(row=>row.id)).size,400);
+});

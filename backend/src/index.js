@@ -34,10 +34,16 @@ async function route(req,env){
   return respond(req,env,200,{status:'ok',service:'dvolada-online',version:1});
  }
  if(method==='GET'&&path==='/api/v1/catalog/restaurants'){
-  const {results=[]}=await env.DB.prepare(`SELECT id,name,online_state,delivery_fee_minor
+  const afterName=url.searchParams.get('afterName'),afterId=url.searchParams.get('afterId');
+  if((afterName===null)!==(afterId===null))throw new ApiError(400,'INVALID_CURSOR');
+  const continuation=afterId===null?'':' AND (name,id)>(?,?)';
+  const statement=env.DB.prepare(`SELECT id,name,online_state,delivery_fee_minor
    FROM restaurants WHERE plan IN ('ONLINE','PLUS') AND subscription_status='active'
-    AND online_state IN ('open','paused') ORDER BY name,id LIMIT 100`).all();
-  return respond(req,env,200,{restaurants:results});
+    AND online_state IN ('open','paused')`+continuation+' ORDER BY name,id LIMIT 101');
+  const {results}=await (afterId===null?statement:statement.bind(afterName,afterId)).all();
+  const restaurants=results.slice(0,100);
+  const last=restaurants.at(-1);
+  return respond(req,env,200,{restaurants,...results.length>100&&{next:{afterName:last.name,afterId:last.id}}});
  }
  if(method==='GET'&&path==='/api/v1/catalog/search'){
   const term=(url.searchParams.get('q')||'').trim();

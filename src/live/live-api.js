@@ -35,7 +35,17 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
  const s=id=>encodeURIComponent(id);
  return {
   health:()=>request('/health',{auth:false}),
-  restaurants:()=>request('/api/v1/catalog/restaurants',{auth:false}),
+  async restaurants(){
+   const rows=new Map();
+   let next=null;
+   do{
+    const query=next?'?'+new URLSearchParams(next):'';
+    const page=await request('/api/v1/catalog/restaurants'+query,{auth:false});
+    for(const restaurant of page.restaurants)rows.set(restaurant.id,restaurant);
+    next=page.next;
+   }while(next);
+   return {restaurants:[...rows.values()]};
+  },
   products:id=>request('/api/v1/catalog/restaurants/'+s(id)+'/products',{auth:false}),
   searchProducts:(term,signal)=>request('/api/v1/catalog/search?q='+s(term),{auth:false,signal}),
   exchange:(idToken,deviceLabel)=>request('/api/v1/auth/exchange',{auth:false,method:'POST',body:{idToken,deviceLabel}}),

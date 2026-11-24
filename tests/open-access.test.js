@@ -28,3 +28,15 @@ test('server requires a contact phone without OTP and keeps sales off by default
  assert.match(config,/ORDER_CREATION_ENABLED:bindings\.text\('false'\)/);
  assert.doesNotMatch(file('backend/src/index.js'),/exchangeFirebase|FIREBASE_PROJECT_ID/);
 });
+
+test('original welcome sends each user to the correct real access form',()=>{
+ const ui=file('src/live/OpenAccessApp.jsx'),access=file('src/live/ClientAccess.jsx');
+ assert.match(ui,/enter\('account','register'\)/);
+ assert.match(ui,/enter\('account',welcomePortal==='login'\?'login':'recover','restaurant'\)/);
+ assert.match(ui,/enter\('account',welcomePortal==='login'\?'login':'register','courier'\)/);
+ assert.match(ui,/openRestaurant\(place.id\)/);
+ assert.match(access,/Object.hasOwn\(actions,requestedMode\)/);
+ assert.match(access,/await authenticate\(mode,body\)/);
+ assert.doesNotMatch(access,/body\.role\s*=/);
+ assert.match(ui,/if\(!writeCart\('guest',draft\)\)/);
+});

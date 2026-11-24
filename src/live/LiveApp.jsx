@@ -15,6 +15,7 @@ import {RestaurantProfile,RestaurantStaff,ProductDetails} from './RestaurantSett
 import ClientSupport from './ClientSupport.jsx';
 import CatalogSearch from './CatalogSearch.jsx';
 import FoodFeed from './FoodFeed.jsx';
+import PublishFood from './PublishFood.jsx';
 import {readCart,writeCart,updateQuantity} from './cart-draft.js';
 
 function OwnerInvitation({restaurantId,invite,disabled}){
@@ -148,7 +149,7 @@ export default function LiveApp(){
  const [orders,setOrders]=useState([]),[selectedRestaurantId,setSelectedRestaurantId]=useState('');
  const [orderDetail,setOrderDetail]=useState(null);
  const [couriers,setCouriers]=useState([]),[courierChoice,setCourierChoice]=useState({});
- const [manageProducts,setManageProducts]=useState([]),[newProductName,setNewProductName]=useState(''),[newProductPrice,setNewProductPrice]=useState('');
+ const [manageProducts,setManageProducts]=useState([]);
  const [editPrices,setEditPrices]=useState({}),[restaurantCapabilities,setRestaurantCapabilities]=useState(null);
  const [newRestaurantName,setNewRestaurantName]=useState(''),[newRestaurantPlan,setNewRestaurantPlan]=useState('ONLINE');
  const [controlSection,setControlSection]=useState('operations');
@@ -560,11 +561,11 @@ export default function LiveApp(){
  const formattedUserId=session?.user?.id||'';
  return <div className="dvl-app">
   <header className="dvl-header"><div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada" /><div><strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
-   <div className="dvl-head-actions"><label className="dvl-theme">Tema<select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy||offline} onClick={()=>logout()}><LogOut size={15}/> Salir</Action>}</div></header>
+   <div className="dvl-head-actions"><a className="dvl-action secondary" href="/">Inicio</a><label className="dvl-theme">Tema<select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy||offline} onClick={()=>logout()}><LogOut size={15}/> Salir</Action>}</div></header>
   <main className="dvl-main">
   <div className="dvl-intro"><span className="dvl-kicker">NEXORA SYSTEMS · DVOLADA ONLINE</span>
    <h1>{session?(scope==='restaurant'&&selectedBusiness?.staff_role==='kitchen'?'Cocina':roles[scope]) :(qaView?'Dvolada · Entorno de pruebas':'Dvolada · Mi cuenta')}</h1>
-   <p>{session?'Todas las acciones oficiales se comprueban y guardan en el servidor.':'Accedé para hacer y seguir pedidos con seguridad.'}</p></div>
+   <p>{session?'Gestioná tu actividad en Dvolada.':'Accedé para hacer y seguir pedidos con seguridad.'}</p></div>
   {offline&&<div className="dvl-offline" role="alert"><WifiOff size={19}/> Sin conexión. Los pedidos se muestran como potencialmente desactualizados; las acciones están bloqueadas.</div>}
   <WaitOrError message={status}/>
   <WaitOrError message={error} warning/>
@@ -706,10 +707,11 @@ export default function LiveApp(){
     <section className="dvl-panel"><div className="dvl-row"><h2>{kitchenRole?'Pantalla de cocina':cashRole?'Caja del restaurante':'Centro de pedidos'}</h2><label>Negocio<select value={selectedRestaurantId}
      onChange={e=>{setBoard('active');setOrderDetail(null);setSupport(null);setOrders([]);setManageProducts([]);setRestaurantCapabilities(null);setCouriers([]);setEditPrices({});setCourierChoice({});setSelectedRestaurantId(e.target.value)}}>{session.restaurants?.map(r=><option key={r.restaurant_id} value={r.restaurant_id}>{r.name}</option>)}</select></label></div>
      {canManage&&<nav className="dvl-inline dvl-client-modes" aria-label="Secciones de Restaurante Cloud">
-      {Object.entries({active:'Pedidos activos',history:'Historial',menu:'Menú',settings:'Perfil y personal',cash:'Caja y ventas',...(commercial?{settlements:'Liquidaciones'}:{})}).map(([tab,label])=>
+      {Object.entries({active:'Pedidos activos',history:'Historial',menu:'Subir comida y menú',settings:'Perfil y personal',cash:'Caja y ventas',...(commercial?{settlements:'Liquidaciones'}:{})}).map(([tab,label])=>
        <button type="button" key={tab} aria-pressed={restaurantTab===tab} disabled={busy} className={'dvl-action '+(restaurantTab===tab?'':'secondary')}
         onClick={()=>setBoard(tab)}>{label}</button>)}
      </nav>}
+     {canManage&&restaurantTab==='active'&&<Action onClick={()=>setBoard('menu')} disabled={busy}>Subir comida</Action>}
      {kitchenRole&&<p>Comandas aceptadas, de la más antigua a la reciente.</p>}
     </section>
     {canManage&&restaurantTab==='settings'&&<>
@@ -733,14 +735,7 @@ export default function LiveApp(){
      </div>
     </section>}
     {canManage&&restaurantTab==='menu'&&<section className="dvl-panel"><h2>Menú del restaurante</h2>
-     <div className="dvl-grid dvl-editor">
-      <label>Nuevo producto<input value={newProductName} maxLength={150} onChange={e=>setNewProductName(e.target.value)} placeholder="Nombre del producto"/></label>
-      <label>Precio (L)<input type="number" min="0" step=".01" value={newProductPrice} onChange={e=>setNewProductPrice(e.target.value)} placeholder="95.00"/></label>
-      <Action disabled={busy||offline||newProductName.trim().length<2||!Number.isFinite(Number(newProductPrice))||Number(newProductPrice)<=0}
-       onClick={async()=>{const saved=await action(()=>api.createProduct(selectedRestaurantId,{name:newProductName.trim(),
-        priceMinor:Math.round(Number(newProductPrice)*100),available:true}));
-        if(saved){setNewProductName('');setNewProductPrice('')}}}>Añadir al menú</Action>
-     </div>
+     <PublishFood key={selectedRestaurantId} api={api} restaurantId={selectedRestaurantId} run={run} busy={busy} offline={offline}/>
      <div className="dvl-stack dvl-manage-menu">{manageProducts.map(p=><div className="dvl-stack" key={p.id}><div className="dvl-row">
       <div><strong>{p.name}</strong><small>{p.available?'Disponible':'Agotado'} · {price(p.price_minor)}</small></div>
       <div className="dvl-inline">
@@ -779,7 +774,7 @@ export default function LiveApp(){
       </>}
       <div className="dvl-inline">{(staffTransitions[o.status]||[]).filter(next=>canManage||
        (selectedBusiness?.staff_role==='kitchen'&&['Preparando','Listo'].includes(next))).map(next=><Action key={next} disabled={busy||offline}
-        onClick={()=>action(()=>api.restaurantStatus(selectedRestaurantId,o,next,newKey()))}>{next}</Action>)}</div>
+        onClick={()=>action(()=>api.restaurantStatus(selectedRestaurantId,o,next,newKey()))}>{{Aceptado:'Aceptar pedido',Rechazado:'Rechazar pedido',Preparando:'Preparar pedido',Listo:'Marcar listo',Cancelado:'Cancelar pedido'}[next]||next}</Action>)}</div>
       {canManage&&o.status==='Listo'&&o.deliveryMethod==='pickup'&&<Action disabled={busy||offline} onClick={()=>action(()=>api.restaurantStatus(selectedRestaurantId,o,'Entregado',newKey()))}>Entregar en mostrador</Action>}
       {canManage&&o.deliveryMethod==='delivery'&&!o.courierId&&['Aceptado','Preparando','Listo'].includes(o.status)&&
        <div className="dvl-assign"><label>Repartidor<select value={courierChoice[o.id]||''} onChange={e=>setCourierChoice(x=>({...x,[o.id]:e.target.value}))}>

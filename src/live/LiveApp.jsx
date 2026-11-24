@@ -2,7 +2,7 @@ import RestaurantKitchenDisplay from '../RestaurantKitchenDisplay.jsx';
 import {openKitchenTicket} from '../kitchen-operations.js';
 import SlideConfirm from '../SlideConfirm.jsx';
 import {playOrderChirp} from '../order-chirp.js';
-import {ControlNavigation,ControlWorkspace} from './ControlWorkspace.jsx';
+import {ControlNavigation,ControlSubnavigation,ControlOverview,ControlWorkspace} from './ControlWorkspace.jsx';
 import {CourierConsole,CourierApplication,CourierApplications} from './CourierWorkspace.jsx';
 import {StaffSignIn,StaffSecret,ManageStaffAccess,SettlementPanel} from './RestaurantCommercial.jsx';
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
@@ -157,7 +157,8 @@ export default function LiveApp({CustomerHome}){
  const [manageProducts,setManageProducts]=useState([]);
  const [editPrices,setEditPrices]=useState({}),[restaurantCapabilities,setRestaurantCapabilities]=useState(null);
  const [newRestaurantName,setNewRestaurantName]=useState(''),[newRestaurantPlan,setNewRestaurantPlan]=useState('ONLINE');
- const [controlSection,setControlSection]=useState('operations');
+ const [controlSection,setControlSection]=useState('summary');
+ const [adminBusinessSearch,setAdminBusinessSearch]=useState(''),[adminCreateOpen,setAdminCreateOpen]=useState(false);
  const [adminSelectedId,setAdminSelectedId]=useState(''),[adminMemberId,setAdminMemberId]=useState(''),[adminStaffRole,setAdminStaffRole]=useState('owner');
  const [adminCourierId,setAdminCourierId]=useState('');
  const [adminFee,setAdminFee]=useState(''),[audit,setAudit]=useState(null);
@@ -189,7 +190,7 @@ export default function LiveApp({CustomerHome}){
   setSession(null);setScope('customer');setSelectedRestaurantId('');
   setOrders([]);setOrderDetail(null);setPrintReceipt(false);setRestaurantTab('active');setHistoryCursor(null);setNextHistory(null);setManageProducts([]);setRestaurantCapabilities(null);
   setCouriers([]);setCourierChoice({});setAdminStats(null);setAdminRestaurants([]);
-  setControlSection('operations');setAdminFee('');setAdminSelectedId('');setAdminCourierId('');setAdminMemberId('');setAudit(null);
+  setControlSection('summary');setAdminBusinessSearch('');setAdminCreateOpen(false);setAdminFee('');setAdminSelectedId('');setAdminCourierId('');setAdminMemberId('');setAudit(null);
   setNewRestaurantName('');setNewRestaurantPlan('ONLINE');setAdminStaffRole('owner');
   setNewProductName('');setNewProductPrice('');setEditPrices({});
   setCart([]);setCartRestaurantId('');setShoppingRestaurant('');setProducts([]);setCatalogTerm('');
@@ -569,6 +570,9 @@ export default function LiveApp({CustomerHome}){
  const boardOrders=kitchenRole?[...orders].sort((a,b)=>a.createdAt-b.createdAt||a.orderNumber.localeCompare(b.orderNumber)):orders;
  const setBoard=tab=>{setRestaurantTab(tab);setHistoryCursor(null);setNextHistory(null);setOrderDetail(null);setSupport(null);setOrders([])};
  const formattedUserId=session?.user?.id||'';
+ const adminMode=Boolean(session&&scope==='admin');
+ const selectControlSection=section=>{setControlSection(section);window.scrollTo({top:0,behavior:'instant'})};
+ const selectedAdminBusiness=adminRestaurants.find(r=>r.id===adminSelectedId);
  const jump=id=>document.getElementById(id)?.scrollIntoView({block:'start'});
  const sectionAction=(change,value,id)=>()=>{change(value);requestAnimationFrame(()=>jump(id))};
  const shortcuts=session?[
@@ -620,22 +624,29 @@ export default function LiveApp({CustomerHome}){
   };
   return <CustomerHome key={cartAccount} connected customerId={cartAccount} initialPage={initialPage} liveCustomer={liveCustomer} onSignOut={()=>logout()}/>;
  }
- return <div className={session?"dvl-app dvl-account-shell":"dvl-app"}>
-  <header className="dvl-header"><div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada" /><div><strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
-   <div className="dvl-head-actions"><a className="dvl-action secondary" href="/">Inicio</a><label className="dvl-theme">Tema<select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy||offline} onClick={()=>logout()}><LogOut size={15}/> Salir</Action>}</div></header>
-  {session&&<nav className="dvl-shortcuts" aria-label="Navegación principal">{shortcuts.map(([label,Icon,action])=>
+ return <div className={adminMode?"dvl-app dvl-account-shell dvl-admin-shell":session?"dvl-app dvl-account-shell":"dvl-app"}>
+  {adminMode?<header className="dvl-header dvl-admin-header">
+   <a className="dvl-admin-brand" href="/" aria-label="Inicio de Dvolada"><img src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada"/><span><strong>Dvolada</strong><small>Centro de Control</small></span></a>
+   <div className="dvl-admin-header-actions">
+    <label className="dvl-theme"><span className="dvl-admin-visually-hidden">Tema</span><select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>
+    <button type="button" className="dvl-admin-icon-button" aria-label="Actualizar Centro de Control" title="Actualizar" disabled={busy||offline} onClick={()=>run(()=>load(scope,selectedRestaurantId),{refresh:false})}><RefreshCw size={18}/></button>
+    <button type="button" className="dvl-admin-icon-button" aria-label="Mi acceso" title="Mi acceso" onClick={()=>selectControlSection('security')}><Users size={19}/></button>
+   </div>
+  </header>:<header className="dvl-header"><div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada" /><div><strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
+   <div className="dvl-head-actions"><a className="dvl-action secondary" href="/">Inicio</a><label className="dvl-theme">Tema<select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy||offline} onClick={()=>logout()}><LogOut size={15}/> Salir</Action>}</div></header>}
+  {adminMode?<ControlNavigation section={controlSection} setSection={selectControlSection} flash={flashEnabled} commercial={commercial}/>:session&&<nav className="dvl-shortcuts" aria-label="Navegación principal">{shortcuts.map(([label,Icon,action])=>
    <button type="button" key={label} onClick={action}><Icon size={20} aria-hidden="true"/>{label}</button>)}</nav>}
   <main className="dvl-main">
   <div className="dvl-intro"><span className="dvl-kicker">NEXORA SYSTEMS · DVOLADA ONLINE</span>
    <h1>{session?(scope==='restaurant'&&selectedBusiness?.staff_role==='kitchen'?'Cocina':roles[scope]) :(qaView?'Dvolada · Entorno de pruebas':'Dvolada · Mi cuenta')}</h1>
-   <p>{session?'Gestioná tu actividad en Dvolada.':'Accedé para hacer y seguir pedidos con seguridad.'}</p></div>
+   <p>{adminMode?'Administrá tu red de negocios y entregas.':session?'Gestioná tu actividad en Dvolada.':'Accedé para hacer y seguir pedidos con seguridad.'}</p></div>
   {offline&&<div className="dvl-offline" role="alert"><WifiOff size={19}/> Sin conexión. Los pedidos se muestran como potencialmente desactualizados; las acciones están bloqueadas.</div>}
   <WaitOrError message={status}/>
   <WaitOrError message={error} warning/>
   <WaitOrError message={refreshWarning}/>
-  {session&&<details><summary>Datos de vinculación</summary><div className="dvl-id-note"><span>ID de vinculación: <code>{formattedUserId}</code></span><Action kind="text"
+  {session&&(!adminMode||controlSection==='security')&&<details className={adminMode?'dvl-panel dvl-admin-details':undefined}><summary>Datos de vinculación</summary><div className="dvl-id-note"><span>ID de vinculación: <code>{formattedUserId}</code></span><Action kind="text"
    onClick={()=>navigator.clipboard?.writeText(formattedUserId).catch(()=>{})}>Copiar</Action></div></details>}
-    {session?.user.privilegedPasskey&&<Action kind="text" disabled={busy||offline}
+    {session?.user.privilegedPasskey&&(!adminMode||controlSection==='security')&&<Action kind="text" disabled={busy||offline}
    onClick={()=>{if(window.confirm('¿Cerrar todas las sesiones de esta cuenta?'))logout(true)}}>Cerrar todas mis sesiones</Action>}
   {staffCredential&&<StaffSecret code={staffCredential} close={()=>setStaffCredential(null)} issued/>}
   {!session&&commercial&&accountEnabled&&<StaffSignIn authenticate={authenticateStaff} disabled={busy||offline}/>}
@@ -650,14 +661,14 @@ export default function LiveApp({CustomerHome}){
    <a href="/">Explorar catálogo sin iniciar sesión</a>
   </form>}
   {session&&<>
-   <nav className="dvl-roles" aria-label="Paneles autorizados">{availableScopes.map(s=><button key={s} className={scope===s?'active':''}
+   {(!adminMode||availableScopes.length>1)&&<nav className="dvl-roles" aria-label="Paneles autorizados">{availableScopes.map(s=><button key={s} className={scope===s?'active':''}
     onClick={()=>{setScope(s);setError('');setSupport(null);setSelectedPin(null);setOrderDetail(null)}}>{s==='customer'?<ShoppingBag size={17}/>:s==='restaurant'?<Store size={17}/>:s==='courier'?<Bike size={17}/>:<ShieldCheck size={17}/>} {roles[s]}</button>)}
-    <Action kind="secondary" disabled={busy||offline} onClick={()=>run(()=>load(scope,selectedRestaurantId),{refresh:false})}><RefreshCw size={15}/> Actualizar</Action>
+    {!adminMode&&<Action kind="secondary" disabled={busy||offline} onClick={()=>run(()=>load(scope,selectedRestaurantId),{refresh:false})}><RefreshCw size={15}/> Actualizar</Action>}
     {pushConfig?.enabled&&<>
      {!pushEnabled&&<Action kind="secondary" disabled={busy||offline} onClick={()=>setQaPush(true)}>Activar notificaciones</Action>}
      <Action kind="secondary" disabled={busy||offline} onClick={()=>setQaPush(false)}>Desactivar notificaciones</Action>
     </>}
-   </nav>
+   </nav>}
     {support&&(support.order||orders.some(order=>order.id===support.id))&&<ClientSupport key={support.id+support.mode}
      mode={support.mode} counterpart={support.mode==='dispatch'?(scope==='courier'?'Restaurante':'Repartidor'):scope!=='customer'?'Cliente':null} order={support.order||orders.find(order=>order.id===support.id)} api={api} offline={offline}
      close={()=>setSupport(null)} onSessionError={handleSessionError}/>}
@@ -868,72 +879,81 @@ export default function LiveApp({CustomerHome}){
    {scope==='courier'&&<CourierConsole api={api} profile={courierProfile} orders={orders} busy={busy} offline={offline}
     action={action} run={run} money={price} errorLabel={errorLabel} endSession={endLocalSession}
     openChat={(order,mode)=>setSupport({id:order.id,order,mode})}/>}
-   {scope==='admin'&&<div className="dvl-stack"><section className="dvl-panel" id="control"><h2>Centro de Control</h2>
-    <p className="dvl-muted">Resumen operativo en el servidor. La autorización se comprueba en cada solicitud.</p>
-    <div className="dvl-stats"><div><strong>{adminStats?.restaurants?.total??'—'}</strong><span>Restaurantes</span></div>
-     <div><strong>{adminStats?.restaurants?.open??'—'}</strong><span>Abiertos</span></div>
-     <div><strong>{adminStats?.orders?.active??'—'}</strong><span>Pedidos activos</span></div>
-     <div><strong>{adminStats?.orders?.delivered??'—'}</strong><span>Entregados</span></div>
-     <div><strong>{adminStats?.couriers?.active??'—'}</strong><span>Repartidores habilitados</span></div></div></section>
-    <div id="control-secciones"><ControlNavigation section={controlSection} setSection={setControlSection} flash={flashEnabled} commercial={commercial}/></div>
-    {!['business','flash','settlements'].includes(controlSection)&&<ControlWorkspace key={controlSection} section={controlSection}
+   {scope==='admin'&&<div className="dvl-stack dvl-admin-content" id="control-secciones">
+    <ControlSubnavigation section={controlSection} setSection={selectControlSection} flash={flashEnabled} commercial={commercial}/>
+    {controlSection==='summary'&&<ControlOverview stats={adminStats} setSection={selectControlSection}/>}
+    {['operations','accounts','claims','coupons','rates','reports','audit'].includes(controlSection)&&<ControlWorkspace key={controlSection} section={controlSection}
      api={api} restaurants={adminRestaurants} offline={offline} busy={busy} run={run} money={price} errorLabel={errorLabel}/>}
-    {controlSection==='accounts'&&<>
-     <section className="dvl-panel"><h2>Invitar propietario</h2>
+    {controlSection==='security'&&<section className="dvl-panel dvl-stack">
+     <h2>Mi acceso</h2><div className="dvl-admin-identity"><span className="dvl-admin-avatar"><ShieldCheck size={23}/></span><div><strong>{session.user.displayName}</strong><small>Administrador global</small></div></div>
+     <p className="dvl-muted">Administrá tu sesión y tus preferencias de acceso.</p>
+     {pushConfig?.enabled&&<Action kind="secondary" disabled={busy||offline} onClick={()=>setQaPush(!pushEnabled)}>{pushEnabled?'Desactivar notificaciones':'Activar notificaciones'}</Action>}
+     <Action kind="secondary" disabled={busy||offline} onClick={()=>logout()}><LogOut size={17}/> Cerrar sesión</Action>
+     <a className="dvl-action secondary" href="/">Ir a Dvolada</a>
+    </section>}
+    {controlSection==='owners'&&<section className="dvl-panel dvl-stack"><h2>Invitar propietario</h2>
+      <p className="dvl-muted">Seleccioná el restaurante y generá una invitación privada para su propietario.</p>
       <label>Restaurante<select value={adminSelectedId} onChange={e=>setAdminSelectedId(e.target.value)}>
        <option value="">Seleccionar</option>{adminRestaurants.filter(r=>r.plan!=='LOCAL').map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-     {session.user.privilegedPasskey&&adminSelectedId&&<OwnerInvitation key={adminSelectedId}
+     {session.user.privilegedPasskey&&selectedAdminBusiness&&selectedAdminBusiness.plan!=='LOCAL'&&<OwnerInvitation key={adminSelectedId}
       restaurantId={adminSelectedId} disabled={busy||offline}
       invite={(id,body)=>run(()=>api.adminInviteOwner(id,body,newKey()),{refresh:false})}/>}
-     </section>
+    </section>}
+    {controlSection==='couriers'&&<>
      <CourierApplications api={api} run={run} busy={busy} offline={offline} errorLabel={errorLabel}/>
+     <details className="dvl-panel dvl-admin-details"><summary>Vincular repartidor registrado</summary>
+      <div className="dvl-grid dvl-editor"><label>ID de repartidor<input value={adminCourierId} onChange={e=>setAdminCourierId(e.target.value)} placeholder="UUID de usuario verificado"/></label>
+      <Action disabled={busy||offline||adminCourierId.length<32} onClick={()=>action(()=>api.adminEnrollCourier(adminCourierId.trim()))}>Habilitar repartidor</Action></div>
+     </details>
     </>}
-    {controlSection==='business'&&<>
-    <section className="dvl-panel"><h2>Negocios afiliados</h2><div className="dvl-stack">{adminRestaurants.map(r=><div className="dvl-row" key={r.id}>
-     <strong>{r.name}</strong><span>{r.plan} · {r.subscription_status} · {r.online_state} · {r.order_count} pedidos</span></div>)}</div></section>
-    <section className="dvl-panel">
-     <h2>Alta de negocios y afiliados</h2>
-     <p className="dvl-muted">Solo Nexora puede activar suscripciones y vincular personal. El negocio se crea cerrado e inactivo por seguridad.</p>
-     <div className="dvl-grid dvl-editor">
-      <label>Nuevo restaurante<input value={newRestaurantName} maxLength={160} onChange={e=>setNewRestaurantName(e.target.value)} placeholder="Nombre comercial"/></label>
-      <label>Plan<select value={newRestaurantPlan} onChange={e=>setNewRestaurantPlan(e.target.value)}>
-       <option value="ONLINE">Dvolada Cloud</option><option value="LOCAL">Dvolada Local</option><option value="PLUS">Dvolada Plus</option></select></label>
-      <Action disabled={busy||offline||newRestaurantName.trim().length<2}
-       onClick={async()=>{const result=await action(()=>api.adminCreateRestaurant({name:newRestaurantName,plan:newRestaurantPlan}));
-        if(result){setAdminSelectedId(result.restaurant.id);setNewRestaurantName('')}}}>Crear negocio</Action>
-     </div>
-     <label>Negocio para administrar<select value={adminSelectedId} onChange={e=>{setAdminSelectedId(e.target.value);setAdminFee('')}}>
-      <option value="">Seleccionar</option>{adminRestaurants.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-     <div className="dvl-inline dvl-control-actions">
-      {adminRestaurants.filter(r=>r.id===adminSelectedId).map(r=><React.Fragment key={r.id}>
-       <Action kind="secondary" disabled={busy||offline||r.subscription_status==='active'}
-        onClick={()=>action(()=>api.adminUpdateRestaurant(r.id,{subscriptionStatus:'active'}))}>Activar suscripción</Action>
-       <Action kind="secondary" disabled={busy||offline||r.subscription_status==='inactive'}
-        onClick={()=>action(()=>api.adminUpdateRestaurant(r.id,{subscriptionStatus:'inactive'}))}>Suspender</Action>
-      </React.Fragment>)}
-     </div>
-     {adminRestaurants.filter(r=>r.id===adminSelectedId).map(r=><div className="dvl-grid dvl-editor" key={r.id}>
-      <label>Tarifa de envío (L)<input value={adminFee} type="number" min="0" max="1000000" step=".01"
-       placeholder={(r.delivery_fee_minor/100).toFixed(2)} onChange={event=>setAdminFee(event.target.value)}/></label>
-      <Action disabled={busy||offline||!/^\d{1,7}(?:\.\d{1,2})?$/.test(adminFee)||Number(adminFee)>1000000}
-       onClick={async()=>{if(await action(()=>api.adminUpdateRestaurant(r.id,{deliveryFeeMinor:Math.round(Number(adminFee)*100)})))setAdminFee('')}}>
-       Guardar tarifa</Action>
-     </div>)}
+    {controlSection==='staff'&&<section className="dvl-panel dvl-stack"><h2>Personal de restaurantes</h2>
+     <label>Negocio para administrar<select value={adminSelectedId} onChange={e=>setAdminSelectedId(e.target.value)}><option value="">Seleccionar</option>{adminRestaurants.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
      <div className="dvl-grid dvl-editor">
       <label>ID de usuario registrado<input value={adminMemberId} onChange={e=>setAdminMemberId(e.target.value)} placeholder="UUID del usuario"/></label>
       <label>Rol del empleado<select value={adminStaffRole} onChange={e=>setAdminStaffRole(e.target.value)}>
-       {['owner','manager','kitchen','cashier'].map(s=><option value={s} key={s}>{s}</option>)}</select></label>
-      <Action disabled={busy||offline||!adminSelectedId||adminMemberId.length<32}
-       onClick={()=>action(()=>api.adminAssignMember(adminSelectedId,{userId:adminMemberId.trim(),staffRole:adminStaffRole}))}>
-       Vincular empleado</Action>
-     </div>
-     <div className="dvl-grid dvl-editor">
-      <label>ID de repartidor<input value={adminCourierId} onChange={e=>setAdminCourierId(e.target.value)} placeholder="UUID de usuario verificado"/></label>
-      <Action disabled={busy||offline||adminCourierId.length<32}
-       onClick={()=>action(()=>api.adminEnrollCourier(adminCourierId.trim()))}>Habilitar repartidor</Action>
-     </div>
-    </section>
-
+       {Object.entries({owner:'Propietario',manager:'Encargado',kitchen:'Cocina',cashier:'Caja'}).map(([id,label])=><option value={id} key={id}>{label}</option>)}</select></label>
+      <Action disabled={busy||offline||!selectedAdminBusiness||adminMemberId.length<32}
+       onClick={()=>action(()=>api.adminAssignMember(adminSelectedId,{userId:adminMemberId.trim(),staffRole:adminStaffRole}))}>Vincular empleado</Action>
+     </div></section>}
+    {controlSection==='business'&&<>
+     <section className="dvl-panel dvl-stack">
+      <div className="dvl-admin-section-heading"><h2>Negocios afiliados</h2><button type="button" className="dvl-action" aria-expanded={adminCreateOpen} onClick={()=>setAdminCreateOpen(v=>!v)}>{adminCreateOpen?'Cerrar formulario':'+ Nuevo negocio'}</button></div>
+      {adminCreateOpen&&<div className="dvl-admin-form-box"><h3>Registrar negocio</h3><p className="dvl-muted">El negocio se crea cerrado e inactivo. Podés activarlo después de verificar su afiliación.</p>
+       <div className="dvl-grid dvl-editor">
+        <label>Nuevo restaurante<input value={newRestaurantName} maxLength={160} onChange={e=>setNewRestaurantName(e.target.value)} placeholder="Nombre comercial"/></label>
+        <label>Plan<select value={newRestaurantPlan} onChange={e=>setNewRestaurantPlan(e.target.value)}>
+         <option value="ONLINE">Dvolada Cloud</option><option value="LOCAL">Dvolada Local</option><option value="PLUS">Dvolada Plus</option></select></label>
+        <Action disabled={busy||offline||newRestaurantName.trim().length<2}
+         onClick={async()=>{const result=await action(()=>api.adminCreateRestaurant({name:newRestaurantName,plan:newRestaurantPlan}));
+          if(result){setAdminSelectedId(result.restaurant.id);setAdminFee('');setNewRestaurantName('');setAdminCreateOpen(false);setAdminBusinessSearch('')}}}>Crear negocio</Action>
+       </div></div>}
+      <label className="dvl-admin-search">Buscar negocio<input type="search" value={adminBusinessSearch} onChange={e=>setAdminBusinessSearch(e.target.value)} placeholder="Nombre del restaurante"/></label>
+      <div className="dvl-admin-business-list">{adminRestaurants.filter(r=>r.name.toLowerCase().includes(adminBusinessSearch.trim().toLowerCase())).map(r=>
+       <button className={'dvl-admin-business-row '+(r.id===adminSelectedId?'selected':'')} type="button" key={r.id} aria-pressed={r.id===adminSelectedId} onClick={()=>{setAdminSelectedId(r.id);setAdminFee('')}}>
+        <span className="dvl-admin-business-icon"><Store size={20}/></span><span className="dvl-admin-business-name"><strong>{r.name}</strong><small>{{ONLINE:'Cloud',LOCAL:'Local',PLUS:'Plus'}[r.plan]||r.plan} · {r.order_count??0} pedidos</small></span>
+        <span className={'dvl-admin-state '+(r.subscription_status==='active'?'is-active':'')}>{r.subscription_status==='active'?'Activo':'Inactivo'}</span><ArrowRight size={16} aria-hidden="true"/>
+       </button>)}
+       {!adminRestaurants.some(r=>r.name.toLowerCase().includes(adminBusinessSearch.trim().toLowerCase()))&&<p className="dvl-muted">No hay negocios para esta búsqueda.</p>}
+      </div>
+     </section>
+     {selectedAdminBusiness&&<section className="dvl-panel dvl-stack dvl-admin-business-detail">
+      <div className="dvl-admin-section-heading"><h2>{selectedAdminBusiness.name}</h2><button className="dvl-action secondary" type="button" onClick={()=>{setAdminSelectedId('');setAdminFee('')}}>Cerrar</button></div>
+      <div className="dvl-admin-business-meta"><span>Suscripción: {selectedAdminBusiness.subscription_status==='active'?'Activa':'Inactiva'}</span><span>Operación: {{open:'Abierto',paused:'En pausa',closed:'Cerrado'}[selectedAdminBusiness.online_state]||selectedAdminBusiness.online_state}</span></div>
+      <div className="dvl-inline dvl-control-actions">
+       {selectedAdminBusiness.subscription_status!=='active'?<Action disabled={busy||offline} onClick={()=>action(()=>api.adminUpdateRestaurant(selectedAdminBusiness.id,{subscriptionStatus:'active'}))}>Activar suscripción</Action>:
+        <Action kind="secondary" disabled={busy||offline} onClick={()=>{if(window.confirm('¿Suspender la suscripción de '+selectedAdminBusiness.name+'?'))action(()=>api.adminUpdateRestaurant(selectedAdminBusiness.id,{subscriptionStatus:'inactive'}))}}>Suspender</Action>}
+       {selectedAdminBusiness.plan!=='LOCAL'&&<Action kind="secondary" onClick={()=>selectControlSection('owners')}>Invitar propietario</Action>}
+       <Action kind="secondary" onClick={()=>selectControlSection('staff')}>Personal</Action>
+      </div>
+      <details className="dvl-admin-details"><summary>Tarifa de envío</summary>
+       <div className="dvl-grid dvl-editor">
+        <label>Tarifa de envío (L)<input value={adminFee} type="number" min="0" max="1000000" step=".01"
+         placeholder={(selectedAdminBusiness.delivery_fee_minor/100).toFixed(2)} onChange={event=>setAdminFee(event.target.value)}/></label>
+        <Action disabled={busy||offline||!/^\d{1,7}(?:\.\d{1,2})?$/.test(adminFee)||Number(adminFee)>1000000}
+         onClick={async()=>{if(await action(()=>api.adminUpdateRestaurant(selectedAdminBusiness.id,{deliveryFeeMinor:Math.round(Number(adminFee)*100)})))setAdminFee('')}}>Guardar tarifa</Action>
+       </div>
+      </details>
+     </section>}
     </>}
     {controlSection==='flash'&&flashEnabled&&<FlashAdmin api={api} restaurants={adminRestaurants} busy={busy} offline={offline} run={run}/>}
     {controlSection==='settlements'&&commercial&&<section className="dvl-panel"><label>Restaurante para liquidaciones
@@ -943,7 +963,7 @@ export default function LiveApp({CustomerHome}){
     {controlSection==='settlements'&&commercial&&adminRestaurants.some(r=>r.id===adminSelectedId&&r.plan!=='LOCAL')&&
      <SettlementPanel key={'central-'+adminSelectedId} api={api} restaurant={adminSelectedId} central
       run={run} busy={busy} offline={offline} money={price} errorLabel={errorLabel}/>}
-    {controlSection==='audit'&&<section className="dvl-panel"><h2>Actividad de afiliación</h2>
+    {controlSection==='affiliationAudit'&&<section className="dvl-panel"><h2>Actividad de afiliación</h2>
      <Action kind="secondary" disabled={busy||offline}
       onClick={()=>run(async()=>{const data=await api.adminAudit();setAudit(data.events)},{refresh:false})}>Consultar actividad</Action>
      {audit&&<ul className="dvl-search-results">{audit.map(event=><li className="dvl-row" key={event.id}>

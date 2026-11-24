@@ -14,6 +14,7 @@ import RestaurantCash from './RestaurantCash.jsx';
 import {RestaurantProfile,RestaurantStaff,ProductDetails} from './RestaurantSettings.jsx';
 import ClientSupport from './ClientSupport.jsx';
 import CatalogSearch from './CatalogSearch.jsx';
+import FoodFeed from './FoodFeed.jsx';
 import {readCart,writeCart,updateQuantity} from './cart-draft.js';
 
 function OwnerInvitation({restaurantId,invite,disabled}){
@@ -136,6 +137,7 @@ export default function LiveApp(){
  const [status,setStatus]=useState(''),[error,setError]=useState(''),[refreshWarning,setRefreshWarning]=useState('');
  const [scope,setScope]=useState('customer'),[restaurants,setRestaurants]=useState([]),[products,setProducts]=useState([]);
  const [shoppingRestaurant,setShoppingRestaurant]=useState(''),[cart,setCart]=useState([]),[catalogTerm,setCatalogTerm]=useState('');
+ const [catalogView,setCatalogView]=useState('food');
  const [optionsByProduct,setOptionsByProduct]=useState({}),[appliedCoupon,setAppliedCoupon]=useState(null),[couponText,setCouponText]=useState('');
  const [pendingKey,setPendingKey]=useState(null),[replaceCart,setReplaceCart]=useState(null);
  const [cartRestaurantId,setCartRestaurantId]=useState('');
@@ -600,6 +602,11 @@ export default function LiveApp(){
     <FlashOffers campaigns={offline?[]:flashOffers} money={price} open={viewProducts}/>
     <section className="dvl-panel"><h2>Restaurantes afiliados</h2>
      {!shoppingRestaurant?<div className="dvl-stack">
+      <div className="dv-catalog-switch" role="group" aria-label="Cómo explorar Dvolada">
+       <button type="button" aria-pressed={catalogView==='food'} className={catalogView==='food'?'active':''} onClick={()=>setCatalogView('food')}><ShoppingBag size={17}/> Ver comida</button>
+       <button type="button" aria-pressed={catalogView==='restaurants'} className={catalogView==='restaurants'?'active':''} onClick={()=>setCatalogView('restaurants')}><Store size={17}/> Ver restaurantes</button>
+      </div>{catalogView==='food'?<><label>Buscar comida o restaurante<input type="search" maxLength={60} value={catalogTerm} onChange={e=>setCatalogTerm(e.target.value)} placeholder="¿Qué se te antoja?"/></label>
+      <FoodFeed api={api} offline={offline} term={catalogTerm} money={price} openRestaurant={viewProducts}/></>:<>
       <label className="dvl-favorite-filter"><input type="checkbox" checked={onlyFavorites} onChange={event=>setOnlyFavorites(event.target.checked)}/> Solo mis favoritos</label>
       <CatalogSearch api={api} offline={offline} term={catalogTerm} onChange={setCatalogTerm} openRestaurant={viewProducts} money={price}/>
       {restaurants.filter(r=>(!onlyFavorites||favoriteIds.includes(r.id))&&r.name.toLowerCase().includes(catalogTerm.trim().toLowerCase())).map(r=><div className="dvl-row" key={r.id}><div><strong>{r.name}</strong><small>{r.online_state==='open'?'Aceptando pedidos':'En pausa'}</small></div>
@@ -607,8 +614,8 @@ export default function LiveApp(){
       <button className="dvl-action secondary" type="button" disabled={busy||offline} aria-pressed={favoriteIds.includes(r.id)}
        onClick={()=>toggleFavorite(r.id)}>{favoriteIds.includes(r.id)?'Quitar favorito':'Guardar favorito'}</button>
       <Action disabled={offline||r.online_state!=='open'} kind="secondary" onClick={()=>viewProducts(r.id)}>Ver menú</Action></div></div>)}
-      {!restaurants.length&&<p>Próximamente encontrarás los restaurantes afiliados aquí.</p>}</div>:
-      <><Action kind="text" onClick={()=>{menuRequest.current++;setShoppingRestaurant('');setProducts([])}}>Volver a restaurantes</Action>
+      {!restaurants.length&&<p>Próximamente encontrarás los restaurantes afiliados aquí.</p>}</>}</div>:
+      <><Action kind="text" onClick={()=>{menuRequest.current++;setShoppingRestaurant('');setProducts([])}}>Volver al catálogo</Action>
        {cart.length>0&&<a className="dvl-cart-link" href="#carrito">Volver al carrito</a>}
        <div className="dvl-stack">{products.map(p=><div className="dvl-row" key={p.id}><div>{p.photoUrl&&<img className="dvl-menu-photo" src={p.photoUrl} alt={p.name} loading="lazy"/>}<strong>{p.name}</strong><small>{p.category&&p.category+' · '}{price(p.price_minor)}</small>
         {p.options?.length>0&&!(cartRestaurantId===shoppingRestaurant&&cart.some(item=>item.productId===p.id))&&

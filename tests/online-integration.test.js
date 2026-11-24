@@ -617,7 +617,7 @@ test('Checkout bloquea una segunda confirmación sin cerrar ni volver a abrir la
  const checkout=app.slice(app.indexOf('function placeOrder(){'),app.indexOf('function sendMandado(){'));
  assert.ok(checkout.includes('if(checkoutCommittedRef.current)'));
  assert.ok(checkout.indexOf('checkoutCommittedRef.current=true')<checkout.indexOf('setCart([])'));
- assert.ok(app.includes('function openCustomerCheckout(){if(!DEMO_ORDER_WRITES_ENABLED)'));
+ assert.ok(app.includes('function openCustomerCheckout(){if(connected){window.location.assign(\'/cuenta#carrito\');return}if(!DEMO_ORDER_WRITES_ENABLED)'));
  assert.ok(app.includes('checkoutCommittedRef.current=false;'));
 });
 
@@ -810,8 +810,8 @@ test('Un build público sin backend no permite pedidos locales que aparenten ser
  const opening=app.slice(app.indexOf('function openCustomerCheckout(){'),app.indexOf('function saveAddress(){'));
  const checkout=app.slice(app.indexOf('function placeOrder(){'),app.indexOf('function sendMandado(){'));
  const grocery=app.slice(app.indexOf('function sendMandado(){'),app.indexOf('function rateOrder(){'));
- assert.ok(opening.startsWith('function openCustomerCheckout(){if(!DEMO_ORDER_WRITES_ENABLED)'));
- assert.ok(checkout.startsWith('function placeOrder(){if(!DEMO_ORDER_WRITES_ENABLED)'));
+ assert.ok(opening.startsWith('function openCustomerCheckout(){if(connected){window.location.assign(\'/cuenta#carrito\');return}if(!DEMO_ORDER_WRITES_ENABLED)'));
+ assert.ok(checkout.startsWith('function placeOrder(){if(connected)return false;if(!DEMO_ORDER_WRITES_ENABLED)'));
  assert.ok(grocery.startsWith('function sendMandado(){if(!DEMO_ORDER_WRITES_ENABLED)'));
  assert.ok(opening.includes('todavía no están habilitados'));
  assert.ok(checkout.includes('No se puede confirmar un pedido real'));

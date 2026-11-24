@@ -64,7 +64,7 @@ export async function menuOption(req,env,actor,access,productId,optionId){
  return {id:key};
 }
 
-const photoType=bytes=>{
+export const photoType=bytes=>{
  if(bytes.startsWith('\xff\xd8\xff'))return 'image/jpeg';
  if(bytes.startsWith('\x89PNG\r\n\x1a\n'))return 'image/png';
  if(bytes.startsWith('RIFF')&&bytes.slice(8,12)==='WEBP')return 'image/webp';

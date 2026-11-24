@@ -1405,3 +1405,23 @@ test('public food feed contains only available products of active businesses and
  assert.equal((await feed('?after=invalid')).status,400);
  assert.equal((await feed('?q='+encodeURIComponent('x'.repeat(61)))).status,400);
 });
+
+test('owner publishes food and photo atomically, invalid photo leaves no product',async()=>{
+ const f=await fixture(),restaurantId=f.restaurants[0];
+ await f.user('publishOwner','customer',[restaurantId,'owner']);
+ const image='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aQ/cAAAAASUVORK5CYII=';
+ const publish=(by,photoBase64)=>f.call('/api/v1/restaurant/products',{by,restaurantId,method:'POST',body:{name:'Comida con foto',priceMinor:12000,category:'Almuerzos',available:true,photoBase64}});
+ const before=f.DB.db.prepare('SELECT COUNT(*) AS n FROM products').get().n;
+ assert.equal((await publish('publishOwner',btoa('<svg>test</svg>'))).status,400);
+ assert.equal(f.DB.db.prepare('SELECT COUNT(*) AS n FROM products').get().n,before);
+ assert.equal((await publish('customer',image)).status,403);
+ const created=await publish('publishOwner',image);
+ assert.equal(created.status,201,JSON.stringify(created.body));
+ const item=created.body.product;
+ assert.equal(item.photoUrl,'/api/v1/catalog/photos/'+item.id);
+ const menu=await f.call('/api/v1/catalog/restaurants/'+restaurantId+'/products');
+ assert.ok(menu.body.products.some(p=>p.id===item.id&&p.photoUrl===item.photoUrl&&p.category==='Almuerzos'));
+ const response=await worker.fetch(new Request('https://api.example.test'+item.photoUrl),f.env);
+ assert.equal(response.status,200);
+ assert.equal(Buffer.from(await response.arrayBuffer()).toString('base64'),image);
+});

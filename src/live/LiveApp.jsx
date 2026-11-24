@@ -609,7 +609,7 @@ export default function LiveApp({CustomerHome}){
    support:(order,mode)=>setSupport({id:order.id,mode,order}),
    cancelOrder:o=>action(()=>api.cancelOrder(o,newKey())),
    supportView:support&&(support.order||orders.some(o=>o.id===support.id))?<ClientSupport key={support.id+support.mode} mode={support.mode} order={support.order||orders.find(o=>o.id===support.id)} api={api} offline={offline} close={()=>setSupport(null)} onSessionError={handleSessionError}/>:null,
-   displayName:session.user.displayName,rename:async name=>{const data=await run(()=>api.renameClient(name),{refresh:false});if(data)setSession(old=>({...old,user:{...old.user,displayName:name}}))},
+   displayName:session.user.displayName,rename:async name=>{const data=await run(()=>api.renameClient(name),{refresh:false});if(data)setSession(old=>({...old,user:{...old.user,displayName:name}}));return Boolean(data)},
    logout:()=>logout(),application:accountEnabled?<CourierApplication api={api} busy={busy} offline={offline} account={cartAccount} run={run}/>:null,
    notifications:pushConfig?.enabled?<div className="dvl-inline"><Action kind="secondary" disabled={busy||offline} onClick={()=>setQaPush(!pushEnabled)}>{pushEnabled?'Desactivar notificaciones':'Activar notificaciones'}</Action></div>:null,
    notice:<><ClientCodes codes={newCodes} close={()=>setNewCodes(null)}/>{offline&&<WaitOrError message="Sin conexión. No se pueden enviar pedidos." warning/>}<WaitOrError message={error} warning/><WaitOrError message={status}/><WaitOrError message={refreshWarning}/></>

@@ -29,7 +29,7 @@ export default function OpenAccessApp(){
  const menuRequest=useRef(0);
  const [name,setName]=useState(''),[phone,setPhone]=useState(''),[address,setAddress]=useState('');
  const [mode,setMode]=useState('delivery'),[message,setMessage]=useState('');
- const [theme,setTheme]=useState('light'),[offline,setOffline]=useState(!navigator.onLine);
+ const [theme,setTheme]=useState(()=>{try{return JSON.parse(localStorage.getItem('dv_theme'))||'light'}catch{return 'light'}}),[offline,setOffline]=useState(!navigator.onLine);
  const [pushStatus,setPushStatus]=useState('off');
  const api=useMemo(()=>{
   if(!API_ORIGIN)return null;
@@ -41,6 +41,7 @@ export default function OpenAccessApp(){
   const update=()=>applyDvoladaTheme({root:document.documentElement,themeColorMeta:document.querySelector('meta[name="theme-color"]'),
    theme,internalPreview:false,prefersDark:media.matches,hour:new Date().getHours()});
   update();media.addEventListener?.('change',update);
+  try{localStorage.setItem('dv_theme',JSON.stringify(theme))}catch{}
   return()=>media.removeEventListener?.('change',update);
  },[theme]);
  useEffect(()=>{
@@ -101,6 +102,7 @@ export default function OpenAccessApp(){
    <div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada"/><div>
     <strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
    <div className="dvl-head-actions">
+    <button type="button" className="dvl-action secondary" onClick={()=>setShowWelcome(true)}>Inicio</button>
     <a className="dvl-action secondary" href="/cuenta">Mi cuenta</a>
     {isDvoladaPushConfigured()&&<button className="dvl-action secondary" disabled={offline||pushStatus==='busy'}
      type="button" onClick={togglePush} aria-label={pushStatus==='enabled'?'Desactivar notificaciones':'Activar notificaciones'}>
@@ -124,10 +126,9 @@ export default function OpenAccessApp(){
      {selected?.address&&<p>{selected.address}</p>}
      {selected&&<button className="dvl-action secondary" onClick={()=>{menuRequest.current++;setSelected(null);setProducts([])}}>Volver a restaurantes</button>}
      {!selected&&<><CatalogSearch api={api} offline={offline} term={search} onChange={setSearch} openRestaurant={openRestaurant} money={money}/>
-      <div className="dvl-stack" style={{marginTop:18}}>{visible.map(r=><div className="dvl-row" key={r.id}><div>
-       <strong>{r.name}</strong><small>{r.online_state==='open'?'Aceptando pedidos':'En pausa'}</small></div>
-       <button className="dvl-action secondary" disabled={offline||r.online_state!=='open'} onClick={()=>openRestaurant(r.id)}>Ver productos</button>
-      </div>)}
+      <div className="dvl-stack" style={{marginTop:18}}>{visible.map(r=><article className="dvl-panel" key={r.id}><div className="dvl-row"><div><strong>{r.name}</strong><small>{r.online_state==='open'?'Aceptando pedidos':'En pausa'}</small><small>Envío de referencia: {money(r.delivery_fee_minor)}</small></div><Store size={24} aria-hidden="true"/></div>
+       <button className="dvl-action secondary" disabled={offline||r.online_state!=='open'} onClick={()=>openRestaurant(r.id)}>Ver productos <ArrowRight size={16}/></button>
+      </article>)}
       {!visible.length&&<p>No hay negocios disponibles todavía.</p>}</div></>}
      {selected&&<div className="dvl-stack" style={{marginTop:18}}>{products.map(p=><div key={p.id} className="dvl-row"><div>
        <> {p.photoUrl&&<img className="dvl-menu-photo" src={p.photoUrl} alt={p.name} loading="lazy"/>}<strong>{p.name}</strong><small>{p.category&&p.category+' · '}{money(p.price_minor)}</small></></div>
@@ -157,14 +158,14 @@ export default function OpenAccessApp(){
        <option value="delivery">A domicilio</option><option value="pickup">Retirar en restaurante</option></select></label>
       {mode==='delivery'&&<label><MapPin size={16}/> Dirección<input value={address} onChange={e=>setAddress(e.target.value)}
        placeholder="Barrio, calle, casa y referencia"/></label>}
-      <div className="dvl-notice"><ShieldCheck size={18}/> Tu teléfono es obligatorio para el pedido. En esta vista preliminar no se envían pedidos ni se verifica el número por SMS.</div>
-      <button className="dvl-action" disabled={!canAttempt||offline} onClick={()=>setMessage('Los datos están completos, pero no se envió ningún pedido. La compra seguirá desactivada hasta probar la integración completa en staging.')}>
-       <Phone size={17}/> Revisar datos del pedido
+      <div className="dvl-notice"><ShieldCheck size={18}/> Tu teléfono es obligatorio para el pedido. En esta vista no se envían pedidos ni se verifica el número por SMS. Continuá a tu cuenta y elegí «Usar carrito de invitado» para completar el pedido.</div>
+      <button className="dvl-action" disabled={!canAttempt||offline} onClick={()=>{writeCart('guest',draft);window.location.assign('/cuenta')}}>
+       <Phone size={17}/> Continuar a mi cuenta
       </button>
      </>}
     </section>
    </div>
-   <footer className="dvl-footer"><span>Powered by Nexora Systems</span><span>Acceso público · Pedidos reales desactivados en pruebas</span></footer>
+   <footer className="dvl-footer"><span>Powered by Nexora Systems</span><span>Catálogo de invitado · Pedidos reales desactivados sin cuenta</span></footer>
   </main>
  </div>;
 }

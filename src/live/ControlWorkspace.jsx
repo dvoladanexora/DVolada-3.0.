@@ -101,7 +101,7 @@ export function ControlOverview({stats,setSection,commercial,flash}){
   ['Ingresaron hoy',stats?.accounts?.signedInToday,Clock,'accounts'],
   ['Repartidores habilitados',stats?.couriers?.active,Bike,'courierDirectory'],
   ['Pedidos activos',stats?.orders?.active,Clock,'operations'],
-  ['Entregados de hoy',stats?.today?.delivered,CheckCircle2,'operations'],
+  ['Pedidos de hoy entregados',stats?.today?.delivered,CheckCircle2,'operations'],
   ['Restaurantes abiertos',stats?.restaurants?.open,DoorOpen,'business']
  ];
  const alerts=[

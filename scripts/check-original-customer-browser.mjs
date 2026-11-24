@@ -71,6 +71,10 @@ try{
  await page.getByRole('heading',{name:'Mis pedidos',exact:true}).waitFor();
  await page.getByText('Orden DV-FIXTURE',{exact:true}).waitFor();
  assert.equal(created,1);
+ await page.getByText('Ver todas las etapas del pedido',{exact:true}).click();
+ assert.deepEqual(await page.locator('.order-timeline .order-step small').allTextContents(),['Pendiente','Aceptado','Preparando','Listo','Entregado']);
+ await page.getByRole('button',{name:'Ver detalle',exact:true}).waitFor();
+
  assert.equal(await page.locator('.dv-tools-header').count(),1);
  assert.equal(await page.locator('.dvl-account-shell').count(),0);
  await page.locator('.mobile-nav').getByRole('button',{name:'Más',exact:true}).click();

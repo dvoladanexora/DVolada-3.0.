@@ -70,7 +70,7 @@ export function CustomerOrders({c,onBrowse,onCart}){
     {selected&&<div className="dv-order-tools">{selected.receipt&&<ul>{selected.receipt.items.map((item,i)=><li key={i}>{item.quantity} × {item.name_snapshot}{(item.optionNames||[]).map(n=>' · '+n)}</li>)}</ul>}{selected.pin&&<><span>PIN privado: <b>{selected.pin}</b></span><button className="secondary" onClick={()=>navigator.clipboard?.writeText(selected.pin)}>Copiar PIN</button><small>Compartilo únicamente cuando recibás tu pedido.</small></>}<button className="secondary" onClick={c.hidePin}>Ocultar detalle</button></div>}
     <div className="dv-support-actions"><button className="secondary" disabled={c.offline} onClick={()=>c.support(o,'restaurant')}><MessageCircle size={16}/> Chat con restaurante</button>{o.courierResponse==='accepted'&&<button className="secondary" disabled={c.offline} onClick={()=>c.support(o,'courier')}>Chat con repartidor</button>}<button className="secondary" disabled={c.offline} onClick={()=>c.support(o,'claim')}><ShieldCheck size={16}/> Reportar un problema</button></div>
     {o.status==='Pendiente'&&<button className="secondary dv-cancel-order" disabled={c.busy||c.offline} onClick={()=>{if(window.confirm('¿Cancelar este pedido?'))c.cancelOrder(o)}}>Cancelar pedido</button>}
-    {o.status==='Entregado'&&<button className="primary" disabled={c.busy||c.offline||Boolean(c.pendingKey)} onClick={async()=>{await c.reorder(o);onCart()}}><ShoppingCart size={16}/> Volvé a pedir</button>}
+    {o.status==='Entregado'&&<button className="primary" disabled={c.busy||c.offline||Boolean(c.pendingKey)} onClick={async()=>{if(await c.reorder(o))onCart()}}><ShoppingCart size={16}/> Volvé a pedir</button>}
    </article>})}</div>}
   {c.supportView}
  </section>

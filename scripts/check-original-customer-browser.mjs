@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {mkdir} from 'node:fs/promises';
 import {spawn} from 'node:child_process';
 import {chromium} from 'playwright';
 
@@ -82,6 +83,19 @@ try{
  await page.getByLabel('Texto grande',{exact:true}).check();
  await page.getByText('Mis direcciones guardadas',{exact:true}).waitFor();
  assert.equal(await page.locator('.dv-tools-header').count(),1);
+ await mkdir('visual-checks',{recursive:true});
+ for(const width of [360,390,430,768,1440]){
+  await page.setViewportSize({width,height:width<768?844:960});
+  for(const scheme of ['light','dark']){
+   await page.emulateMedia({colorScheme:scheme});
+   await page.reload();
+   await page.locator('.dv-tools-header').waitFor();
+   assert.equal(await page.locator('.dvl-account-shell').count(),0);
+   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
+   assert.ok(overflow<=1,'Desborde horizontal a '+width+' px en '+scheme+': '+overflow);
+   await page.screenshot({path:'visual-checks/inicio-'+width+'-'+scheme+'.png'});
+  }
+ }
  assert.deepEqual(errors,[]);
  assert.deepEqual(unexpected,[]);
  console.log(JSON.stringify({originalAuthenticatedShell:true,originalCart:true,orderFlow:true,profile:true,fixtureOrders:created,viewport:390}));

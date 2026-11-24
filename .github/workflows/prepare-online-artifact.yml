@@ -2,7 +2,7 @@ name: Preparar artefacto verificable para Cloudflare
 # Transporte del candidato, no despliega ni cambia recursos Cloudflare.
 on:
   push:
-    branches: [main, prelaunch/phase-3-live-integration]
+    branches: [main]
     paths:
       - 'src/**'
       - 'backend/**'
@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
-    if: github.repository == 'dvoladanexora/DVolada-3.0.' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prelaunch/phase-3-live-integration')
+    if: github.repository == 'dvoladanexora/DVolada-3.0.' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -47,13 +47,19 @@ jobs:
           npx playwright install chromium
           node scripts/check-original-customer-browser.mjs
       - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: customer-visual-checks
+          path: visual-checks/
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
         with:
           name: verified-online
           path: online-release/
           if-no-files-found: error
   transport:
     needs: build
-    if: github.repository == 'dvoladanexora/DVolada-3.0.' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prelaunch/phase-3-live-integration')
+    if: github.repository == 'dvoladanexora/DVolada-3.0.' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

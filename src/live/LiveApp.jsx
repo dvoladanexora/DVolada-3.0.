@@ -508,6 +508,7 @@ export default function LiveApp({CustomerHome}){
   if(result){confirmCheckout(result);return true}return false;
  }
  async function reorder(order){
+  if(pendingKey)return false;
   return run(async()=>{
    const [receipt,menu]=await Promise.all([api.customerOrder(order.id),api.products(order.restaurantId)]);
    const available=new Map(menu.products.map(product=>[product.id,product]));
@@ -523,6 +524,7 @@ export default function LiveApp({CustomerHome}){
    else putCart(order.restaurantId,items);
    setStatus(items.length===receipt.order.items.length?'Revisá los precios actuales antes de hacer tu pedido.'
     :'Algunos productos ya no están disponibles. Revisá el carrito antes de continuar.');
+   return true;
   },{refresh:false});
  }
  async function showCustomerOrder(order){

@@ -298,6 +298,19 @@ test('platform admin analytics require an independent platform role',async()=>{
  const allowed=await f.call('/api/v1/admin/overview',{by:'platformAdmin'});
  assert.equal(allowed.status,200,JSON.stringify(allowed.body));
  assert.equal(allowed.body.restaurants.total,2);
+ assert.equal(allowed.body.restaurants.affiliated,2);
+ assert.equal(allowed.body.today.orders,0);
+ assert.equal(typeof allowed.body.accounts.registered,'number');
+ assert.equal(typeof allowed.body.accounts.signedInToday,'number');
+ assert.equal(allowed.body.alerts.claims,0);
+ assert.equal((await f.call('/api/v1/admin/courier-directory',{by:'customer'})).status,403);
+ const directory=await f.call('/api/v1/admin/courier-directory',{by:'platformAdmin'});
+ assert.equal(directory.status,200,JSON.stringify(directory.body));
+ assert.equal(directory.body.couriers.length,1);
+ assert.equal(directory.body.couriers[0].id,f.tokens.courier.id);
+ assert.equal(directory.body.couriers[0].delivered,0);
+ assert.equal((await f.call('/api/v1/admin/courier-directory?q=NO-MATCH-XYZ',{by:'platformAdmin'})).body.couriers.length,0);
+
  const listing=await f.call('/api/v1/admin/restaurants',{by:'platformAdmin'});
  assert.equal(listing.status,200);
  assert.equal(listing.body.restaurants.length,2);

@@ -5,6 +5,7 @@ import {createLiveApi} from './live-api.js';
 import {applyDvoladaTheme} from '../theme-policy.js';
 import {FlashOffers} from './FlashCampaigns.jsx';
 import CatalogSearch from './CatalogSearch.jsx';
+import FoodFeed from './FoodFeed.jsx';
 import {readCart,writeCart,updateQuantity} from './cart-draft.js';
 import './live.css';
 
@@ -18,8 +19,9 @@ const API_ORIGIN=import.meta.env.VITE_DVOLADA_API_URL||window.location.origin;
 
 export default function OpenAccessApp(){
  const [showWelcome,setShowWelcome]=useState(true);
+ const [catalogView,setCatalogView]=useState('food');
  const [welcomePortal,setWelcomePortal]=useState(null);
- const enter=(page,mode='login',intent)=>{if(page==='account'){const query=new URLSearchParams({mode});if(intent)query.set('intent',intent);window.location.assign('/cuenta?'+query);return}setShowWelcome(false);window.scrollTo(0,0)};
+ const enter=(page,mode='login',intent)=>{if(page==='account'){const query=new URLSearchParams({mode});if(intent)query.set('intent',intent);window.location.assign('/cuenta?'+query);return}setCatalogView(page==='restaurants'?'restaurants':'food');setShowWelcome(false);window.scrollTo(0,0)};
  const [flashOffers,setFlashOffers]=useState([]);
  const [restaurants,setRestaurants]=useState([]);
  const [selected,setSelected]=useState(null),[products,setProducts]=useState([]);
@@ -125,11 +127,15 @@ export default function OpenAccessApp(){
      {selected?.description&&<p>{selected.description}</p>}
      {selected?.address&&<p>{selected.address}</p>}
      {selected&&<button className="dvl-action secondary" onClick={()=>{menuRequest.current++;setSelected(null);setProducts([])}}>Volver a restaurantes</button>}
-     {!selected&&<><CatalogSearch api={api} offline={offline} term={search} onChange={setSearch} openRestaurant={openRestaurant} money={money}/>
+     {!selected&&<><div className="dv-catalog-switch" role="group" aria-label="Cómo explorar Dvolada">
+      <button type="button" aria-pressed={catalogView==='food'} className={catalogView==='food'?'active':''} onClick={()=>setCatalogView('food')}><ShoppingBag size={17}/> Ver comida</button>
+      <button type="button" aria-pressed={catalogView==='restaurants'} className={catalogView==='restaurants'?'active':''} onClick={()=>setCatalogView('restaurants')}><Store size={17}/> Ver restaurantes</button>
+     </div>{catalogView==='food'?<><label>Buscar comida o restaurante<input type="search" value={search} maxLength={60} onChange={e=>setSearch(e.target.value)} placeholder="¿Qué se te antoja?"/></label>
+     <FoodFeed api={api} offline={offline} term={search} money={money} openRestaurant={openRestaurant}/></>:<><CatalogSearch api={api} offline={offline} term={search} onChange={setSearch} openRestaurant={openRestaurant} money={money}/>
       <div className="dvl-stack" style={{marginTop:18}}>{visible.map(r=><article className="dvl-panel" key={r.id}><div className="dvl-row"><div><strong>{r.name}</strong><small>{r.online_state==='open'?'Aceptando pedidos':'En pausa'}</small><small>Envío de referencia: {money(r.delivery_fee_minor)}</small></div><Store size={24} aria-hidden="true"/></div>
        <button className="dvl-action secondary" disabled={offline||r.online_state!=='open'} onClick={()=>openRestaurant(r.id)}>Ver productos <ArrowRight size={16}/></button>
       </article>)}
-      {!visible.length&&<p>No hay negocios disponibles todavía.</p>}</div></>}
+      {!visible.length&&<p>No hay negocios disponibles todavía.</p>}</div></>}</>}
      {selected&&<div className="dvl-stack" style={{marginTop:18}}>{products.map(p=><div key={p.id} className="dvl-row"><div>
        <> {p.photoUrl&&<img className="dvl-menu-photo" src={p.photoUrl} alt={p.name} loading="lazy"/>}<strong>{p.name}</strong><small>{p.category&&p.category+' · '}{money(p.price_minor)}</small></></div>
        <button className="dvl-action secondary" disabled={offline||selected.online_state!=='open'} onClick={()=>add(p)}>Agregar</button>

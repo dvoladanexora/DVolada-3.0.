@@ -1372,3 +1372,19 @@ test('catalog client pages through four hundred open restaurants with equal name
  assert.equal(catalog.restaurants.length,400);
  assert.equal(new Set(catalog.restaurants.map(row=>row.id)).size,400);
 });
+test('controlled checkout 20 restaurants and 100 clients',async()=>{
+ const f=await fixture(), shops=[];
+ for(let i=0;i<20;i++){
+  const restaurantId=randomUUID(),productId=randomUUID();
+  f.DB.db.prepare("INSERT INTO restaurants(id,name,plan,subscription_status,online_state) VALUES(?,?,'ONLINE','active','open')").run(restaurantId,'R'+i);
+  f.DB.db.prepare("INSERT INTO products(id,restaurant_id,name,price_minor) VALUES(?,?,'Baleada',5000)").run(productId,restaurantId);
+  shops.push({restaurantId,productId});
+ }
+ for(let i=0;i<100;i++)await f.user('fixture'+i);
+ const intents=Array.from({length:100},(_,i)=>({...shops[i%20],by:'fixture'+i,key:randomUUID()}));
+ const results=await Promise.all([...intents,...intents].map(intent=>f.create(intent)));
+ assert(results.every(r=>[200,201].includes(r.status)));
+ assert.equal(new Set(results.map(r=>r.body.order.id)).size,100);
+ assert.equal(f.DB.db.prepare('SELECT COUNT(*) n FROM online_orders').get().n,100);
+ assert.equal(f.DB.db.prepare('SELECT COUNT(DISTINCT restaurant_id) n FROM online_orders').get().n,20);
+});

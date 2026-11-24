@@ -103,12 +103,10 @@ export function ControlOverview({stats,setSection,commercial,flash}){
   ['Repartidores habilitados',stats?.couriers?.active,Bike,'couriers']
  ];
  const links=[
-  ['Nuevo negocio','Registrar y activar afiliados',Store,'business'],
+  ['Nuevo negocio','Registrar y activar afiliados',Store,'newBusiness'],
   ['Invitar propietario','Gestionar acceso de restaurantes',UserPlus,'owners'],
   ['Repartidores','Revisar solicitudes y cuentas',Bike,'couriers'],
   ['Reclamos','Atender problemas de pedidos',Package,'claims'],
-  ['Reportes','Consultar ventas y operaciones',Wallet,'reports'],
-  ['Cupones','Gestionar descuentos',Tag,'coupons'],
  ];
  return <div className="dvl-admin-overview" id="control">
   <div className="dvl-admin-section-heading"><h2>Vista general</h2><span>Estado de la plataforma</span></div>

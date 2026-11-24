@@ -35,7 +35,7 @@ export function googleAdminConfiguration(env){
 }
 
 export async function verifyGoogleAdminIdentity(idToken,env,expectedNonce,{
-  fetchImpl=fetch,now=Math.floor(Date.now()/1000)
+  fetchImpl=(url,options)=>globalThis.fetch(url,options),now=Math.floor(Date.now()/1000)
 }={}){
   const {clientId,emails}=googleAdminConfiguration(env);
   if(typeof expectedNonce!=='string'||! /^[A-Za-z0-9_-]{43,128}$/.test(expectedNonce))throw invalid();
@@ -49,7 +49,7 @@ export async function verifyGoogleAdminIdentity(idToken,env,expectedNonce,{
   const signature=decodePart(signaturePart);
   let keys;
   try{
-    const response=await fetchImpl(jwksUrl,{redirect:'error',headers:{accept:'application/json'}});
+    const response=await fetchImpl(jwksUrl,{redirect:'error',headers:{accept:'application/json','User-Agent':'Dvolada-Control/1.0'}});
     if(!response.ok)throw new Error('JWKS unavailable');
     keys=(await response.json()).keys;
     if(!Array.isArray(keys)||keys.length>32)throw new Error('Unexpected JWKS');

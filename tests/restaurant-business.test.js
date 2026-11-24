@@ -64,7 +64,7 @@ test('Panel presenta información, horarios y fotos con advertencia de demo loca
 test('Conservar la disponibilidad al recargar y evitar contraseñas de demo en fuente',()=>{
  const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
  const login=readFileSync(new URL('../src/AffiliateOnline.jsx',import.meta.url),'utf8');
- assert.ok(main.includes("[places,setPlaces]=useState(()=>stored('dv_places',initialPlaces))"));
+ assert.ok(main.includes("[places,setPlaces]=useState(()=>connected?[]:stored('dv_places',initialPlaces))"));
  assert.ok(!main.includes("String(i.id)==='103'?{...i,soldOut:true"));
  assert.ok(login.includes('import.meta.env.DEV'));
  assert.ok(!login.includes('restorres'));

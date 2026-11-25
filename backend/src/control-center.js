@@ -192,6 +192,7 @@ async function courierRules(req,env,actor,url){
  const rid=requireUuid(input.restaurantId),courier=requireUuid(input.courierId),id=idempotencyKey(req);
  const start=requireInteger(input.effectiveAt,clock()+1,2147483647,'effectiveAt');
  const share=requireInteger(input.courierBps,0,10000,'courierBps');
+ if(share!==10000&&await env.DB.prepare('SELECT 1 FROM launch_pricing WHERE id=1').first())throw new ApiError(409,'LAUNCH_PRICING_FIXED');
  try{
   const [changed]=await env.DB.batch([
    env.DB.prepare(`INSERT INTO control_courier_rules(id,restaurant_id,courier_id,effective_at,courier_bps,author_id)

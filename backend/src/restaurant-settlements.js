@@ -21,6 +21,7 @@ export async function settlementRule(req,env,actor,restaurant){
  const start=requireInteger(data.effectiveAt,1,4102444800,'effectiveAt');
  const commission=requireInteger(data.commissionBps,0,10000,'commissionBps');
  const courier=requireInteger(data.courierBps,0,10000,'courierBps');
+ if((commission!==0||courier!==10000)&&await env.DB.prepare('SELECT 1 FROM launch_pricing WHERE id=1').first())throw new ApiError(409,'LAUNCH_PRICING_FIXED');
  const present=await env.DB.prepare("SELECT 1 FROM restaurants WHERE id=? AND plan IN ('ONLINE','PLUS')").bind(id).first();
  if(!present)throw new ApiError(404,'RESTAURANT_NOT_FOUND');
  const proposed=crypto.randomUUID();
@@ -108,6 +109,10 @@ export async function settlements(req,env,actor,restaurant,id,operation,central=
    ['restaurant_minor','courier_minor','dvolada_minor'].some((name,index)=>saved[name]!==split[index]))
    throw new ApiError(409,'IDEMPOTENCY_KEY_REUSED');
   return {adjustment:saved};
+ }
+ if(operation==='calculate'){
+  const policy=await env.DB.prepare('SELECT enabled_at FROM launch_pricing WHERE id=1').first();
+  if(policy)await env.DB.prepare('INSERT INTO restaurant_settlement_rules(id,restaurant_id,effective_at,commission_bps,courier_bps,author_id) VALUES(?,?,?,0,10000,?) ON CONFLICT(restaurant_id,effective_at) DO NOTHING').bind(crypto.randomUUID(),restaurant,policy.enabled_at,actor.userId).run();
  }
  const next=step[operation];
  if(!next)throw new ApiError(404,'NOT_FOUND');

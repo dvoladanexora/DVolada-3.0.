@@ -1834,17 +1834,31 @@ test('manual courier invitation is private, expires and can be claimed once with
  const me=await (await passkeyRequest(f,'auth/me',undefined,{cookie:partCookie(claim)})).json();assert.equal(me.user.id,id);assert.equal(me.user.role,'courier');
  const directory=await f.call('/api/v1/admin/courier-directory?q=Repartidor%20ficticio',{by:'platformAdmin'});assert.equal(directory.body.couriers[0].transport,'bicycle');assert.equal(directory.body.couriers[0].available,0);
 });
-test('courier fees are explicitly assigned, partial and counted separately from order commissions',async()=>{
+test('launch pricing charges exactly L5 once for each completed courier delivery; no monthly charge',async()=>{
  const f=await fixture(),by='platformAdmin',root='/api/v1/admin/control/courier-commercial/'+f.tokens.courier.id+'/fees',date=new Date(Date.now()-21600000).toISOString().slice(0,10);
- const charge={id:randomUUID(),period:date.slice(0,7),dueDate:date,amountMinor:50000};
- assert.equal((await f.call(root,{method:'POST',body:charge})).status,403);
- assert.equal((await f.call(root,{by,method:'POST',body:charge})).status,200);
- assert.equal((await f.call(root,{by,method:'POST',body:{...charge,id:randomUUID()}})).status,409);
- const body={id:randomUUID(),version:1,amountMinor:20000,paidDate:date,method:'cash',reference:'prueba'};
- const pay=body=>f.call(root+'/'+charge.id+'/payments',{by,method:'POST',body});
- assert.equal((await pay(body)).status,200);assert.equal((await pay(body)).status,200);
- assert.equal((await pay({...body,id:randomUUID(),version:2,amountMinor:31000})).status,409);
- const data=(await f.call(root,{by})).body;assert.equal(data.charges[0].paid_minor,20000);assert.equal(data.payments.length,1);
+ f.DB.db.prepare('INSERT INTO launch_pricing(id,enabled_at) VALUES(1,unixepoch()-86400)').run();
+ assert.equal((await f.call(root,{by,method:'POST',body:{id:randomUUID(),period:date.slice(0,7),dueDate:date,amountMinor:50000}})).status,405);
+ const o=await f.create({});assert.equal(o.status,201);const order=o.body.order.id;
+ f.DB.db.prepare("UPDATE online_orders SET status='Entregado',courier_id=?,courier_response='accepted' WHERE id=?").run(f.tokens.courier.id,order);
+ f.DB.db.prepare("UPDATE online_orders SET status='Entregado' WHERE id=?").run(order);
+ const data=(await f.call(root,{by})).body;assert.equal(data.charges.length,1);assert.equal(data.charges[0].id,order);assert.equal(data.charges[0].amount_minor,500);
+ const body={id:randomUUID(),version:1,amountMinor:500,paidDate:date,method:'cash',reference:'prueba'};
+ const pay=body=>f.call(root+'/'+order+'/payments',{by,method:'POST',body});
+ assert.equal((await pay({...body,amountMinor:600})).status,409);assert.equal((await pay(body)).status,200);assert.equal((await pay(body)).status,200);
  const finance=(await f.call('/api/v1/admin/control/finance?from='+date+'&until='+date,{by})).body;
- assert.equal(finance.courierFeesReceived,20000);assert.equal(finance.courierFeesOutstanding,30000);assert.equal(finance.totalReceived,20000);
+ assert.equal(finance.courierFeesReceived,500);assert.equal(finance.courierFeesOutstanding,0);assert.equal(finance.totalReceived,500);
+});
+test('launch restaurant pricing separates L1500 activation from L500 monthly subscription',async()=>{
+ const f=await fixture(),by='platformAdmin',root='/api/v1/admin/control/contracts/'+f.restaurants[0],date=new Date(Date.now()-21600000).toISOString().slice(0,10);
+ f.DB.db.prepare('INSERT INTO launch_pricing(id,enabled_at) VALUES(1,unixepoch()-86400)').run();
+ const contract={plan:'ONLINE',startDate:date,nextDue:date,frequency:'monthly',amountMinor:50000,version:0};
+ assert.equal((await f.call(root,{by,method:'PATCH',body:{...contract,amountMinor:75000}})).status,409);
+ assert.equal((await f.call(root,{by,method:'PATCH',body:contract})).status,200);
+ const before=(await f.call(root,{by})).body;assert.equal(before.activation.amount_minor,150000);assert.equal(before.contract.amount_minor,50000);
+ const pay={id:randomUUID(),version:1,amountMinor:150000,paidDate:date,method:'cash',reference:'inicio'};
+ assert.equal((await f.call(root+'/activation',{by,method:'POST',body:pay})).status,200);
+ assert.equal((await f.call(root+'/activation',{by,method:'POST',body:pay})).status,200);
+ const finance=(await f.call('/api/v1/admin/control/finance',{by})).body;
+ assert.equal(finance.activationReceived,150000);assert.equal(finance.activationOutstanding,0);assert.equal(finance.affiliationNextDue,50000);assert.equal(finance.totalReceived,150000);
+ const rule=await f.call('/api/v1/admin/settlement-rules/'+f.restaurants[0],{by,method:'POST',body:{effectiveAt:Math.floor(Date.now()/1000),commissionBps:500,courierBps:8000}});assert.equal(rule.status,409);
 });

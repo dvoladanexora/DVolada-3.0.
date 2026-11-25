@@ -101,7 +101,7 @@ function errorLabel(error){
   COURIER_INACTIVE:'Esta cuenta de repartidor está inactiva.',
   SPOT_FINANCIAL_HISTORY:'No se puede eliminar un anuncio con valor contratado. Pausalo para conservar su historial financiero.',
   COURIER_INVITE_UNAVAILABLE:'La invitación ya fue utilizada o la cuenta está inactiva.',
-  COURIER_FEE_EXISTS:'Ya existe una cuota para este período.',
+  LAUNCH_PRICING_FIXED:'Dvolada Online: L 1,500 iniciales, L 500 mensuales y L 5 por entrega al repartidor; sin comisiones porcentuales adicionales.',
   FINANCE_BALANCE_CHANGED:'El saldo cambió o el abono supera lo pendiente. Actualizá antes de registrar otro pago.',
   SPOT_USE_RECEIPT:'Registrá los abonos desde Pagos e historial.',
   CONTRACT_PARTIAL_LOCK:'Completá la cuota parcialmente abonada antes de modificar el contrato.',

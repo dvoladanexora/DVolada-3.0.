@@ -41,22 +41,11 @@ async function fees(req,env,actor,id){
  const courier=await env.DB.prepare("SELECT u.id FROM users u JOIN courier_profiles c ON c.user_id=u.id WHERE u.id=? AND u.account_role='courier'").bind(id).first();
  if(!courier)throw new ApiError(404,'NOT_FOUND');
  if(req.method==='GET'){
-  const charges=await rows(env.DB.prepare(`SELECT c.*,COALESCE((SELECT SUM(amount_minor) FROM courier_fee_receipts r WHERE r.charge_id=c.id),0) AS paid_minor FROM courier_fee_charges c WHERE courier_id=? ORDER BY period DESC LIMIT 120`).bind(id));
-  const payments=await rows(env.DB.prepare('SELECT r.id,r.charge_id,r.amount_minor,r.paid_date,r.method,r.reference,c.period FROM courier_fee_receipts r JOIN courier_fee_charges c ON c.id=r.charge_id WHERE c.courier_id=? ORDER BY r.paid_date DESC,r.created_at DESC LIMIT 200').bind(id));
+  const charges=await rows(env.DB.prepare(`SELECT c.*,o.order_number,COALESCE((SELECT SUM(amount_minor) FROM courier_fee_receipts r WHERE r.charge_id=c.id),0) AS paid_minor FROM courier_fee_charges c JOIN online_orders o ON o.id=c.id WHERE c.courier_id=? ORDER BY c.created_at DESC,c.id DESC LIMIT 200`).bind(id));
+  const payments=await rows(env.DB.prepare('SELECT r.id,r.charge_id,r.amount_minor,r.paid_date,r.method,r.reference,c.period,o.order_number FROM courier_fee_receipts r JOIN courier_fee_charges c ON c.id=r.charge_id JOIN online_orders o ON o.id=c.id WHERE c.courier_id=? ORDER BY r.paid_date DESC,r.created_at DESC LIMIT 200').bind(id));
   return {charges,payments};
  }
- const d=await readJson(req);requireKeys(d,['id','period','dueDate','amountMinor']);
- const key=requireUuid(d.id),period=typeof d.period==='string'?d.period:'';
- if(!/^20[0-9]{2}-(0[1-9]|1[0-2])$/.test(period))return invalid();
- const due=validDate(d.dueDate),amount=money(d.amountMinor);
- const prior=await env.DB.prepare('SELECT * FROM courier_fee_charges WHERE id=?').bind(key).first();
- if(prior){if(prior.courier_id!==id||prior.period!==period||prior.due_date!==due||prior.amount_minor!==amount)throw new ApiError(409,'IDEMPOTENCY_KEY_REUSED');return {ok:true,replayed:true}}
- const [saved]=await env.DB.batch([
-  env.DB.prepare('INSERT INTO courier_fee_charges(id,courier_id,period,due_date,amount_minor,created_by) VALUES(?,?,?,?,?,?) ON CONFLICT DO NOTHING').bind(key,id,period,due,amount,actor.userId),
-  audit(env,actor,'courier_fee_created',key,{courierId:id,period,due,amount})
- ]);
- if(!saved.meta.changes)throw new ApiError(409,'COURIER_FEE_EXISTS');
- return {ok:true};
+ throw new ApiError(405,'METHOD_NOT_ALLOWED');
 }
 async function pay(req,env,actor,id,charge){
  const d=await readJson(req);requireKeys(d,['id','version','amountMinor','paidDate','method','reference']);
@@ -82,7 +71,7 @@ export async function courierCommercial(req,env,actor,path){
  if(!match)throw new ApiError(404,'NOT_FOUND');
  const id=requireUuid(match[1]);
  if(match[2]==='renew'&&!match[3]&&req.method==='POST')return respond(req,env,200,await renew(req,env,actor,id));
- if(match[2]==='fees'&&!match[3]&&['GET','POST'].includes(req.method))return respond(req,env,200,await fees(req,env,actor,id));
+ if(match[2]==='fees'&&!match[3]&&req.method==='GET')return respond(req,env,200,await fees(req,env,actor,id));
  if(match[2]==='fees'&&match[3]&&req.method==='POST')return respond(req,env,200,await pay(req,env,actor,id,requireUuid(match[3])));
  throw new ApiError(405,'METHOD_NOT_ALLOWED');
 }

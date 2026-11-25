@@ -100,10 +100,13 @@ async function spots(req,env,actor,id){
 async function contract(req,env,actor,id,payment){
  const restaurant=await env.DB.prepare('SELECT id,plan FROM restaurants WHERE id=?').bind(id).first();if(!restaurant)throw new ApiError(404,'RESTAURANT_NOT_FOUND');
  const current=await env.DB.prepare('SELECT * FROM restaurant_contracts WHERE restaurant_id=?').bind(id).first();
+ const fixed=Boolean(await env.DB.prepare('SELECT 1 FROM launch_pricing WHERE id=1').first());
  const partial=async()=>current?.next_due?(await env.DB.prepare('SELECT COALESCE(SUM(amount_minor),0) AS amount FROM contract_receipts WHERE restaurant_id=? AND due_date=?').bind(id,current.next_due).first()).amount:0;
  if(req.method==='GET'&&!payment){
   const payments=await rows(env.DB.prepare('SELECT id,due_date,amount_minor,paid_date,method,reference,created_at FROM restaurant_contract_payments WHERE restaurant_id=? UNION ALL SELECT id,due_date,amount_minor,paid_date,method,reference,created_at FROM contract_receipts WHERE restaurant_id=? ORDER BY paid_date DESC,created_at DESC,id DESC LIMIT 200').bind(id,id));
-  return {contract:current,payments,plan:restaurant.plan,currentPaidMinor:await partial()};
+  const activation=await env.DB.prepare('SELECT a.*,COALESCE((SELECT SUM(amount_minor) FROM restaurant_activation_receipts p WHERE p.restaurant_id=a.restaurant_id),0) AS paid_minor FROM restaurant_activation_charges a WHERE restaurant_id=?').bind(id).first();
+  const activationPayments=await rows(env.DB.prepare('SELECT id,amount_minor,paid_date,method,reference FROM restaurant_activation_receipts WHERE restaurant_id=? ORDER BY paid_date DESC,created_at DESC LIMIT 200').bind(id));
+  return {contract:current,payments,plan:restaurant.plan,currentPaidMinor:await partial(),activation,activationPayments,fixed};
  }
  if(payment&&req.method==='POST'){
   const d=await readJson(req);requireKeys(d,['id','version','paidDate','method','reference','amountMinor']);
@@ -132,13 +135,29 @@ async function contract(req,env,actor,id,payment){
  const plan=choice(d.plan,['ONLINE','LOCAL','PLUS']),start=validDate(d.startDate),due=validDate(d.nextDue),frequency=choice(d.frequency,['monthly','quarterly','semiannual','annual','once']);
  if(due<start)return fail();
  const price=amount(d.amountMinor,1),version=requireInteger(d.version,0,2147483646,'version');
+ if(fixed&&plan==='ONLINE'&&(price!==50000||frequency!=='monthly'))throw new ApiError(409,'LAUNCH_PRICING_FIXED');
  const billing=Number(due.slice(-2));
  const already=await env.DB.prepare('SELECT 1 FROM restaurant_contract_payments WHERE restaurant_id=? AND due_date>=? UNION ALL SELECT 1 FROM contract_receipts WHERE restaurant_id=? AND due_date>=? LIMIT 1').bind(id,due,id,due).first();
  if(await partial()>0)throw new ApiError(409,'CONTRACT_PARTIAL_LOCK');
  if(already)throw new ApiError(409,'CONTRACT_PERIOD_PAID');
  const stmt=current?env.DB.prepare('UPDATE restaurant_contracts SET start_date=?,next_due=?,frequency=?,billing_day=?,amount_minor=?,version=version+1,updated_at=unixepoch() WHERE restaurant_id=? AND version=? AND NOT EXISTS(SELECT 1 FROM contract_receipts r WHERE r.restaurant_id=restaurant_contracts.restaurant_id AND r.due_date=restaurant_contracts.next_due)').bind(start,due,frequency,billing,price,id,version):env.DB.prepare('INSERT INTO restaurant_contracts(restaurant_id,start_date,next_due,frequency,billing_day,amount_minor) SELECT ?,?,?,?,?,? WHERE ?=0 ON CONFLICT(restaurant_id) DO NOTHING').bind(id,start,due,frequency,billing,price,version);
- const [changed]=await env.DB.batch([stmt,env.DB.prepare("UPDATE restaurants SET plan=?,online_state=CASE WHEN ?='LOCAL' THEN 'closed' ELSE online_state END WHERE id=? AND changes()=1").bind(plan,plan,id),audit(env,actor,'contract_saved',id,{plan,start,due,frequency,price},id)]);
+ const [changed]=await env.DB.batch([stmt,env.DB.prepare("UPDATE restaurants SET plan=?,online_state=CASE WHEN ?='LOCAL' THEN 'closed' ELSE online_state END WHERE id=? AND changes()=1").bind(plan,plan,id),audit(env,actor,'contract_saved',id,{plan,start,due,frequency,price},id),env.DB.prepare("INSERT INTO restaurant_activation_charges(restaurant_id,amount_minor) SELECT ?,150000 WHERE ?='ONLINE' AND EXISTS(SELECT 1 FROM launch_pricing WHERE id=1) AND changes()=1 ON CONFLICT DO NOTHING").bind(id,plan)]);
  if(!changed.meta.changes)throw new ApiError(409,'ADMIN_ACCOUNT_CHANGED');return {ok:true};
+}
+async function activationPayment(req,env,actor,id){
+ if(req.method!=='POST')throw new ApiError(405,'METHOD_NOT_ALLOWED');
+ const d=await readJson(req);requireKeys(d,['id','version','amountMinor','paidDate','method','reference']);
+ const fields=paymentFields(d),{paymentId,version,paidDate,method,reference}=fields,paid=amount(d.amountMinor,1);
+ const prior=await env.DB.prepare('SELECT * FROM restaurant_activation_receipts WHERE id=?').bind(paymentId).first();
+ if(prior)return matchReceipt(prior,'restaurant_id',id,fields,paid);
+ const [saved]=await env.DB.batch([
+  env.DB.prepare(`INSERT INTO restaurant_activation_receipts(id,restaurant_id,amount_minor,paid_date,method,reference,actor_id)
+   SELECT ?,restaurant_id,?,?,?,?,? FROM restaurant_activation_charges a WHERE restaurant_id=? AND version=? AND amount_minor-COALESCE((SELECT SUM(amount_minor) FROM restaurant_activation_receipts p WHERE p.restaurant_id=a.restaurant_id),0)>=? ON CONFLICT(id) DO NOTHING`).bind(paymentId,paid,paidDate,method,reference,actor.userId,id,version,paid),
+  env.DB.prepare('UPDATE restaurant_activation_charges SET version=version+1 WHERE restaurant_id=? AND version=? AND changes()=1').bind(id,version),
+  audit(env,actor,'restaurant_activation_payment',id,{paymentId,amount:paid,paidDate,method,reference},id)
+ ]);
+ if(!saved.meta.changes){const existing=await env.DB.prepare('SELECT * FROM restaurant_activation_receipts WHERE id=?').bind(paymentId).first();if(existing)return matchReceipt(existing,'restaurant_id',id,fields,paid);throw new ApiError(409,'FINANCE_BALANCE_CHANGED')}
+ return {ok:true};
 }
 async function financeSummary(env,req){
  const day=hondurasToday(),params=new URL(req.url).searchParams;
@@ -165,9 +184,10 @@ async function financeSummary(env,req){
   }
  }
  const courier=await env.DB.prepare(`SELECT (SELECT COALESCE(SUM(amount_minor),0) FROM courier_fee_receipts WHERE paid_date BETWEEN ? AND ?) AS courierFeesReceived,(SELECT COALESCE(SUM(c.amount_minor-COALESCE((SELECT SUM(amount_minor) FROM courier_fee_receipts r WHERE r.charge_id=c.id),0)),0) FROM courier_fee_charges c) AS courierFeesOutstanding`).bind(start,end).first();
+ const activation=await env.DB.prepare(`SELECT (SELECT COALESCE(SUM(amount_minor),0) FROM restaurant_activation_receipts WHERE paid_date BETWEEN ? AND ?) AS activationReceived,(SELECT COALESCE(SUM(a.amount_minor-COALESCE((SELECT SUM(amount_minor) FROM restaurant_activation_receipts r WHERE r.restaurant_id=a.restaurant_id),0)),0) FROM restaurant_activation_charges a) AS activationOutstanding`).bind(start,end).first();
  const advertisingReceived=from===null?total.advertisingRecorded:total.advertisingPeriod;
- return {...total,...courier,advertisingReceived,affiliationNextDue,affiliationOverdue,affiliationDueToday,
-  totalReceived:total.affiliationReceived+advertisingReceived+total.settledDvolada+courier.courierFeesReceived,asOf:day,from,until};
+ return {...total,...courier,...activation,advertisingReceived,affiliationNextDue,affiliationOverdue,affiliationDueToday,
+  totalReceived:total.affiliationReceived+advertisingReceived+total.settledDvolada+courier.courierFeesReceived+activation.activationReceived,asOf:day,from,until};
 }
 export async function commercialControl(req,env,actor,path){
  requireRole(actor,'platform_admin');
@@ -176,6 +196,8 @@ export async function commercialControl(req,env,actor,path){
  if(pay)return respond(req,env,200,await spotPayments(req,env,actor,requireUuid(pay[1])));
  const s=/^spots(?:\/([0-9a-f-]{36}))?$/.exec(path);
  if(s)return respond(req,env,200,await spots(req,env,actor,s[1]?requireUuid(s[1]):null));
+ const activation=/^contracts\/([0-9a-f-]{36})\/activation$/.exec(path);
+ if(activation)return respond(req,env,200,await activationPayment(req,env,actor,requireUuid(activation[1])));
  const c=/^contracts\/([0-9a-f-]{36})(\/payments)?$/.exec(path);
  if(c)return respond(req,env,200,await contract(req,env,actor,requireUuid(c[1]),Boolean(c[2])));
  throw new ApiError(404,'NOT_FOUND');

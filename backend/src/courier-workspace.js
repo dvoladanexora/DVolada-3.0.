@@ -23,15 +23,24 @@ export async function courierAvailability(req,env,actor){
 export async function courierApplication(req,env,actor){
  requireRole(actor,'customer');
  if(req.method==='POST'){
-  requireKeys(await readJson(req),[]);
-  const result=await env.DB.prepare(`INSERT INTO courier_applications(user_id)
-   SELECT id FROM users WHERE id=? AND status='active' AND account_role='customer'
+  const body=await readJson(req,2048);
+  requireKeys(body,['phone','transport','zone']);
+  const detail=body.phone!==undefined||body.transport!==undefined||body.zone!==undefined;
+  const zone=detail?requireText(body.zone,2,100,'zone'):null;
+  if(detail&&(!/^\+504[0-9]{8}$/.test(body.phone)||!['motorcycle','car','bicycle','walking','other'].includes(body.transport)))
+   throw new ApiError(400,'INVALID_INPUT');
+  const result=await env.DB.prepare(`INSERT INTO courier_applications(user_id,contact_phone,transport,service_zone)
+   SELECT id,?,?,? FROM users WHERE id=? AND status='active' AND account_role='customer'
     AND NOT EXISTS(SELECT 1 FROM restaurant_memberships WHERE user_id=users.id AND active=1)
-   ON CONFLICT(user_id) DO NOTHING`).bind(actor.userId).run();
+   ON CONFLICT(user_id) DO UPDATE SET
+    contact_phone=excluded.contact_phone,transport=excluded.transport,service_zone=excluded.service_zone
+   WHERE courier_applications.contact_phone IS NULL AND excluded.contact_phone IS NOT NULL`)
+   .bind(body.phone??null,body.transport??null,zone,actor.userId).run();
   if(!result.meta.changes&&!await env.DB.prepare('SELECT 1 FROM courier_applications WHERE user_id=?').bind(actor.userId).first())
    throw new ApiError(403,'ROLE_FORBIDDEN');
  }
- return {requested:Boolean(await env.DB.prepare('SELECT 1 FROM courier_applications WHERE user_id=?').bind(actor.userId).first())};
+ const request=await env.DB.prepare('SELECT contact_phone FROM courier_applications WHERE user_id=?').bind(actor.userId).first();
+ return {requested:Boolean(request),needsDetails:Boolean(request&&!request.contact_phone)};
 }
 
 export async function rejectCourierApplication(req,env,actor){
@@ -51,7 +60,7 @@ export async function rejectCourierApplication(req,env,actor){
 
 export async function pendingCouriers(env,actor){
  requireRole(actor,'platform_admin');
- const {results=[]}=await env.DB.prepare(`SELECT a.user_id,u.display_name,a.created_at FROM courier_applications a JOIN users u ON u.id=a.user_id
+ const {results=[]}=await env.DB.prepare(`SELECT a.user_id,u.display_name,a.created_at,a.contact_phone,a.transport,a.service_zone FROM courier_applications a JOIN users u ON u.id=a.user_id
   WHERE u.account_role='customer' AND u.status='active' ORDER BY a.created_at,a.user_id LIMIT 100`).all();
  return {applications:results};
 }

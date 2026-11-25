@@ -9,7 +9,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql','0024_commercial_control.sql','0025_public_auth.sql','0026_restaurant_applications.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql','0024_commercial_control.sql','0025_public_auth.sql','0026_restaurant_applications.sql','0027_courier_application_details.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -1043,7 +1043,13 @@ test('QA courier application, platform validation and global session revocation'
  const {cookie,account}=await enrollPasskey(f,'qa.courier.profile');
  assert.equal((await req('courier/orders',undefined,{cookie,account})).status,403);
  for(let i=0;i<2;i++)assert.equal((await req('customer/courier-application',{},{cookie,account})).status,200);
+ assert.equal((await req('customer/courier-application',{phone:'123',transport:'car',zone:'Centro'},{cookie,account})).status,400);
+ assert.equal((await req('customer/courier-application',{phone:'+50400000003',transport:'bicycle',zone:'Centro'},{cookie,account})).status,200);
  assert.equal((await f.call('/api/v1/admin/courier-applications')).status,403);
+ const [application]=(await f.call('/api/v1/admin/courier-applications',{by:'platformAdmin'})).body.applications;
+ assert.equal(application.transport,'bicycle');
+ assert.equal(application.contact_phone,'+50400000003');
+
  assert.deepEqual((await f.call('/api/v1/admin/courier-applications',{by:'platformAdmin'})).body.applications.map(x=>x.user_id),[account]);
  const pending=f.DB.db.prepare('SELECT created_at FROM courier_applications WHERE user_id=?').get(account);
  const decision={userId:account,createdAt:pending.created_at};
@@ -1605,6 +1611,22 @@ test('commercial spots are admin-only, scheduled, pausable and public without pr
  const image=await worker.fetch(new Request('https://api.example.test/api/v1/catalog/spots/'+id+'/image'),f.env);assert.equal(image.status,200);assert.equal(image.headers.get('content-type'),'image/jpeg');
  assert.equal((await f.call(root+'/'+id,{by:'platformAdmin',method:'POST',body:{action:'pause',version:2}})).status,200);
  assert.equal((await f.call('/api/v1/catalog/spots')).body.spots.length,0);
+ const edit={...body,title:'Anuncio actualizado',version:3};
+ delete edit.imageBase64;
+ assert.equal((await f.call(root+'/'+id,{by:'platformAdmin',method:'PATCH',body:edit})).status,200);
+ assert.equal((await f.call(root+'/'+id,{by:'platformAdmin',method:'PATCH',body:edit})).status,409);
+ assert.equal((await f.call(root+'/'+id,{by:'platformAdmin',method:'POST',body:{action:'activate',version:4}})).status,200);
+ assert.equal((await f.call('/api/v1/catalog/spots')).body.spots[0].title,edit.title);
+ f.DB.db.prepare('UPDATE commercial_spots SET ends_at=unixepoch()-1 WHERE id=?').run(id);
+ assert.equal((await f.call('/api/v1/catalog/spots')).body.spots.length,0);
+ assert.equal((await f.call('/api/v1/catalog/spots/'+id+'/image')).status,404);
+ const finance='/api/v1/admin/control/finance';
+ assert.equal((await f.call(finance)).status,403);
+ const summary=await f.call(finance,{by:'platformAdmin'});
+ assert.equal(summary.status,200);
+ assert.equal(summary.body.advertisingRecorded,25000);
+ assert.equal(summary.body.advertisingOutstanding,50000);
+ assert.equal(summary.body.settledDvolada,0);
 });
 test('affiliate payment is unique per due date and advances billing date',async()=>{
  const f=await fixture(),root='/api/v1/admin/control/contracts/'+f.restaurants[0];

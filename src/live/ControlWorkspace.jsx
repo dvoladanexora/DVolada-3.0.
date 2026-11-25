@@ -50,7 +50,7 @@ const controlGroups=[
  {id:'business',label:'Afiliados',icon:Store,sections:[['business','Restaurantes'],['restaurantApplications','Solicitudes'],['owners','Propietarios'],['staff','Personal']]},
  {id:'couriers',label:'Repartidores',icon:Bike,sections:[['courierDirectory','Directorio'],['couriers','Solicitudes']]},
  {id:'advertising',label:'Publicidad',icon:Megaphone,sections:[['advertising','Spots'],['coupons','Cupones'],['flash','Flash y regalos']]},
- {id:'statistics',label:'Estadísticas',icon:ChartNoAxesCombined,sections:[['reports','Reportes de actividad'],['settlements','Liquidaciones']]},
+ {id:'statistics',label:'Estadísticas',icon:ChartNoAxesCombined,sections:[['reports','Reportes de actividad'],['finance','Finanzas'],['settlements','Liquidaciones']]},
  {id:'security',label:'Administrador',icon:Settings,sections:[['security','Mi acceso'],['accounts','Cuentas'],['rates','Tarifas y comisiones'],['audit','Auditoría'],['affiliationAudit','Actividad de afiliación']]}
 ];
 function visibleGroups(flash,commercial){

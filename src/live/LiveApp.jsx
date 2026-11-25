@@ -1,3 +1,4 @@
+import FinanceSummary from './FinanceSummary.jsx';
 import {RestaurantApplicationQueue} from './RestaurantApplications.jsx';
 import RestaurantKitchenDisplay from '../RestaurantKitchenDisplay.jsx';
 import {openKitchenTicket} from '../kitchen-operations.js';
@@ -913,6 +914,7 @@ export default function LiveApp({CustomerHome}){
       restaurantId={adminSelectedId} disabled={busy||offline}
       invite={(id,body)=>run(()=>api.adminInviteOwner(id,body,newKey()),{refresh:false})}/>}
     </section>}
+    {controlSection==='finance'&&<FinanceSummary api={api} money={price} offline={offline}/>}
     {controlSection==='courierDirectory'&&<CourierDirectory api={api} run={run} busy={busy} offline={offline} errorLabel={errorLabel} setSection={selectControlSection}/>}
     {controlSection==='advertising'&&<SpotManager api={api} run={run} busy={busy} offline={offline} money={price} errorLabel={errorLabel}/>}
     {controlSection==='couriers'&&<>

@@ -3,6 +3,7 @@ import React,{useEffect,useRef,useState} from 'react';
 const labels={Listo:'Confirmar recogida',Recogido:'Salir a entregar','En camino':'Confirmar llegada'};
 const next={Listo:'Recogido',Recogido:'En camino','En camino':'En ubicación'};
 const settlements={pending:'Pendiente',calculated:'Calculada',approved:'Aprobada',paid:'Pagada'};
+const transportLabels={motorcycle:'Motocicleta',car:'Automóvil',bicycle:'Bicicleta',walking:'A pie',other:'Otro'};
 const date=value=>new Date(value*1000).toLocaleString('es-HN',{timeZone:'America/Tegucigalpa'});
 const mapUrl=destination=>'https://www.google.com/maps/dir/?'+new URLSearchParams({api:'1',destination});
 function Button({secondary=false,...props}){
@@ -14,17 +15,24 @@ export function CourierApplication({api,busy,offline,account,run}){
  useEffect(()=>{
   if(offline)return;
   let active=true;
-  api.courierApplication(false).then(data=>{if(active)setRequested(data.requested)}).catch(()=>{});
+  api.courierApplication(false).then(data=>{if(active)setRequested(data.requested&&!data.needsDetails)}).catch(()=>{});
   return()=>{active=false};
  },[api,account,offline]);
  if(requested===null)return null;
  return <details className="dvl-panel dvl-span">
   <summary>Trabajá como repartidor</summary>
   {requested?<p role="status">Solicitud enviada. Cuando el Centro de Control habilite tu cuenta, volvé a iniciar sesión.</p>:
-   <Button secondary disabled={busy||offline} onClick={async()=>{
-    const response=await run(()=>api.courierApplication(true),{refresh:false});
-    if(response)setRequested(response.requested);
-   }}>Solicitar acceso de repartidor</Button>}
+   <form className="dvl-stack" onSubmit={async event=>{
+    event.preventDefault();
+    const values=Object.fromEntries(new FormData(event.currentTarget));
+    const response=await run(()=>api.courierApplication({...values,phone:'+504'+values.phone}),{refresh:false});
+    if(response)setRequested(response.requested&&!response.needsDetails);
+   }}>
+    <label>Teléfono o WhatsApp (+504)<input name="phone" required inputMode="numeric" autoComplete="tel-national" pattern="[0-9]{8}" maxLength={8}/></label>
+    <label>Medio de transporte<select name="transport">{Object.entries(transportLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+    <label>Zona de cobertura<input name="zone" required minLength={2} maxLength={100}/></label>
+    <button className="dvl-action" disabled={busy||offline}>Solicitar acceso de repartidor</button>
+   </form>}
  </details>;
 }
 
@@ -42,7 +50,8 @@ export function CourierApplications({api,run,busy,offline,errorLabel}){
   {error&&<p role="alert">{error}</p>}
   {applications?.length===0&&<p>No hay solicitudes pendientes.</p>}
   {applications?.map(person=><div className="dvl-row" key={person.user_id}>
-   <span>{person.display_name} · {date(person.created_at)}</span>
+   <span>{person.display_name} · {date(person.created_at)}{person.service_zone&&<> · {transportLabels[person.transport]} · {person.service_zone}</>}</span>
+   {person.contact_phone&&<a href={'https://wa.me/'+person.contact_phone.slice(1)} target="_blank" rel="noreferrer">WhatsApp</a>}
    <Button secondary disabled={busy||offline} onClick={async()=>{
     const done=await run(()=>api.adminEnrollCourier(person.user_id,person.created_at));
     if(done)setApplications(rows=>rows.filter(row=>row.user_id!==person.user_id));

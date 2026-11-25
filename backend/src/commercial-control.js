@@ -97,8 +97,22 @@ async function contract(req,env,actor,id,payment){
  const [changed]=await env.DB.batch([stmt,env.DB.prepare("UPDATE restaurants SET plan=?,online_state=CASE WHEN ?='LOCAL' THEN 'closed' ELSE online_state END WHERE id=? AND changes()=1").bind(plan,plan,id),audit(env,actor,'contract_saved',id,{plan,start,due,frequency,price},id)]);
  if(!changed.meta.changes)throw new ApiError(409,'ADMIN_ACCOUNT_CHANGED');return {ok:true};
 }
+async function financeSummary(env){
+ const day=new Date((now()-6*3600)*1000).toISOString().slice(0,10);
+ return env.DB.prepare(`SELECT
+  (SELECT COALESCE(SUM(amount_minor),0) FROM restaurant_contract_payments) AS affiliationReceived,
+  (SELECT COALESCE(SUM(amount_minor),0) FROM restaurant_contracts WHERE next_due IS NOT NULL) AS affiliationNextDue,
+  (SELECT COALESCE(SUM(amount_minor),0) FROM restaurant_contracts WHERE next_due<?) AS affiliationOverdue,
+  (SELECT COALESCE(SUM(paid_minor),0) FROM commercial_spots) AS advertisingRecorded,
+  (SELECT COALESCE(SUM(price_minor-paid_minor),0) FROM commercial_spots) AS advertisingOutstanding,
+  (SELECT COALESCE(SUM(l.dvolada_minor),0) FROM restaurant_settlement_lines l
+   JOIN restaurant_settlements s ON s.id=l.settlement_id WHERE s.status='paid')+
+  (SELECT COALESCE(SUM(a.dvolada_minor),0) FROM restaurant_settlement_adjustments a
+   JOIN restaurant_settlements s ON s.id=a.settlement_id WHERE s.status='paid') AS settledDvolada`).bind(day).first();
+}
 export async function commercialControl(req,env,actor,path){
  requireRole(actor,'platform_admin');
+ if(path==='finance'&&req.method==='GET')return respond(req,env,200,await financeSummary(env));
  const s=/^spots(?:\/([0-9a-f-]{36}))?$/.exec(path);
  if(s)return respond(req,env,200,await spots(req,env,actor,s[1]?requireUuid(s[1]):null));
  const c=/^contracts\/([0-9a-f-]{36})(\/payments)?$/.exec(path);

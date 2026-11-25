@@ -157,7 +157,7 @@ async function route(req,env){
  if(biometricRoute&&(biometricRoute[1]==='status'?method==='GET':method==='POST'))return biometric(req,env,actor,biometricRoute[1]);
  const application=/^\/api\/v1\/admin\/restaurant-applications(?:\/([0-9a-f-]{36}))?$/.exec(path);
  if(application)return manageRestaurantApplications(req,env,actor,application[1]);
- if(/^\/api\/v1\/admin\/control\/(spots|contracts)(?:\/|$)/.test(path))return commercialControl(req,env,actor,path.slice('/api/v1/admin/control/'.length));
+ if(/^\/api\/v1\/admin\/control\/(spots|contracts|finance)(?:\/|$)/.test(path))return commercialControl(req,env,actor,path.slice('/api/v1/admin/control/'.length));
  const courierRating=/^\/api\/v1\/customer\/orders\/([0-9a-f-]{36})\/courier-rating$/.exec(path);
  if(method==='POST'&&courierRating)return respond(req,env,200,await rateCourier(req,env,actor,courierRating[1]));
  if(path.startsWith('/api/v1/admin/control/'))return controlRoute(req,env,actor,path.slice('/api/v1/admin/control/'.length));

@@ -51,6 +51,8 @@ function OwnerInvitation({restaurantId,invite,disabled}){
 
 const qaView=['/pruebas','/pruebas/'].includes(window.location.pathname);
 const controlView=['/cuenta','/cuenta/'].includes(window.location.pathname)&&new URLSearchParams(window.location.search).get('panel')==='control';
+const accountParams=new URLSearchParams(window.location.search);
+const restaurantIntent=accountParams.get('intent')==='restaurant'||(location.hostname==='dvolada-beta.dvoladanexora.workers.dev'&&accountParams.get('beta_rol')==='restaurant');
 const apiOrigin=import.meta.env.VITE_DVOLADA_API_URL||window.location.origin;
 const optionPrice=options=>(options||[]).reduce((total,option)=>total+option.price_minor,0);
 const optionsFromReceipt=item=>{try{return JSON.parse(item.options_json||'[]')}catch{return []}};
@@ -145,7 +147,7 @@ export default function LiveApp({CustomerHome}){
  const [pushConfig,setPushConfig]=useState(null),[pushEnabled,setPushEnabled]=useState(false);
  const [commercial,setCommercial]=useState(false),[staffCredential,setStaffCredential]=useState(null);
  const [accountEnabled,setAccountEnabled]=useState(false),[accessReady,setAccessReady]=useState(false);
- const [publicAuth,setPublicAuth]=useState(false),[googleCustomer,setGoogleCustomer]=useState(false),[passwordMode,setPasswordMode]=useState(()=>new URLSearchParams(location.search).get('mode')==='register');
+ const [publicAuth,setPublicAuth]=useState(false),[googleCustomer,setGoogleCustomer]=useState(false),[passwordMode,setPasswordMode]=useState(true);
  const [newCodes,setNewCodes]=useState(null),[support,setSupport]=useState(null);
  const [flashEnabled,setFlashEnabled]=useState(false),[flashOffers,setFlashOffers]=useState([]),[flashSelection,setFlashSelection]=useState(null);
  const [favoriteIds,setFavoriteIds]=useState([]),[onlyFavorites,setOnlyFavorites]=useState(false);
@@ -654,8 +656,8 @@ export default function LiveApp({CustomerHome}){
    <button type="button" key={label} onClick={action}><Icon size={20} aria-hidden="true"/>{label}</button>)}</nav>}
   <main className="dvl-main">
   <div className="dvl-intro"><span className="dvl-kicker">NEXORA SYSTEMS · DVOLADA ONLINE</span>
-   <h1>{session?(scope==='restaurant'&&selectedBusiness?.staff_role==='kitchen'?'Cocina':roles[scope]) :(qaView?'Dvolada · Entorno de pruebas':'Dvolada · Mi cuenta')}</h1>
-   <p>{adminMode?'Administrá tu red de negocios y entregas.':session?'Gestioná tu actividad en Dvolada.':'Accedé para hacer y seguir pedidos con seguridad.'}</p></div>
+   <h1>{session?(scope==='restaurant'&&selectedBusiness?.staff_role==='kitchen'?'Cocina':roles[scope]) :(qaView?'Dvolada · Entorno de pruebas':restaurantIntent?'Acceso de restaurantes':customerSection==='mis-pedidos'?'Mis pedidos':customerSection==='carrito'?'Tu carrito':'Dvolada · Mi cuenta')}</h1>
+   <p>{adminMode?'Administrá tu red de negocios y entregas.':session?'Gestioná tu actividad en Dvolada.':restaurantIntent?'Ingresá con el acceso de tu negocio.':customerSection==='mis-pedidos'?'Iniciá sesión para consultar tus pedidos y su seguimiento.':customerSection==='carrito'?'Iniciá sesión para continuar tu pedido.':'Accedé para hacer y seguir pedidos con seguridad.'}</p></div>
   {offline&&<div className="dvl-offline" role="alert"><WifiOff size={19}/> Sin conexión. Los pedidos se muestran como potencialmente desactualizados; las acciones están bloqueadas.</div>}
   <WaitOrError message={status}/>
   <WaitOrError message={error} warning/>
@@ -665,10 +667,17 @@ export default function LiveApp({CustomerHome}){
     {(session?.user.privilegedPasskey||session?.user.googleAdmin)&&(!adminMode||controlSection==='security')&&<Action kind="text" disabled={busy||offline}
    onClick={()=>{if(window.confirm('¿Cerrar todas las sesiones de esta cuenta?'))logout(true)}}>Cerrar todas mis sesiones</Action>}
   {staffCredential&&<StaffSecret code={staffCredential} close={()=>setStaffCredential(null)} issued/>}
-  {!session&&commercial&&accountEnabled&&<StaffSignIn authenticate={authenticateStaff} disabled={busy||offline}/>}
+  {!session&&commercial&&accountEnabled&&(restaurantIntent||qaView)&&<StaffSignIn authenticate={authenticateStaff} disabled={busy||offline}/>}
   <ClientCodes codes={newCodes} close={()=>setNewCodes(null)}/>
   {!session&&!accessReady&&!offline&&<p role="status">Verificando acceso…</p>}
-  {!session&&accountEnabled&&<>{publicAuth&&new URLSearchParams(location.search).get('intent')!=='restaurant'&&<section className="dvl-panel dvl-stack">{googleCustomer&&<CustomerGoogleButton api={api} offline={offline} onSuccess={(me,codes)=>{if(codes.recovery)setNewCodes(codes);openSession(me,true)}}/>}<button type="button" className="dvl-action secondary" disabled={busy||offline} onClick={()=>authenticateClient('login',{login:''})}>Ingresar con huella o Face ID</button><button type="button" className="dvl-action secondary" disabled={busy||offline} onClick={()=>setPasswordMode(v=>!v)}>{passwordMode?'Usar huella o llave de acceso':'Ingresar o crear cuenta con contraseña'}</button></section>}{publicAuth&&passwordMode&&new URLSearchParams(location.search).get('intent')!=='restaurant'?<PasswordAccess authenticate={authenticatePassword} busy={busy} offline={offline} initialMode={new URLSearchParams(location.search).get('mode')==='register'?'register':'login'} onBack={()=>setPasswordMode(false)}/>:<ClientAccess authenticate={authenticateClient} busy={busy} offline={offline}/>}</>}
+  {!session&&accountEnabled&&<>{publicAuth&&!restaurantIntent&&!qaView?<>
+   {passwordMode?<PasswordAccess authenticate={authenticatePassword} busy={busy} offline={offline} initialMode={accountParams.get('mode')==='register'?'register':'login'} onBack={null}/>:<ClientAccess authenticate={authenticateClient} busy={busy} offline={offline}/>}
+   <section className="dvl-panel dvl-stack" aria-label="Otras opciones de acceso">{googleCustomer&&<CustomerGoogleButton api={api} offline={offline} onSuccess={(me,codes)=>{if(codes.recovery)setNewCodes(codes);openSession(me,true)}}/>}
+    <button type="button" className="dvl-action secondary" disabled={busy||offline} onClick={()=>authenticateClient('login',{login:''})}>Ingresar con huella o Face ID</button>
+    <p className="dvl-muted">Usá la huella, el rostro o el PIN del dispositivo si ya activaste una llave de acceso.</p>
+    <button type="button" className="dvl-action secondary" disabled={busy||offline} onClick={()=>setPasswordMode(v=>!v)}>{passwordMode?'Otras opciones de llave de acceso':'Volver a usuario y contraseña'}</button>
+    <a href="/#home">Continuar explorando como invitado</a>
+   </section></>:<ClientAccess authenticate={authenticateClient} busy={busy} offline={offline}/>}</>}
   {qaView&&!session&&(accessReady||offline)&&<form className="dvl-panel dvl-login" onSubmit={signIn}>
    <h2>Ingresá con tu acceso de pruebas</h2>
    <label>Código de acceso<input type="password" autoComplete="off" value={accessCode}

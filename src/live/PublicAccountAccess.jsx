@@ -35,7 +35,7 @@ export function PasswordAccess({authenticate,busy,offline,initialMode='login',on
  {mode!=='login'&&<label>Confirmá la contraseña<input name="confirm" type="password" required minLength={12} maxLength={128} autoComplete="new-password"/></label>}
  {error&&<p role="alert">{error}</p>}
  <button type="submit" className="dvl-action" disabled={busy||offline}>{mode==='register'?'Crear mi cuenta':mode==='recover'?'Restablecer contraseña':'Ingresar'}</button>
- <button type="button" className="dvl-action secondary" onClick={onBack}>Otras formas de ingreso</button>
+ {onBack&&<button type="button" className="dvl-action secondary" onClick={onBack}>Otras formas de ingreso</button>}
  </form>;
 }
 export function AccountBiometrics({api,busy,offline,run,errorLabel}){

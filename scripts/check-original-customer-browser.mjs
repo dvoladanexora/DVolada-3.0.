@@ -20,12 +20,13 @@ try{
   localStorage.setItem('dv_sound_onboard_seen','1');
   localStorage.setItem('dv_local_profile',JSON.stringify({sound:false}));
  },{account,rid,pid});
- let created=0;let orders=[];
+ let created=0;let orders=[];let signedIn=false;
  const unexpected=[],errors=[];
  await context.route('**/api/v1/**',async route=>{
   const req=route.request(),p=new URL(req.url()).pathname;
   const data={
-   '/api/v1/auth/client/config':{enabled:true,commercial:true},
+   '/api/v1/auth/client/config':{enabled:true,commercial:true,publicAuth:true,googleCustomer:false},
+   '/api/v1/auth/biometric/status':{registered:false,login:'cliente.fixture'},
    '/api/v1/auth/me':{user:{id:account,role:'customer',displayName:'Cliente de fixture'},restaurants:[]},
    '/api/v1/catalog/restaurants':{restaurants:[restaurant],next:null},
    ['/api/v1/catalog/restaurants/'+rid+'/products']:{restaurant,products:[product]},
@@ -34,6 +35,8 @@ try{
    '/api/v1/customer/favorites':{ids:[]},
    '/api/v1/customer/courier-application':{requested:false},
   };
+  if(p==='/api/v1/auth/me'&&!signedIn)return route.fulfill({status:401,json:{error:'SESSION_REQUIRED'}});
+  if(p==='/api/v1/auth/client/password/login'){assert.deepEqual(req.postDataJSON(),{login:'cliente.fixture',password:'solo-prueba-12345'});signedIn=true;return route.fulfill({status:204,body:''})}
   if(p==='/api/v1/customer/orders'){
    if(req.method()==='POST'){
     const body=req.postDataJSON();assert.equal(body.restaurantId,rid);assert.equal(body.items[0].quantity,2);assert.equal(body.expectedTotalMinor,10000);assert.ok(req.headers()['idempotency-key']);created++;
@@ -48,6 +51,17 @@ try{
  await context.route('**/push-config',r=>r.fulfill({json:{enabled:false}}));
  const page=await context.newPage();
  page.on('pageerror',error=>errors.push(error.message));
+ await page.goto(origin+'/cuenta?vista=pedido#mis-pedidos');
+ await page.getByRole('heading',{name:'Mis pedidos',exact:true}).waitFor();
+ await page.getByRole('heading',{name:'Ingresar con contraseña',exact:true}).waitFor();
+ assert.equal(await page.getByText('Acceso de personal del restaurante',{exact:true}).count(),0);
+ assert.equal(await page.getByRole('button',{name:'Ingresar con llave',exact:true}).count(),0);
+ await page.getByRole('button',{name:'Ingresar con huella o Face ID',exact:true}).waitFor();
+ await page.getByLabel('Usuario',{exact:true}).fill('cliente.fixture');
+ await page.getByLabel('Contraseña',{exact:true}).fill('solo-prueba-12345');
+ await page.locator('form.dvl-login').getByRole('button',{name:'Ingresar',exact:true}).last().click();
+ await page.locator('.dv-tools-header').waitFor();
+ await page.getByRole('heading',{name:'Mis pedidos',exact:true}).waitFor();
  await page.goto(origin+'/cuenta');
  await page.locator('.dv-tools-header').waitFor();
  assert.equal(await page.locator('.dv-sidebar').count(),1);

@@ -1,3 +1,4 @@
+import {bankAccount,customerTransfer,reviewTransfers} from './bank-transfers.js';
 import {submitRestaurantApplication,manageRestaurantApplications} from './restaurant-applications.js';
 import {controlRoute} from './control-center.js';
 import {commercialControl,publicSpots,rateCourier} from './commercial-control.js';
@@ -297,6 +298,9 @@ async function route(req,env){
   const access=await restaurantAccess(req,env,actor);
   requireStaff(access.staff_role,['owner','manager','kitchen','cashier']);
   if(commercial){
+   if(path==='/api/v1/restaurant/bank-account'&&['GET','PATCH'].includes(method))return bankAccount(req,env,access);
+   const transfer=/^\/api\/v1\/restaurant\/transfers(?:\/([0-9a-f-]{36}))?$/.exec(path);
+   if(transfer&&(transfer[1]?method==='PATCH':method==='GET'))return reviewTransfers(req,env,actor,access,transfer[1]);
    const staff=/^\/api\/v1\/restaurant\/staff-access(?:\/([0-9a-f-]+)\/(state|role|reset|revoke))?$/.exec(path);
    if(staff&&(method==='POST'||method==='GET'&&!staff[1]))
     return respond(req,env,200,await staffAccess(req,env,actor,access,staff[1],staff[2]));
@@ -382,6 +386,8 @@ async function route(req,env){
  const deliver=/^\/api\/v1\/courier\/orders\/([0-9a-f-]+)\/deliver$/i.exec(path);
  if(method==='POST'&&deliver)
   return respond(req,env,200,await confirmDelivery(req,env,actor,deliver[1]));
+ const transfer=/^\/api\/v1\/customer\/orders\/([0-9a-f-]{36})\/transfer$/.exec(path);
+ if(commercial&&transfer&&['GET','POST'].includes(method))return customerTransfer(req,env,actor,transfer[1]);
  if(method==='GET'&&path==='/api/v1/customer/orders')
   return respond(req,env,200,await customerOrders(env,actor));
  if(method==='GET'&&path==='/api/v1/customer/orders/checkout')

@@ -1,3 +1,4 @@
+import {OrderTransfer,BankAccountForm,TransferQueue} from './BankTransfers.jsx';
 import FinanceSummary from './FinanceSummary.jsx';
 import {RestaurantApplicationQueue} from './RestaurantApplications.jsx';
 import RestaurantKitchenDisplay from '../RestaurantKitchenDisplay.jsx';
@@ -125,7 +126,8 @@ function errorLabel(error){
   STAFF_CHANGE_FORBIDDEN:'No se puede cambiar el rol o acceso de esa cuenta.',
   INVALID_COUPON:'Revisá el formato del cupón.',
   COUPON_UNAVAILABLE:'Cupón vencido, ya utilizado o ajeno a este restaurante.',
-  PASSKEY_INVALID:'No pudimos verificar tu llave. Elegí la llave de esa cuenta o recuperá el acceso.',
+  PASSKEY_INVALID:'No pudimos verificar tu llave. Elegí la llave de tu cuenta de cliente; las llaves del Centro de Control no sirven para este ingreso.',
+  TRANSFER_NOT_CONFIRMED:'Confirmá la transferencia en Caja antes de aceptar este pedido.',
   PASSKEY_CHALLENGE_INVALID:'La solicitud venció o ya fue usada. Iniciá un intento nuevo.',
   PASSKEY_ALREADY_REGISTERED:'La llave elegida ya pertenece a otra cuenta.',
   CLIENT_CODE_INVALID:'La clave o el código no es válido.',
@@ -619,6 +621,7 @@ export default function LiveApp({CustomerHome}){
    ['home','cart','orders','account','restaurants','favorites','invite','install'].includes(hashPage)?hashPage:
    new URLSearchParams(window.location.search).get('intent')==='courier'?'account':'home';
   const liveCustomer={
+   transferView:commercial?order=><OrderTransfer api={api} order={order} offline={offline}/>:null,
    cart,restaurantId:cartRestaurantId,restaurant,restaurants,orders,subtotal,fee,discount,money:price,
    busy,offline,pendingKey,replaceCart,deliveryMethod,setDeliveryMethod,phone,setPhone,deliveryAddress,setDeliveryAddress,
    eligibleFlash,activeFlash,flashSelection,couponText,orderNote,setOrderNote,error,checkout,recoverCheckout,
@@ -814,6 +817,7 @@ export default function LiveApp({CustomerHome}){
      {kitchenRole&&<p>Comandas aceptadas, de la más antigua a la reciente.</p>}
     </section>
     {canManage&&restaurantTab==='settings'&&<>
+     {commercial&&selectedBusiness.staff_role==='owner'&&<BankAccountForm key={'bank-'+selectedRestaurantId} api={api} id={selectedRestaurantId} offline={offline}/>}
      <RestaurantProfile key={selectedRestaurantId} api={api} id={selectedRestaurantId} run={run} busy={busy} offline={offline}/>
      <RestaurantStaff key={'staff-'+selectedRestaurantId} api={api} id={selectedRestaurantId} owner={selectedBusiness.staff_role==='owner'}
       run={run} busy={busy} offline={offline}/>
@@ -822,6 +826,7 @@ export default function LiveApp({CustomerHome}){
     </>}
     {commercial&&canManage&&restaurantTab==='settlements'&&<SettlementPanel key={selectedRestaurantId}
      api={api} restaurant={selectedRestaurantId} run={run} busy={busy} offline={offline} money={price} errorLabel={errorLabel}/>}
+    {commercial&&(cashRole||(canManage&&restaurantTab==='cash'))&&<TransferQueue key={'transfer-'+selectedRestaurantId} api={api} id={selectedRestaurantId} offline={offline} money={price}/>}
     {(cashRole||(canManage&&restaurantTab==='cash'))&&<RestaurantCash key={'cash-'+selectedRestaurantId}
      api={api} id={selectedRestaurantId} orders={orders} offline={offline} busy={busy} run={run} money={price} refreshOrders={load}/>}
     {canManage&&['active','menu'].includes(restaurantTab)&&<section className="dvl-panel">

@@ -9,7 +9,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql','0024_commercial_control.sql','0025_public_auth.sql','0026_restaurant_applications.sql','0027_courier_application_details.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql','0024_commercial_control.sql','0025_public_auth.sql','0026_restaurant_applications.sql','0027_courier_application_details.sql','0028_bank_transfers.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -1729,4 +1729,44 @@ test('restaurant applications persist once, remain private and have one audited 
  assert.equal((await reject('Otra revisión')).status,409);
  assert.equal(f.DB.db.prepare("SELECT COUNT(*) AS n FROM control_audit WHERE action='restaurant_application_decided'").get().n,1);
  assert.equal(f.DB.db.prepare('SELECT count(*) AS n FROM restaurants').get().n,2);
+});
+
+test('direct transfers are scoped, snapshot bank details and block acceptance and cash reconciliation until verified',async()=>{
+ const f=await fixture(),rid=f.restaurants[0];
+ f.env.QA_RESTAURANT_COMMERCIAL='true';
+ await f.user('transferOwner','customer',[rid,'owner']);
+ const settings={by:'transferOwner',restaurantId:rid};
+ const bank='/api/v1/restaurant/bank-account';
+ const account={bank:'Banco ficticio',beneficiary:'Restaurante de prueba',type:'Ahorros',number:'00001234',instructions:'Transferencia ficticia'};
+ assert.equal((await f.call(bank,{...settings,method:'PATCH',body:account})).status,200);
+ assert.equal((await f.call(bank,{by:'staffA',restaurantId:rid})).status,403);
+ const profile={description:'QA',address:'QA',latitude:null,longitude:null,hours:Array(7).fill(null),paymentMethods:['cash','transfer']};
+ assert.equal((await f.call('/api/v1/restaurant/profile',{...settings,method:'PATCH',body:profile})).status,200);
+ const [one,two]=await Promise.all([f.create({deliveryMethod:'pickup'}),f.create({deliveryMethod:'pickup'})]);
+ const id=one.body.order.id,other=two.body.order.id;
+ const customer=order=>'/api/v1/customer/orders/'+order+'/transfer';
+ const send=(id,body)=>f.call(customer(id),{method:'POST',body});
+ assert.equal((await f.call(customer(id),{by:'customer2'})).status,404);
+ assert.equal((await send(id,{})).body.transfer.account_number,account.number);
+ assert.equal((await send(other,{})).status,200);
+ assert.equal((await f.call(bank,{...settings,method:'PATCH',body:{...account,number:'00009876'}})).status,200);
+ assert.equal((await f.call(customer(id))).body.transfer.account_number,account.number);
+ const [a,b]=await Promise.all([send(id,{reference:'QA-00001'}),send(other,{reference:'QA00001'})]);
+ assert.deepEqual([a.status,b.status].sort(),[200,409]);
+ const paid=a.status===200?id:other;
+ assert.equal((await f.status(paid,'staffA','Aceptado',1)).body.error,'TRANSFER_NOT_CONFIRMED');
+ const review='/api/v1/restaurant/transfers/'+paid;
+ const body={decision:'confirmed',reference:'QA00001'};
+ assert.equal((await f.call(review,{by:'staffB',restaurantId:f.restaurants[1],method:'PATCH',body})).status,409);
+ const decisions=await Promise.all([f.call(review,{...settings,method:'PATCH',body}),f.call(review,{...settings,method:'PATCH',body:{...body,decision:'rejected'}})]);
+ assert.deepEqual(decisions.map(x=>x.status).sort(),[200,409]);
+ assert.equal((await f.call(customer(paid))).body.transfer.status,'confirmed');
+ for(const [i,status] of ['Aceptado','Preparando','Listo','Entregado'].entries())
+  assert.equal((await f.status(paid,'staffA',status,i+1)).status,200);
+ const shift=(await f.call('/api/v1/restaurant/cash/open',{...settings,method:'POST',key:randomUUID(),body:{openingMinor:0}})).body.shift;
+ const sale=method=>f.call('/api/v1/restaurant/cash/sale',{...settings,method:'POST',key:randomUUID(),body:{shiftId:shift.id,orderId:paid,method}});
+ assert.equal((await sale('cash')).status,409);
+ assert.equal((await sale('transfer')).status,200);
+ assert.equal((await sale('transfer')).status,200);
+ assert.equal(f.DB.db.prepare('SELECT count(*) n FROM restaurant_sales WHERE order_id=?').get(paid).n,1);
 });

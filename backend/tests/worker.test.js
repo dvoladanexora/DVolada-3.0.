@@ -9,7 +9,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql','0024_commercial_control.sql','0025_public_auth.sql','0026_restaurant_applications.sql','0027_courier_application_details.sql','0028_bank_transfers.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql','0024_commercial_control.sql','0025_public_auth.sql','0026_restaurant_applications.sql','0027_courier_application_details.sql','0028_bank_transfers.sql','0029_finance_receipts.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -1779,4 +1779,37 @@ test('direct transfers are scoped, snapshot bank details and block acceptance an
  assert.equal((await sale('transfer')).status,200);
  assert.equal((await sale('transfer')).status,200);
  assert.equal(f.DB.db.prepare('SELECT count(*) n FROM restaurant_sales WHERE order_id=?').get(paid).n,1);
+});
+
+test('finance partial receipts are versioned, replay safe and reconcile periods without counting gross sales',async()=>{
+ const f=await fixture(),root='/api/v1/admin/control/contracts/'+f.restaurants[0],by='platformAdmin';
+ const d=new Date(Date.now()-21600000).toISOString().slice(0,10),start='2026-01-01';
+ assert.equal((await f.call(root,{by,method:'PATCH',body:{plan:'ONLINE',startDate:start,nextDue:start,frequency:'monthly',amountMinor:75000,version:0}})).status,200);
+ const first={id:randomUUID(),version:1,paidDate:d,method:'cash',reference:'abono',amountMinor:25000};
+ const submit=body=>f.call(root+'/payments',{by,method:'POST',body});
+ assert.equal((await submit(first)).status,200);
+ assert.equal((await submit(first)).status,200);
+ assert.equal((await submit({...first,amountMinor:26000})).status,409);
+ let data=(await f.call(root,{by})).body;assert.equal(data.currentPaidMinor,25000);assert.equal(data.contract.next_due,start);
+ assert.equal((await f.call(root,{by,method:'PATCH',body:{plan:'ONLINE',startDate:start,nextDue:start,frequency:'monthly',amountMinor:75000,version:2}})).status,409);
+ assert.equal((await submit({...first,id:randomUUID(),version:2,amountMinor:51000})).status,409);
+ const last={...first,id:randomUUID(),version:2,amountMinor:50000};
+ const both=await Promise.all([submit(last),submit({...last,id:randomUUID()})]);assert.deepEqual(both.map(r=>r.status).sort(),[200,409]);
+ data=(await f.call(root,{by})).body;assert.equal(data.currentPaidMinor,0);assert.equal(data.contract.next_due,'2026-02-01');assert.equal(data.payments.length,2);
+ const summary=(await f.call('/api/v1/admin/control/finance?from='+d+'&until='+d,{by})).body;assert.equal(summary.affiliationReceived,75000);assert.equal(summary.totalReceived,75000);
+ assert.ok(summary.affiliationOverdue>=75000);
+});
+test('advertising receipts preserve historical balances and reject overpayments or duplicates',async()=>{
+ const f=await fixture(),by='platformAdmin',root='/api/v1/admin/control/spots',d=new Date(Date.now()-21600000).toISOString().slice(0,10),t=Math.floor(Date.now()/1000);
+ const body={advertiser:'Comercio prueba',title:'Publicidad prueba',placement:'feed',startsAt:t,endsAt:t+300,durationSeconds:5,link:'',priceMinor:10000,paidMinor:2000,imageBase64:Buffer.from([255,216,255,217]).toString('base64')};
+ const spot=await f.call(root,{by,method:'POST',body});assert.equal(spot.status,200);const id=spot.body.id,path=root+'/'+id+'/payments';
+ const payment={id:randomUUID(),version:1,paidDate:d,method:'transfer',reference:'prueba',amountMinor:3000};
+ assert.equal((await f.call(path)).status,403);
+ const submit=body=>f.call(path,{by,method:'POST',body});
+ assert.equal((await submit(payment)).status,200);
+ assert.equal((await submit(payment)).status,200);
+ assert.equal((await submit({...payment,id:randomUUID(),version:2,amountMinor:6000})).status,409);
+ const history=(await f.call(path,{by})).body;assert.equal(history.undatedMinor,2000);assert.equal(history.payments.length,1);
+ const period=(await f.call('/api/v1/admin/control/finance?from='+d+'&until='+d,{by})).body;assert.equal(period.advertisingReceived,3000);assert.equal(period.advertisingUndated,2000);assert.equal(period.advertisingOutstanding,5000);
+ const all=(await f.call('/api/v1/admin/control/finance',{by})).body;assert.equal(all.advertisingReceived,5000);
 });

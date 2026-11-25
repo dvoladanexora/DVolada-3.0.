@@ -40,6 +40,38 @@ export async function publicSpots(req,env,id){
  const data=await rows(env.DB.prepare('SELECT id,advertiser,title,placement,starts_at,ends_at,duration_seconds,link FROM commercial_spots WHERE active=1 AND starts_at<=? AND ends_at>? ORDER BY created_at DESC LIMIT 100').bind(t,t));
  return respond(req,env,200,{spots:data.map(x=>({...x,imageUrl:'/api/v1/catalog/spots/'+x.id+'/image'}))});
 }
+const hondurasToday=()=>new Date(Date.now()-21600000).toISOString().slice(0,10);
+function paymentFields(d){
+ const paymentId=requireUuid(d.id),version=requireInteger(d.version,1,2147483646,'version'),paidDate=validDate(d.paidDate);
+ if(paidDate>hondurasToday())return fail();
+ const method=choice(d.method,['cash','transfer','external_card']),reference=requireText(d.reference??'',0,100,'reference');
+ return {paymentId,version,paidDate,method,reference};
+}
+function matchReceipt(prior,owner,id,fields,requested){
+ if(prior[owner]!==id||prior.paid_date!==fields.paidDate||prior.method!==fields.method||prior.reference!==fields.reference||(requested!==undefined&&prior.amount_minor!==requested))throw new ApiError(409,'IDEMPOTENCY_KEY_REUSED');
+ return {ok:true,replayed:true};
+}
+async function spotPayments(req,env,actor,id){
+ if(req.method==='GET'){
+  const spot=await env.DB.prepare('SELECT paid_minor,price_minor FROM commercial_spots WHERE id=?').bind(id).first();
+  if(!spot)throw new ApiError(404,'NOT_FOUND');
+  const payments=await rows(env.DB.prepare('SELECT id,amount_minor,paid_date,method,reference FROM spot_receipts WHERE spot_id=? ORDER BY paid_date DESC,created_at DESC,id DESC LIMIT 200').bind(id));
+  const total=await env.DB.prepare('SELECT COALESCE(SUM(amount_minor),0) AS amount FROM spot_receipts WHERE spot_id=?').bind(id).first();
+  return {payments,undatedMinor:spot.paid_minor-total.amount};
+ }
+ if(req.method!=='POST')throw new ApiError(405,'METHOD_NOT_ALLOWED');
+ const d=await readJson(req);requireKeys(d,['id','version','paidDate','method','reference','amountMinor']);
+ const fields=paymentFields(d),{paymentId,version,paidDate,method,reference}=fields,paid=amount(d.amountMinor,1);
+ const prior=await env.DB.prepare('SELECT * FROM spot_receipts WHERE id=?').bind(paymentId).first();
+ if(prior)return matchReceipt(prior,'spot_id',id,fields,paid);
+ const [saved]=await env.DB.batch([
+  env.DB.prepare('INSERT INTO spot_receipts(id,spot_id,amount_minor,paid_date,method,reference,actor_id) SELECT ?,id,?,?,?,?,? FROM commercial_spots WHERE id=? AND version=? AND price_minor-paid_minor>=? ON CONFLICT(id) DO NOTHING').bind(paymentId,paid,paidDate,method,reference,actor.userId,id,version,paid),
+  env.DB.prepare('UPDATE commercial_spots SET paid_minor=paid_minor+?,version=version+1 WHERE id=? AND version=? AND changes()=1').bind(paid,id,version),
+  audit(env,actor,'spot_payment',id,{paymentId,amount:paid,paidDate,method,reference})
+ ]);
+ if(!saved.meta.changes){const existing=await env.DB.prepare('SELECT * FROM spot_receipts WHERE id=?').bind(paymentId).first();if(existing)return matchReceipt(existing,'spot_id',id,fields,paid);throw new ApiError(409,'FINANCE_BALANCE_CHANGED')}
+ return {ok:true};
+}
 async function spots(req,env,actor,id){
  if(req.method==='GET'&&!id)return {spots:(await rows(env.DB.prepare('SELECT '+spotFields+' FROM commercial_spots ORDER BY created_at DESC LIMIT 200')))};
  if(id&&req.method==='GET'){
@@ -61,34 +93,39 @@ async function spots(req,env,actor,id){
  let mime=null;if(d.imageBase64!==undefined){try{if(typeof d.imageBase64==='string'&&d.imageBase64.length<=163840)mime=photoType(atob(d.imageBase64))}catch{}if(!mime)throw new ApiError(400,'INVALID_PHOTO')}
  if(!id&&!mime)throw new ApiError(400,'INVALID_PHOTO');
  const key=id||crypto.randomUUID();let stmt;
- if(id){const version=requireInteger(d.version,1,2147483646,'version');stmt=env.DB.prepare('UPDATE commercial_spots SET advertiser=?,title=?,placement=?,starts_at=?,ends_at=?,duration_seconds=?,link=?,price_minor=?,paid_minor=?,image_base64=COALESCE(?,image_base64),mime=COALESCE(?,mime),version=version+1 WHERE id=? AND version=? AND paid_minor<=?').bind(advertiser,title,placement,start,end,duration,link,price,paid,d.imageBase64??null,mime,key,version,paid)}
+ if(id){const version=requireInteger(d.version,1,2147483646,'version');stmt=env.DB.prepare('UPDATE commercial_spots SET advertiser=?,title=?,placement=?,starts_at=?,ends_at=?,duration_seconds=?,link=?,price_minor=?,paid_minor=?,image_base64=COALESCE(?,image_base64),mime=COALESCE(?,mime),version=version+1 WHERE id=? AND version=? AND paid_minor=?').bind(advertiser,title,placement,start,end,duration,link,price,paid,d.imageBase64??null,mime,key,version,paid)}
  else stmt=env.DB.prepare('INSERT INTO commercial_spots(id,advertiser,title,placement,starts_at,ends_at,duration_seconds,link,price_minor,paid_minor,image_base64,mime) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(key,advertiser,title,placement,start,end,duration,link,price,paid,d.imageBase64,mime);
- const [r]=await env.DB.batch([stmt,audit(env,actor,id?'spot_updated':'spot_created',key,{price,paid,placement,start,end})]);if(!r.meta.changes){if(id&&await env.DB.prepare('SELECT 1 FROM commercial_spots WHERE id=? AND version=? AND paid_minor>?').bind(id,d.version,paid).first())throw new ApiError(409,'SPOT_PAYMENT_REDUCTION');throw new ApiError(409,'ADMIN_ACCOUNT_CHANGED')}return {id:key};
+ const [r]=await env.DB.batch([stmt,audit(env,actor,id?'spot_updated':'spot_created',key,{price,paid,placement,start,end})]);if(!r.meta.changes){if(id&&await env.DB.prepare('SELECT 1 FROM commercial_spots WHERE id=? AND version=? AND paid_minor>?').bind(id,d.version,paid).first())throw new ApiError(409,'SPOT_PAYMENT_REDUCTION');if(id&&await env.DB.prepare('SELECT 1 FROM commercial_spots WHERE id=? AND version=? AND paid_minor<?').bind(id,d.version,paid).first())throw new ApiError(409,'SPOT_USE_RECEIPT');throw new ApiError(409,'ADMIN_ACCOUNT_CHANGED')}return {id:key};
 }
 async function contract(req,env,actor,id,payment){
  const restaurant=await env.DB.prepare('SELECT id,plan FROM restaurants WHERE id=?').bind(id).first();if(!restaurant)throw new ApiError(404,'RESTAURANT_NOT_FOUND');
  const current=await env.DB.prepare('SELECT * FROM restaurant_contracts WHERE restaurant_id=?').bind(id).first();
+ const partial=async()=>current?.next_due?(await env.DB.prepare('SELECT COALESCE(SUM(amount_minor),0) AS amount FROM contract_receipts WHERE restaurant_id=? AND due_date=?').bind(id,current.next_due).first()).amount:0;
  if(req.method==='GET'&&!payment){
-  const payments=await rows(env.DB.prepare('SELECT id,due_date,amount_minor,paid_date,method,reference FROM restaurant_contract_payments WHERE restaurant_id=? ORDER BY paid_date DESC,created_at DESC LIMIT 200').bind(id));
-  return {contract:current,payments,plan:restaurant.plan};
+  const payments=await rows(env.DB.prepare('SELECT id,due_date,amount_minor,paid_date,method,reference,created_at FROM restaurant_contract_payments WHERE restaurant_id=? UNION ALL SELECT id,due_date,amount_minor,paid_date,method,reference,created_at FROM contract_receipts WHERE restaurant_id=? ORDER BY paid_date DESC,created_at DESC,id DESC LIMIT 200').bind(id,id));
+  return {contract:current,payments,plan:restaurant.plan,currentPaidMinor:await partial()};
  }
  if(payment&&req.method==='POST'){
-  const d=await readJson(req);requireKeys(d,['id','version','paidDate','method','reference']);
-  const paymentId=requireUuid(d.id),version=requireInteger(d.version,1,2147483646,'version'),paidDate=validDate(d.paidDate);
-  const today=new Date(Date.now()-21600000).toISOString().slice(0,10);
-  if(paidDate>today)return fail();
-  const method=choice(d.method,['cash','transfer','external_card']),reference=requireText(d.reference??'',0,100,'reference');
-  const prior=await env.DB.prepare('SELECT restaurant_id,paid_date,method,reference FROM restaurant_contract_payments WHERE id=?').bind(paymentId).first();
-  if(prior){if(prior.restaurant_id!==id||prior.paid_date!==paidDate||prior.method!==method||prior.reference!==reference)throw new ApiError(409,'IDEMPOTENCY_KEY_REUSED');return {ok:true,replayed:true}}
+  const d=await readJson(req);requireKeys(d,['id','version','paidDate','method','reference','amountMinor']);
+  const fields=paymentFields(d),{paymentId,version,paidDate,method,reference}=fields;
+  const requested=d.amountMinor===undefined?undefined:amount(d.amountMinor,1);
+  const old=await env.DB.prepare('SELECT * FROM restaurant_contract_payments WHERE id=?').bind(paymentId).first();
+  const prior=old||await env.DB.prepare('SELECT * FROM contract_receipts WHERE id=?').bind(paymentId).first();
+  if(prior)return matchReceipt(prior,'restaurant_id',id,fields,requested);
   if(!current?.next_due)throw new ApiError(409,'CONTRACT_NO_PAYMENT_DUE');
   if(paidDate<current.start_date)return fail();
+  const balance=current.amount_minor-await partial(),paid=requested??balance;
+  if(paid<=0||paid>balance)throw new ApiError(409,'FINANCE_BALANCE_CHANGED');
   const next=nextBillingDate(current.next_due,current.frequency,current.billing_day);
   const [saved]=await env.DB.batch([
-   env.DB.prepare('INSERT INTO restaurant_contract_payments(id,restaurant_id,due_date,amount_minor,paid_date,method,reference,actor_id) SELECT ?,restaurant_id,next_due,amount_minor,?,?,?,? FROM restaurant_contracts WHERE restaurant_id=? AND version=? AND next_due=? ON CONFLICT(restaurant_id,due_date) DO NOTHING').bind(paymentId,paidDate,method,reference,actor.userId,id,version,current.next_due),
-   env.DB.prepare('UPDATE restaurant_contracts SET next_due=?,version=version+1,updated_at=unixepoch() WHERE restaurant_id=? AND version=? AND changes()=1').bind(next,id,version),
-   audit(env,actor,'contract_payment',id,{paymentId,amount:current.amount_minor,dueDate:current.next_due,paidDate},id)
+   env.DB.prepare(`INSERT INTO contract_receipts(id,restaurant_id,due_date,amount_minor,paid_date,method,reference,actor_id)
+    SELECT ?,restaurant_id,next_due,?,?,?,?,? FROM restaurant_contracts c WHERE restaurant_id=? AND version=? AND next_due=?
+    AND amount_minor-COALESCE((SELECT SUM(amount_minor) FROM contract_receipts r WHERE r.restaurant_id=c.restaurant_id AND r.due_date=c.next_due),0)>=?
+    AND NOT EXISTS(SELECT 1 FROM restaurant_contract_payments p WHERE p.id=? OR (p.restaurant_id=c.restaurant_id AND p.due_date=c.next_due)) ON CONFLICT(id) DO NOTHING`).bind(paymentId,paid,paidDate,method,reference,actor.userId,id,version,current.next_due,paid,paymentId),
+   env.DB.prepare(`UPDATE restaurant_contracts SET next_due=CASE WHEN amount_minor=(SELECT SUM(amount_minor) FROM contract_receipts r WHERE r.restaurant_id=restaurant_contracts.restaurant_id AND r.due_date=restaurant_contracts.next_due) THEN ? ELSE next_due END,version=version+1,updated_at=unixepoch() WHERE restaurant_id=? AND version=? AND changes()=1`).bind(next,id,version),
+   audit(env,actor,'contract_payment',id,{paymentId,amount:paid,dueDate:current.next_due,paidDate,method,reference},id)
   ]);
-  if(!saved.meta.changes)throw new ApiError(409,'ADMIN_ACCOUNT_CHANGED');return {ok:true};
+  if(!saved.meta.changes){const existing=await env.DB.prepare('SELECT * FROM contract_receipts WHERE id=?').bind(paymentId).first();if(existing)return matchReceipt(existing,'restaurant_id',id,fields,requested);throw new ApiError(409,'FINANCE_BALANCE_CHANGED')}return {ok:true};
  }
  if(req.method!=='PATCH'||payment)throw new ApiError(405,'METHOD_NOT_ALLOWED');
  const d=await readJson(req);requireKeys(d,['plan','startDate','nextDue','frequency','amountMinor','version']);
@@ -96,28 +133,46 @@ async function contract(req,env,actor,id,payment){
  if(due<start)return fail();
  const price=amount(d.amountMinor,1),version=requireInteger(d.version,0,2147483646,'version');
  const billing=Number(due.slice(-2));
- const already=await env.DB.prepare('SELECT 1 FROM restaurant_contract_payments WHERE restaurant_id=? AND due_date=?').bind(id,due).first();
+ const already=await env.DB.prepare('SELECT 1 FROM restaurant_contract_payments WHERE restaurant_id=? AND due_date>=? UNION ALL SELECT 1 FROM contract_receipts WHERE restaurant_id=? AND due_date>=? LIMIT 1').bind(id,due,id,due).first();
+ if(await partial()>0)throw new ApiError(409,'CONTRACT_PARTIAL_LOCK');
  if(already)throw new ApiError(409,'CONTRACT_PERIOD_PAID');
- const stmt=current?env.DB.prepare('UPDATE restaurant_contracts SET start_date=?,next_due=?,frequency=?,billing_day=?,amount_minor=?,version=version+1,updated_at=unixepoch() WHERE restaurant_id=? AND version=?').bind(start,due,frequency,billing,price,id,version):env.DB.prepare('INSERT INTO restaurant_contracts(restaurant_id,start_date,next_due,frequency,billing_day,amount_minor) SELECT ?,?,?,?,?,? WHERE ?=0 ON CONFLICT(restaurant_id) DO NOTHING').bind(id,start,due,frequency,billing,price,version);
+ const stmt=current?env.DB.prepare('UPDATE restaurant_contracts SET start_date=?,next_due=?,frequency=?,billing_day=?,amount_minor=?,version=version+1,updated_at=unixepoch() WHERE restaurant_id=? AND version=? AND NOT EXISTS(SELECT 1 FROM contract_receipts r WHERE r.restaurant_id=restaurant_contracts.restaurant_id AND r.due_date=restaurant_contracts.next_due)').bind(start,due,frequency,billing,price,id,version):env.DB.prepare('INSERT INTO restaurant_contracts(restaurant_id,start_date,next_due,frequency,billing_day,amount_minor) SELECT ?,?,?,?,?,? WHERE ?=0 ON CONFLICT(restaurant_id) DO NOTHING').bind(id,start,due,frequency,billing,price,version);
  const [changed]=await env.DB.batch([stmt,env.DB.prepare("UPDATE restaurants SET plan=?,online_state=CASE WHEN ?='LOCAL' THEN 'closed' ELSE online_state END WHERE id=? AND changes()=1").bind(plan,plan,id),audit(env,actor,'contract_saved',id,{plan,start,due,frequency,price},id)]);
  if(!changed.meta.changes)throw new ApiError(409,'ADMIN_ACCOUNT_CHANGED');return {ok:true};
 }
-async function financeSummary(env){
- const day=new Date((now()-6*3600)*1000).toISOString().slice(0,10);
- return env.DB.prepare(`SELECT
-  (SELECT COALESCE(SUM(amount_minor),0) FROM restaurant_contract_payments) AS affiliationReceived,
-  (SELECT COALESCE(SUM(amount_minor),0) FROM restaurant_contracts WHERE next_due IS NOT NULL) AS affiliationNextDue,
-  (SELECT COALESCE(SUM(amount_minor),0) FROM restaurant_contracts WHERE next_due<?) AS affiliationOverdue,
-  (SELECT COALESCE(SUM(paid_minor),0) FROM commercial_spots) AS advertisingRecorded,
-  (SELECT COALESCE(SUM(price_minor-paid_minor),0) FROM commercial_spots) AS advertisingOutstanding,
-  (SELECT COALESCE(SUM(l.dvolada_minor),0) FROM restaurant_settlement_lines l
-   JOIN restaurant_settlements s ON s.id=l.settlement_id WHERE s.status='paid')+
-  (SELECT COALESCE(SUM(a.dvolada_minor),0) FROM restaurant_settlement_adjustments a
-   JOIN restaurant_settlements s ON s.id=a.settlement_id WHERE s.status='paid') AS settledDvolada`).bind(day).first();
+async function financeSummary(env,req){
+ const day=hondurasToday(),params=new URL(req.url).searchParams;
+ const from=params.get('from'),until=params.get('until');
+ if((from===null)!==(until===null))return fail();
+ if(from!==null){validDate(from);validDate(until);if(from>until)return fail()}
+ const start=from||'2000-01-01',end=until||'2099-12-31';
+ const total=await env.DB.prepare(`SELECT
+ (SELECT COALESCE(SUM(amount_minor),0) FROM restaurant_contract_payments WHERE paid_date BETWEEN ? AND ?)+(SELECT COALESCE(SUM(amount_minor),0) FROM contract_receipts WHERE paid_date BETWEEN ? AND ?) AS affiliationReceived,
+ (SELECT COALESCE(SUM(paid_minor),0) FROM commercial_spots) AS advertisingRecorded,
+ (SELECT COALESCE(SUM(price_minor-paid_minor),0) FROM commercial_spots) AS advertisingOutstanding,
+ (SELECT COALESCE(SUM(amount_minor),0) FROM spot_receipts WHERE paid_date BETWEEN ? AND ?) AS advertisingPeriod,
+ (SELECT COALESCE(SUM(paid_minor),0) FROM commercial_spots)-(SELECT COALESCE(SUM(amount_minor),0) FROM spot_receipts) AS advertisingUndated,
+ (SELECT COALESCE(SUM(l.dvolada_minor),0) FROM restaurant_settlement_lines l JOIN restaurant_settlements s ON s.id=l.settlement_id WHERE s.status='paid' AND date(s.paid_at-21600,'unixepoch') BETWEEN ? AND ?)+
+ (SELECT COALESCE(SUM(a.dvolada_minor),0) FROM restaurant_settlement_adjustments a JOIN restaurant_settlements s ON s.id=a.settlement_id WHERE s.status='paid' AND date(s.paid_at-21600,'unixepoch') BETWEEN ? AND ?) AS settledDvolada`).bind(start,end,start,end,start,end,start,end,start,end).first();
+ const contracts=await rows(env.DB.prepare(`SELECT c.*,COALESCE((SELECT SUM(amount_minor) FROM contract_receipts r WHERE r.restaurant_id=c.restaurant_id AND r.due_date=c.next_due),0) AS partial FROM restaurant_contracts c WHERE next_due IS NOT NULL`));
+ let affiliationNextDue=0,affiliationOverdue=0,affiliationDueToday=0;
+ for(const c of contracts){
+  let due=c.next_due,balance=c.amount_minor-c.partial;affiliationNextDue+=balance;
+  // Current obligation plus all subsequent scheduled installments before today.
+  for(let n=0;due&&due<=day&&n<1200;n++){
+   if(due===day)affiliationDueToday+=balance;else affiliationOverdue+=balance;
+   due=nextBillingDate(due,c.frequency,c.billing_day);balance=c.amount_minor;
+  }
+ }
+ const advertisingReceived=from===null?total.advertisingRecorded:total.advertisingPeriod;
+ return {...total,advertisingReceived,affiliationNextDue,affiliationOverdue,affiliationDueToday,
+  totalReceived:total.affiliationReceived+advertisingReceived+total.settledDvolada,asOf:day,from,until};
 }
 export async function commercialControl(req,env,actor,path){
  requireRole(actor,'platform_admin');
- if(path==='finance'&&req.method==='GET')return respond(req,env,200,await financeSummary(env));
+ if(path==='finance'&&req.method==='GET')return respond(req,env,200,await financeSummary(env,req));
+ const pay=/^spots\/([0-9a-f-]{36})\/payments$/.exec(path);
+ if(pay)return respond(req,env,200,await spotPayments(req,env,actor,requireUuid(pay[1])));
  const s=/^spots(?:\/([0-9a-f-]{36}))?$/.exec(path);
  if(s)return respond(req,env,200,await spots(req,env,actor,s[1]?requireUuid(s[1]):null));
  const c=/^contracts\/([0-9a-f-]{36})(\/payments)?$/.exec(path);

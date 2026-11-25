@@ -12,7 +12,7 @@ const loginErrors={
  SERVICE_UNAVAILABLE:'El servidor no pudo completar el inicio de sesión.',
  SIN_CONEXION:'Se perdió la conexión con Dvolada.'
 };
-function loadGoogle(){
+export function loadGoogle(){
  if(window.google?.accounts?.id)return Promise.resolve(window.google.accounts.id);
  if(loader)return loader;
  loader=new Promise((resolve,reject)=>{

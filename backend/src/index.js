@@ -18,6 +18,7 @@ import {createRestaurant,updateRestaurant,assignMember,enrollCourier,createProdu
 
 import {adminFlash,flashCatalogue} from './flash.js';
 import {clientPasskey} from './client-passkeys.js';
+import {publicAuthEnabled,googleCustomerEnabled,publicPassword,publicGoogle,biometric} from './public-auth.js';
 import {clientAccessEnabled,readClientCookie,changeClientCookie} from './client-access.js';
 import {inviteOwner} from './privileged-access.js';
 import {staffAccess,staffAuthenticate} from './staff-access.js';
@@ -105,6 +106,10 @@ async function route(req,env){
   }
   return respond(req,env,200,{restaurant:rest,products:results.map(({has_photo,...product})=>({...product,photoUrl:has_photo?'/api/v1/catalog/photos/'+product.id:null,options:byProduct.get(product.id)||[]}))});
  }
+ const publicPass=/^\/api\/v1\/auth\/client\/password\/(register|login|recover)$/.exec(path);
+ if(method==='POST'&&publicPass)return publicPassword(req,env,publicPass[1]);
+ const customerGoogle=/^\/api\/v1\/auth\/client\/google\/(challenge|login)$/.exec(path);
+ if(method==='POST'&&customerGoogle)return publicGoogle(req,env,customerGoogle[1]);
  const access=/^\/api\/v1\/auth\/client\/(register|login|recover)\/(begin|finish)$/.exec(path);
  if(method==='POST'&&access)return clientPasskey(req,env,access[1],access[2]);
  if(method==='POST'&&/^\/api\/v1\/auth\/client\/(register|login|recover)$/.test(path))
@@ -112,7 +117,7 @@ async function route(req,env){
  if(method==='GET'&&path==='/api/v1/catalog/flash')
   return respond(req,env,200,{...(env.QA_FLASH==='true'?await flashCatalogue(env):{campaigns:[]}),enabled:env.QA_FLASH==='true'});
  if(method==='GET'&&path==='/api/v1/auth/client/config')
-  return respond(req,env,200,{enabled:clientAccessEnabled(req,env),...(env.QA_RESTAURANT_COMMERCIAL==='true'?{commercial:true}:{})});
+  return respond(req,env,200,{enabled:clientAccessEnabled(req,env),...(publicAuthEnabled(req,env)?{publicAuth:true,googleCustomer:googleCustomerEnabled(req,env)}:{}),...(env.QA_RESTAURANT_COMMERCIAL==='true'?{commercial:true}:{})});
  const commercial=env.QA_RESTAURANT_COMMERCIAL==='true';
  const staffLogin=/^\/api\/v1\/auth\/staff\/(claim|login)$/.exec(path);
  if(commercial&&method==='POST'&&staffLogin)return staffAuthenticate(req,env,staffLogin[1]);
@@ -122,7 +127,7 @@ async function route(req,env){
  if(googleMode&&!/^\/api\/v1\/(admin\/|auth\/(me|logout|revoke-sessions)$)/.test(path))throw new ApiError(403,'ROLE_FORBIDDEN');
  const token=!googleMode&&!req.headers.has('authorization')&&readClientCookie(req,env);
  if(token){
-  if(!/^\/api\/v1\/(customer\/|orders\/|restaurant\/|courier\/|admin\/|auth\/(me|logout|revoke-sessions)$)/.test(path))
+  if(!/^\/api\/v1\/(customer\/|orders\/|restaurant\/|courier\/|admin\/|auth\/(me|logout|revoke-sessions|biometric\/(status|begin|finish))$)/.test(path))
    throw new ApiError(403,'ROLE_FORBIDDEN');
   if(method!=='GET'&&req.headers.get('origin')!==url.origin)throw new ApiError(403,'ORIGIN_FORBIDDEN');
   const headers=new Headers(req.headers);
@@ -138,7 +143,7 @@ async function route(req,env){
   throw new ApiError(403,'ROLE_FORBIDDEN');
  if(token&&actor.role==='platform_admin'&&!/^\/api\/v1\/(admin\/|auth\/(me|logout|revoke-sessions)$)/.test(path))
   throw new ApiError(403,'ROLE_FORBIDDEN');
- if(token&&!actor.staffRestaurantId&&(actor.role==='courier'?!/^\/api\/v1\/(courier\/|orders\/[0-9a-f-]+\/chat\/(courier|dispatch)$|auth\/(me|logout|revoke-sessions)$)/i.test(path):path.startsWith('/api/v1/courier/')))
+ if(token&&!actor.staffRestaurantId&&(actor.role==='courier'?!/^\/api\/v1\/(courier\/|orders\/[0-9a-f-]+\/chat\/(courier|dispatch)$|auth\/(me|logout|revoke-sessions|biometric\/(status|begin|finish))$)/i.test(path):path.startsWith('/api/v1/courier/')))
   throw new ApiError(403,'ROLE_FORBIDDEN');
  if(actor.staffRestaurantId){
   if((!commercial&&!actor.privilegedPasskey)||!/^\/api\/v1\/(restaurant\/|orders\/[0-9a-f-]+\/chat\/(restaurant|dispatch)$|auth\/(me|logout|revoke-sessions)$)/i.test(path))
@@ -146,6 +151,8 @@ async function route(req,env){
  }else if(token&&path.startsWith('/api/v1/restaurant/'))throw new ApiError(403,'ROLE_FORBIDDEN');
 
  if(['POST','PATCH'].includes(method))await mutationRateLimit(env,actor);
+ const biometricRoute=/^\/api\/v1\/auth\/biometric\/(status|begin|finish)$/.exec(path);
+ if(biometricRoute&&(biometricRoute[1]==='status'?method==='GET':method==='POST'))return biometric(req,env,actor,biometricRoute[1]);
  if(/^\/api\/v1\/admin\/control\/(spots|contracts)(?:\/|$)/.test(path))return commercialControl(req,env,actor,path.slice('/api/v1/admin/control/'.length));
  const courierRating=/^\/api\/v1\/customer\/orders\/([0-9a-f-]{36})\/courier-rating$/.exec(path);
  if(method==='POST'&&courierRating)return respond(req,env,200,await rateCourier(req,env,actor,courierRating[1]));

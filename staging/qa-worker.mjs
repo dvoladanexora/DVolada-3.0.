@@ -65,7 +65,7 @@ export default {
       : new Blob([gzip]).stream().pipeThrough(new DecompressionStream('gzip'));
     return new Response(body, {
       headers: { ...headers, 'Content-Type': type,
-        ...(qa&&route==='/index.html'&&['/cuenta','/cuenta/'].includes(pathname)&&searchParams.get('panel')==='control'?{
+        ...(qa&&route==='/index.html'&&['/cuenta','/cuenta/'].includes(pathname)&&(searchParams.get('panel')==='control'||env.QA_PUBLIC_AUTH==='true')?{
           'Cross-Origin-Opener-Policy':'same-origin-allow-popups',
           'Content-Security-Policy': headers['Content-Security-Policy'].replace("script-src 'self'","script-src 'self' https://accounts.google.com/gsi/client").replace("style-src 'self'","style-src 'self' https://accounts.google.com/gsi/style").replace("connect-src 'self'","connect-src 'self' https://accounts.google.com/gsi/").replace("frame-ancestors 'none'","frame-src https://accounts.google.com/gsi/; frame-ancestors 'none'")
         }:{}),

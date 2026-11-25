@@ -42,6 +42,7 @@ export function ClientCodes({codes,close}) {
  if(!codes)return null;
  return <section className="dvl-panel dvl-code-panel" aria-label="Accesos recién generados">
   <h2>Guardá tu código de recuperación</h2>
+  {codes.login&&<label>Tu usuario<input readOnly value={codes.login}/></label>}
   <p>Se muestra una sola vez. Cualquiera con ese código puede restablecer el acceso.</p>
   {codes.access&&<label>Clave para ingresar<input readOnly value={codes.access} onFocus={event=>event.target.select()}/></label>}
   <label>Código de recuperación<input readOnly value={codes.recovery} onFocus={event=>event.target.select()}/></label>

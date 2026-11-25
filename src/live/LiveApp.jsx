@@ -14,6 +14,7 @@ import { enableQaPush, disableQaPush } from './onesignal-push.js';
 import {applyDvoladaTheme} from '../theme-policy.js';
 import ClientAccess,{ClientCodes} from './ClientAccess.jsx';
 import GoogleAdminSignIn from './GoogleAdminSignIn.jsx';
+import {CustomerGoogleButton,PasswordAccess,AccountBiometrics} from './PublicAccountAccess.jsx';
 import {SpotManager,RestaurantContract} from './CommercialControl.jsx';
 import {FlashAdmin,FlashOffers} from './FlashCampaigns.jsx';
 import RestaurantCash from './RestaurantCash.jsx';
@@ -68,6 +69,7 @@ function errorLabel(error){
  if(error?.name==='AbortError')return 'Se canceló la operación. Podés intentarlo de nuevo.';
  if(!(error instanceof LiveApiError))return error?.message||'No fue posible completar la acción.';
  const lookup={
+  PUBLIC_CREDENTIAL_INVALID:'Usuario, contraseña o código de recuperación incorrecto.',PUBLIC_PASSWORD_FORMAT:'La contraseña debe tener entre 12 y 128 caracteres.',PUBLIC_REAUTH_REQUIRED:'Por seguridad, cerrá sesión y volvé a ingresar para activar la huella.',
   SIN_CONEXION:'Sin conexión con el servidor. No se confirmó la operación; revisá el estado antes de intentar nuevamente.',
   ORDER_CHANGED:'Otro usuario modificó el pedido. Actualizá la lista antes de actuar.',
   SESSION_REQUIRED:'No hay una sesión válida. Iniciá sesión nuevamente.',
@@ -139,6 +141,7 @@ export default function LiveApp({CustomerHome}){
  const [pushConfig,setPushConfig]=useState(null),[pushEnabled,setPushEnabled]=useState(false);
  const [commercial,setCommercial]=useState(false),[staffCredential,setStaffCredential]=useState(null);
  const [accountEnabled,setAccountEnabled]=useState(false),[accessReady,setAccessReady]=useState(false);
+ const [publicAuth,setPublicAuth]=useState(false),[googleCustomer,setGoogleCustomer]=useState(false),[passwordMode,setPasswordMode]=useState(false);
  const [newCodes,setNewCodes]=useState(null),[support,setSupport]=useState(null);
  const [flashEnabled,setFlashEnabled]=useState(false),[flashOffers,setFlashOffers]=useState([]),[flashSelection,setFlashSelection]=useState(null);
  const [favoriteIds,setFavoriteIds]=useState([]),[onlyFavorites,setOnlyFavorites]=useState(false);
@@ -220,7 +223,7 @@ export default function LiveApp({CustomerHome}){
    try{
     const config=await api.clientAccess();
     if(!active)return;
-    setAccountEnabled(config.enabled);setCommercial(Boolean(config.commercial));
+    setAccountEnabled(config.enabled);setCommercial(Boolean(config.commercial));setPublicAuth(Boolean(config.publicAuth));setGoogleCustomer(Boolean(config.googleCustomer));
     if(config.enabled||controlView){
      const me=await api.me(true);
      if(controlView&&!me.user.googleAdmin)return;
@@ -344,6 +347,9 @@ export default function LiveApp({CustomerHome}){
    openSession(await api.me(true),true);
   }catch(error){setError(errorLabel(error))}
   finally{setBusy(false)}
+ }
+ async function authenticatePassword(mode,body){
+  if(busy||offline||!accessReady)return;setBusy(true);setError('');try{const codes=await api.clientPassword(mode,body);if(codes.recovery)setNewCodes(codes);openSession(await api.me(true),true)}catch(error){setError(errorLabel(error))}finally{setBusy(false)}
  }
  async function authenticateClient(mode,body){
   if(busy||offline||!accessReady)return;
@@ -624,7 +630,7 @@ export default function LiveApp({CustomerHome}){
    cancelOrder:o=>action(()=>api.cancelOrder(o,newKey())),
    supportView:support&&(support.order||orders.some(o=>o.id===support.id))?<ClientSupport key={support.id+support.mode} mode={support.mode} order={support.order||orders.find(o=>o.id===support.id)} api={api} offline={offline} close={()=>setSupport(null)} onSessionError={handleSessionError}/>:null,
    displayName:session.user.displayName,rename:async name=>{const data=await run(()=>api.renameClient(name),{refresh:false});if(data)setSession(old=>({...old,user:{...old.user,displayName:name}}));return Boolean(data)},
-   logout:()=>logout(),application:accountEnabled?<CourierApplication api={api} busy={busy} offline={offline} account={cartAccount} run={run}/>:null,
+   logout:()=>logout(),application:accountEnabled?<><CourierApplication api={api} busy={busy} offline={offline} account={cartAccount} run={run}/>{publicAuth&&<AccountBiometrics api={api} busy={busy} offline={offline} run={run} errorLabel={errorLabel}/>}</>:null,
    notifications:pushConfig?.enabled?<div className="dvl-inline"><Action kind="secondary" disabled={busy||offline} onClick={()=>setQaPush(!pushEnabled)}>{pushEnabled?'Desactivar notificaciones':'Activar notificaciones'}</Action></div>:null,
    notice:<><ClientCodes codes={newCodes} close={()=>setNewCodes(null)}/>{offline&&<WaitOrError message="Sin conexión. No se pueden enviar pedidos." warning/>}<WaitOrError message={error} warning/><WaitOrError message={status}/><WaitOrError message={refreshWarning}/></>
   };
@@ -658,7 +664,7 @@ export default function LiveApp({CustomerHome}){
   {!session&&commercial&&accountEnabled&&<StaffSignIn authenticate={authenticateStaff} disabled={busy||offline}/>}
   <ClientCodes codes={newCodes} close={()=>setNewCodes(null)}/>
   {!session&&!accessReady&&!offline&&<p role="status">Verificando acceso…</p>}
-  {!session&&accountEnabled&&<ClientAccess authenticate={authenticateClient} busy={busy} offline={offline}/>}
+  {!session&&accountEnabled&&<>{publicAuth&&new URLSearchParams(location.search).get('intent')!=='restaurant'&&<section className="dvl-panel dvl-stack">{googleCustomer&&<CustomerGoogleButton api={api} offline={offline} onSuccess={(me,codes)=>{if(codes.recovery)setNewCodes(codes);openSession(me,true)}}/>}<button type="button" className="dvl-action secondary" disabled={busy||offline} onClick={()=>setPasswordMode(v=>!v)}>{passwordMode?'Usar huella o llave de acceso':'Ingresar o crear cuenta con contraseña'}</button></section>}{publicAuth&&passwordMode&&new URLSearchParams(location.search).get('intent')!=='restaurant'?<PasswordAccess authenticate={authenticatePassword} busy={busy} offline={offline} initialMode={new URLSearchParams(location.search).get('mode')==='register'?'register':'login'} onBack={()=>setPasswordMode(false)}/>:<ClientAccess authenticate={authenticateClient} busy={busy} offline={offline}/>}</>}
   {qaView&&!session&&(accessReady||offline)&&<form className="dvl-panel dvl-login" onSubmit={signIn}>
    <h2>Ingresá con tu acceso de pruebas</h2>
    <label>Código de acceso<input type="password" autoComplete="off" value={accessCode}

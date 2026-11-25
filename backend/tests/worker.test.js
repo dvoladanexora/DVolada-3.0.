@@ -9,7 +9,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql','0024_commercial_control.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql','0024_commercial_control.sql','0025_public_auth.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -1630,4 +1630,31 @@ test('courier ratings require a delivered order belonging to the caller and coun
 test('restaurant account filter is based on actual memberships',async()=>{
  const f=await fixture();const r=await f.call('/api/v1/admin/control/accounts?role=restaurant',{by:'platformAdmin'});
  assert.equal(r.status,200);assert.equal(r.body.accounts.length,2);assert(r.body.accounts.every(a=>a.memberships===1));
+});
+
+
+test('public password registration is gated, never elevates roles, supports recovery and does not reuse legacy endpoints',async()=>{
+ const f=await fixture();const origin='https://dvolada-qa.dvoladanexora.workers.dev';
+ f.env.QA_CLIENT_ACCESS='true';f.env.CORS_ORIGINS=origin;
+ const call=(mode,body)=>worker.fetch(new Request(origin+'/api/v1/auth/client/password/'+mode,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body)}),f.env);
+ const user={login:'qa.password.demo',displayName:'Cliente de prueba',password:'unicamente-prueba-123'};
+ assert.equal((await call('register',user)).status,404);f.env.QA_PUBLIC_AUTH='true';
+ assert.equal((await call('register',{...user,role:'platform_admin'})).status,400);
+ const res=await call('register',user);assert.equal(res.status,201);const data=await res.json();
+ const account=f.DB.db.prepare("SELECT u.account_role,c.password_hash FROM users u JOIN client_credentials c ON c.user_id=u.id WHERE c.login_name=?").get(user.login);
+ assert.equal(account.account_role,'customer');assert.match(account.password_hash,/^p2\$/);assert(!account.password_hash.includes(user.password));
+ assert.equal((await call('login',{login:user.login,password:'incorrecta-123'})).status,401);
+ assert.equal((await call('login',{login:user.login,password:user.password})).status,204);
+ const reset=await call('recover',{login:user.login,code:data.recovery,password:'nueva-clave-12345'});assert.equal(reset.status,200);
+ assert.equal((await call('login',{login:user.login,password:user.password})).status,401);
+ assert.equal((await call('login',{login:user.login,password:'nueva-clave-12345'})).status,204);
+ const admin=f.tokens.platformAdmin.id;f.DB.db.prepare('INSERT INTO client_credentials(user_id,login_name,password_hash,access_hash,recovery_hash) VALUES(?,?,?,?,?)').run(admin,'qa.admin.password',account.password_hash,'fake-admin-access','fake-admin-recovery');
+ assert.equal((await call('login',{login:'qa.admin.password',password:user.password})).status,401);
+});
+test('public Google client cannot reuse the administrative OAuth client ID',async()=>{
+ const f=await fixture();const origin='https://dvolada-qa.dvoladanexora.workers.dev';
+ Object.assign(f.env,{QA_CLIENT_ACCESS:'true',QA_PUBLIC_AUTH:'true',CORS_ORIGINS:origin,GOOGLE_CUSTOMER_CLIENT_ID:'same.apps.googleusercontent.com',GOOGLE_ADMIN_CLIENT_ID:'same.apps.googleusercontent.com'});
+ const r=await worker.fetch(new Request(origin+'/api/v1/auth/client/google/challenge',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:'{}'}),f.env);assert.equal(r.status,503);
+ f.env.GOOGLE_CUSTOMER_CLIENT_ID='customer.apps.googleusercontent.com';
+ const ready=await worker.fetch(new Request(origin+'/api/v1/auth/client/google/challenge',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:'{}'}),f.env);assert.equal(ready.status,200);assert.equal((await ready.json()).clientId,f.env.GOOGLE_CUSTOMER_CLIENT_ID);
 });

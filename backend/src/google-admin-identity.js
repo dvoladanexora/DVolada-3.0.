@@ -34,10 +34,16 @@ export function googleAdminConfiguration(env){
   return {clientId,emails:new Set(emails)};
 }
 
-export async function verifyGoogleAdminIdentity(idToken,env,expectedNonce,{
+export async function verifyGoogleAdminIdentity(idToken,env,expectedNonce,options={}){
+ const {clientId,emails}=googleAdminConfiguration(env);
+ const claims=await verifyGoogleIdentity(idToken,clientId,expectedNonce,options);
+ if(!emails.has(claims.email))throw new ApiError(403,'GOOGLE_ADMIN_FORBIDDEN');
+ return {subject:claims.subject,email:claims.email};
+}
+export async function verifyGoogleIdentity(idToken,clientId,expectedNonce,{
   fetchImpl=(url,options)=>globalThis.fetch(url,options),now=Math.floor(Date.now()/1000)
 }={}){
-  const {clientId,emails}=googleAdminConfiguration(env);
+  if(typeof clientId!=='string'||! /^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/.test(clientId))throw configError();
   if(typeof expectedNonce!=='string'||! /^[A-Za-z0-9_-]{43,128}$/.test(expectedNonce))throw invalid();
   if(typeof idToken!=='string'||idToken.length>16000)throw invalid();
   const parts=idToken.split('.');
@@ -77,8 +83,6 @@ export async function verifyGoogleAdminIdentity(idToken,env,expectedNonce,{
     ||! /^[A-Za-z0-9_-]{1,255}$/.test(claims.sub)
     ||claims.email_verified!==true||typeof claims.email!=='string')throw invalid();
   const email=claims.email.toLowerCase();
-  if(!emails.has(email))throw new ApiError(403,'GOOGLE_ADMIN_FORBIDDEN');
-  // Persist an immutable subject binding during the separate admin session exchange.
-  // Never accept a role or subject from a client request.
-  return {subject:claims.sub,email};
+  if(email.length>254||! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw invalid();
+  return {subject:claims.sub,email,name:typeof claims.name==='string'&&claims.name.trim().length>=2?claims.name.trim().slice(0,80):'Cliente Dvolada'};
 }

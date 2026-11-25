@@ -137,10 +137,12 @@ function CourierHistory({api,run,busy,offline,money,openChat}){
  return <section className="dvl-panel dvl-stack" id="historial-entregas">
   <h2>Entregas y liquidaciones</h2>
   <Button secondary disabled={busy||offline} onClick={()=>load()}>Consultar historial y ganancias</Button>
+  {data?.commissions&&<div className="dvl-panel dvl-stack"><h3>Comisiones Dvolada</h3><p>L 5 por pedido entregado. Sin cuota mensual ni débito automático.</p><div className="dvl-grid"><p>Entregas con comisión: <strong>{data.commissions.deliveries}</strong></p><p>Total registrado: <strong>{money(data.commissions.chargedMinor)}</strong></p><p>Pagado: <strong>{money(data.commissions.paidMinor)}</strong></p><p>Saldo pendiente: <strong>{money(data.commissions.outstandingMinor)}</strong></p></div><small>La comisión se registra por separado de tus liquidaciones de envíos.</small></div>}
   {data?.orders.length===0&&<p>No hay entregas completadas.</p>}
   {data?.orders.map(order=><article className="dvl-stack" key={order.id}>
    <strong>{order.orderNumber} · {order.restaurantName}</strong>
    <span>{date(order.deliveredAt)} · {order.earningsMinor===null?'Pendiente de liquidación':money(order.earningsMinor)}</span>
+   {order.commissionMinor!=null&&<small>Comisión: {money(order.commissionMinor)} · {order.commissionPaidMinor===order.commissionMinor?'Pagada':'Pendiente '+money(order.commissionMinor-order.commissionPaidMinor)}</small>}
    <div className="dvl-inline">
     <Button secondary disabled={offline} onClick={()=>openChat(order,'courier')}>Conversación con cliente</Button>
     <Button secondary disabled={offline} onClick={()=>openChat(order,'dispatch')}>Conversación con restaurante</Button>

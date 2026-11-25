@@ -1867,3 +1867,55 @@ test('launch restaurant pricing separates L1500 activation from L500 monthly sub
  assert.equal(finance.activationReceived,150000);assert.equal(finance.activationOutstanding,0);assert.equal(finance.affiliationNextDue,50000);assert.equal(finance.totalReceived,150000);
  const rule=await f.call('/api/v1/admin/settlement-rules/'+f.restaurants[0],{by,method:'POST',body:{effectiveAt:Math.floor(Date.now()/1000),commissionBps:500,courierBps:8000}});assert.equal(rule.status,409);
 });
+
+test('commercial launch journey: real cash and verified transfer delivery, PIN, settlement and private L5 commissions',async()=>{
+ const f=await fixture(),rid=f.restaurants[0],by='platformAdmin';
+ f.env.QA_RESTAURANT_COMMERCIAL='true';
+ f.DB.db.prepare('INSERT INTO launch_pricing(id,enabled_at) VALUES(1,unixepoch()-86400)').run();
+ await f.user('launchOwner','customer',[rid,'owner']);
+ const api=(path,body,{by='launchOwner',restaurantId=rid,method=body?'POST':'GET',key=randomUUID()}={})=>f.call('/api/v1/'+path,{by,restaurantId,method,body,key});
+ const ops=(path,body,options)=>api('restaurant/'+path,body,options);
+ const courier=(path,body,method)=>api('courier/'+path,body,{by:'courier',method});
+ const bank={bank:'Banco ficticio',beneficiary:'Comercio de prueba',type:'Ahorros',number:'00001234',instructions:'Sin fondos reales'};
+ assert.equal((await ops('bank-account',bank,{method:'PATCH'})).status,200);
+ assert.equal((await ops('profile',{description:'QA',address:'QA',latitude:null,longitude:null,hours:Array(7).fill(null),paymentMethods:['cash','transfer']},{method:'PATCH'})).status,200);
+ const shift=(await ops('cash/open',{openingMinor:0})).body.shift.id;
+ const orderIds=[];
+ for(const [customer,method] of [['customer','cash'],['customer2','transfer']]){
+  const created=await f.create({by:customer,deliveryMethod:'delivery'});assert.equal(created.status,201,JSON.stringify(created.body));
+  const order=created.body.order,id=order.id;orderIds.push(id);
+  assert.equal(order.totalMinor,order.subtotalMinor+order.deliveryFeeMinor-(order.discountMinor||0));
+  if(method==='transfer'){
+   const path='customer/orders/'+id+'/transfer';
+   assert.equal((await api(path,{}, {by:customer})).status,200);
+   assert.equal((await api(path,{reference:'LANZAMIENTO123'},{by:customer})).status,200);
+   assert.equal((await f.status(id,'staffA','Aceptado',1)).body.error,'TRANSFER_NOT_CONFIRMED');
+   assert.equal((await ops('transfers/'+id,{decision:'confirmed',reference:'LANZAMIENTO123'},{method:'PATCH'})).status,200);
+  }
+  for(const [index,status] of ['Aceptado','Preparando','Listo'].entries())assert.equal((await f.status(id,'staffA',status,index+1)).status,200);
+  assert.equal((await ops('orders/'+id+'/assign',{courierId:f.tokens.courier.id,expectedVersion:4},{method:'PATCH'})).status,200);
+  assert.equal((await courier('orders/'+id+'/offer',{action:'accept',expectedVersion:5})).status,200);
+  for(const [index,status] of ['Recogido','En camino','En ubicación'].entries())assert.equal((await courier('orders/'+id+'/status',{status,expectedVersion:6+index},'PATCH')).status,200);
+  assert.equal((await courier('orders/'+id+'/deliver',{expectedVersion:9,pin:created.body.deliveryPin})).status,200);
+  assert.equal((await ops('cash/sale',{shiftId:shift,orderId:id,method})).status,200);
+ }
+ const history=(await courier('history')).body;assert.equal(history.commissions.deliveries,2);assert.equal(history.commissions.outstandingMinor,1000);
+ assert.equal(history.orders.length,2);assert.ok(history.orders.every(o=>o.commissionMinor===500&&o.commissionPaidMinor===0));
+ assert.equal((await api('courier/history',undefined,{by:'customer'})).status,403);
+ const closed=await ops('cash/close',{shiftId:shift,countedMinor:10550});assert.equal(closed.status,200);
+ // Shift must be closed and sale timestamps fall strictly within the period.
+ const at=Math.floor(Date.now()/1000);f.DB.db.prepare('UPDATE restaurant_sales SET paid_at=? WHERE restaurant_id=?').run(at-2,rid);
+ const period=(await ops('settlements',{from:at-60,until:at})).body.settlement;
+ assert.ok(period);
+ const calc=await ops('settlements/'+period.id+'/calculate',{});assert.equal(calc.status,200,JSON.stringify(calc.body));
+ const detail=(await ops('settlements/'+period.id)).body;assert.equal(detail.split.dvolada_minor,0);assert.equal(detail.split.courier_minor,1000);
+ const date=new Date(Date.now()-21600000).toISOString().slice(0,10);
+ const root='admin/control/courier-commercial/'+f.tokens.courier.id+'/fees/'+orderIds[0]+'/payments';
+ const receipt={id:randomUUID(),version:1,amountMinor:500,paidDate:date,method:'cash',reference:'prueba'};
+ assert.equal((await api(root,receipt,{by})).status,200);
+ assert.equal((await api(root,receipt,{by})).status,200);
+ const after=(await courier('history')).body;
+ assert.equal(after.commissions.paidMinor,500);assert.equal(after.commissions.outstandingMinor,500);
+ const summary=(await api('admin/control/finance',undefined,{by})).body;
+ assert.equal(summary.totalReceived,500);assert.equal(summary.courierFeesOutstanding,500);
+});

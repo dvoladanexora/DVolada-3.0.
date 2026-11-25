@@ -39,7 +39,8 @@ try{
     '/api/v1/admin/control/accounts':{accounts:[]},
     '/api/v1/admin/control/claims':{claims:[]},
     '/api/v1/admin/control/coupons':{coupons:[]},
-    '/api/v1/admin/control/audit':{events:[]}
+    '/api/v1/admin/control/audit':{events:[]},
+    '/api/v1/courier/history':{orders:[],periods:[],commissions:{deliveries:0,chargedMinor:0,paidMinor:0,outstandingMinor:0},nextCursor:null}
    };
    const data=fixtures[path]??{restaurants:[],orders:[],products:[],couriers:[],
     profile:{available:0,active:1,capacity:2},enabled:false,counts:[],applications:[],rules:[],campaigns:[],settlements:[]};
@@ -50,7 +51,7 @@ try{
   const title={owner:'Restaurante',kitchen:'Cocina',courier:'Repartidor',platform_admin:'Centro de Control'}[role];
   await page.getByRole('heading',{level:1,name:title,exact:true}).waitFor();
   if(role==='kitchen')await page.locator('.dv-kitchen-lane-preparing').waitFor();
-  if(role==='courier')await page.getByText(/0 de 2 espacios ocupados/).waitFor();
+  if(role==='courier'){await page.getByText(/0 de 2 espacios ocupados/).waitFor();await page.getByRole('button',{name:'Consultar historial y ganancias',exact:true}).click();await page.getByRole('heading',{name:'Comisiones Dvolada',exact:true}).waitFor();await page.getByText('Saldo pendiente:',{exact:false}).waitFor();}
   for(const width of [360,390,430,768,1440]){
    await page.setViewportSize({width,height:width<768?844:960});
    for(const theme of ['light','dark']){

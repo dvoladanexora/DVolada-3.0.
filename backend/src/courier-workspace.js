@@ -83,9 +83,9 @@ export async function courierHistory(env,actor,url){
  const params=[actor.userId];
  if(found)params.push(Number(found[1]),Number(found[1]),requireUuid(found[2]));
  const {results=[]}=await env.DB.prepare(`SELECT o.id,o.order_number AS orderNumber,o.updated_at AS deliveredAt,r.name AS restaurantName,
-  l.courier_minor AS earningsMinor,t.id AS settlementId,t.from_at AS periodFrom,t.until_at AS periodUntil,t.status AS settlementStatus
+  l.courier_minor AS earningsMinor,fee.amount_minor AS commissionMinor,CASE WHEN fee.id IS NULL THEN NULL ELSE COALESCE((SELECT SUM(amount_minor) FROM courier_fee_receipts p WHERE p.charge_id=fee.id),0) END AS commissionPaidMinor,t.id AS settlementId,t.from_at AS periodFrom,t.until_at AS periodUntil,t.status AS settlementStatus
   FROM online_orders o JOIN restaurants r ON r.id=o.restaurant_id LEFT JOIN restaurant_settlement_lines l ON l.order_id=o.id
-  LEFT JOIN restaurant_settlements t ON t.id=l.settlement_id
+  LEFT JOIN restaurant_settlements t ON t.id=l.settlement_id LEFT JOIN courier_fee_charges fee ON fee.id=o.id AND fee.courier_id=o.courier_id
   WHERE o.courier_id=? AND o.courier_response='accepted' AND o.status='Entregado'
   ${found?'AND (o.updated_at<? OR (o.updated_at=? AND o.id<?))':''}
   ORDER BY o.updated_at DESC,o.id DESC LIMIT 51`).bind(...params).all();
@@ -101,7 +101,8 @@ export async function courierHistory(env,actor,url){
    WHERE o.courier_id=? AND o.status='Entregado' AND a.courier_minor!=0
   ) m JOIN restaurant_settlements t ON t.id=m.settlement_id JOIN restaurants r ON r.id=t.restaurant_id
   GROUP BY t.id ORDER BY t.from_at DESC,t.id DESC LIMIT 50`).bind(actor.userId,actor.userId).all();
- return {orders,periods,nextCursor:results.length>50?`${last.deliveredAt}:${last.id}`:null};
+ const commissions=await env.DB.prepare(`SELECT COUNT(*) AS deliveries,COALESCE(SUM(amount_minor),0) AS chargedMinor,COALESCE(SUM(paid),0) AS paidMinor,COALESCE(SUM(amount_minor-paid),0) AS outstandingMinor FROM (SELECT c.amount_minor,COALESCE((SELECT SUM(r.amount_minor) FROM courier_fee_receipts r WHERE r.charge_id=c.id),0) AS paid FROM courier_fee_charges c WHERE c.courier_id=?)`).bind(actor.userId).first();
+ return {orders,periods,commissions,nextCursor:results.length>50?`${last.deliveredAt}:${last.id}`:null};
 }
 
 export async function courierRestaurantChat(req,env,actor,orderId){

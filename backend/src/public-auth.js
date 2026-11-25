@@ -52,15 +52,17 @@ async function session(env,user,token,revision,adminVersion,recovery=null){
 }
 export async function publicPassword(req,env,action){
  assertOrigin(req,env);const body=await readJson(req,4096);
- requireKeys(body,action==='register'?['login','displayName','password']:action==='recover'?['login','code','password']:['login','password']);
+ requireKeys(body,action==='register'?['login','displayName','password','phone']:action==='recover'?['login','code','password']:['login','password']);
  const login=normalizeLogin(body.login),password=passwordValue(body.password);
  await limit(env,req,'ip:'+ip(req),20);await limit(env,req,'login:'+login,8);
  const token=randomSecret();
  if(action==='register'){
   const name=requireText(body.displayName,2,80,'displayName'),user=crypto.randomUUID(),recovery=randomSecret();
+  const phone=typeof body.phone==='string'?body.phone.trim():'';
+  if(!/^\+504[0-9]{8}$/.test(phone))throw new ApiError(400,'PHONE_REQUIRED');
   const verifier=await passwordHash(env,password);
   try{const results=await env.DB.batch([
-   env.DB.prepare("INSERT INTO users(id,display_name,account_role) VALUES(?,?,'customer')").bind(user,name),
+   env.DB.prepare("INSERT INTO users(id,display_name,account_role,phone_e164) VALUES(?,?,'customer',?)").bind(user,name,phone),
    env.DB.prepare('INSERT INTO client_credentials(user_id,login_name,password_hash,access_hash,recovery_hash) VALUES(?,?,?,?,?)').bind(user,login,verifier,await retiredAccessHash(env),await recoveryHash(env,recovery)),
    await session(env,user,token,1,1)
   ]);if(results[2].meta.changes!==1)throw credentialError()}

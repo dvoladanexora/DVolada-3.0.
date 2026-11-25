@@ -1637,12 +1637,13 @@ test('public password registration is gated, never elevates roles, supports reco
  const f=await fixture();const origin='https://dvolada-qa.dvoladanexora.workers.dev';
  f.env.QA_CLIENT_ACCESS='true';f.env.CORS_ORIGINS=origin;
  const call=(mode,body)=>worker.fetch(new Request(origin+'/api/v1/auth/client/password/'+mode,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body)}),f.env);
- const user={login:'qa.password.demo',displayName:'Cliente de prueba',password:'unicamente-prueba-123'};
+ const user={login:'qa.password.demo',displayName:'Cliente de prueba',password:'unicamente-prueba-123',phone:'+50400000003'};
  assert.equal((await call('register',user)).status,404);f.env.QA_PUBLIC_AUTH='true';
  assert.equal((await call('register',{...user,role:'platform_admin'})).status,400);
+ assert.equal((await call('register',{...user,phone:'+504123'})).status,400);
  const res=await call('register',user);assert.equal(res.status,201);const data=await res.json();
- const account=f.DB.db.prepare("SELECT u.account_role,c.password_hash FROM users u JOIN client_credentials c ON c.user_id=u.id WHERE c.login_name=?").get(user.login);
- assert.equal(account.account_role,'customer');assert.match(account.password_hash,/^p2\$/);assert(!account.password_hash.includes(user.password));
+ const account=f.DB.db.prepare("SELECT u.account_role,u.phone_e164,u.phone_verified_at,c.password_hash FROM users u JOIN client_credentials c ON c.user_id=u.id WHERE c.login_name=?").get(user.login);
+ assert.equal(account.account_role,'customer');assert.equal(account.phone_e164,user.phone);assert.equal(account.phone_verified_at,null);assert.match(account.password_hash,/^p2\$/);assert(!account.password_hash.includes(user.password));
  assert.equal((await call('login',{login:user.login,password:'incorrecta-123'})).status,401);
  assert.equal((await call('login',{login:user.login,password:user.password})).status,204);
  const reset=await call('recover',{login:user.login,code:data.recovery,password:'nueva-clave-12345'});assert.equal(reset.status,200);
@@ -1662,7 +1663,7 @@ test('public Google client cannot reuse the administrative OAuth client ID',asyn
 test('password account can enroll a verified passkey without changing password or account identity',async()=>{
  const f=await fixture();Object.assign(f.env,{CORS_ORIGINS:passkeyOrigin,QA_CLIENT_ACCESS:'true',QA_PUBLIC_AUTH:'true'});
  const login='qa.password.bio',password='clave-ficticia-segura';
- const registered=await passkeyRequest(f,'auth/client/password/register',{login,displayName:'Cliente ficticio',password});
+ const registered=await passkeyRequest(f,'auth/client/password/register',{login,displayName:'Cliente ficticio',password,phone:'+50400000003'});
  assert.equal(registered.status,201);const cookie=partCookie(registered);
  const {user}=await (await passkeyRequest(f,'auth/me',undefined,{cookie})).json();
  const call=(stage,body)=>worker.fetch(new Request(passkeyOrigin+'/api/v1/auth/biometric/'+stage,{method:body?'POST':'GET',headers:{Origin:passkeyOrigin,Cookie:cookie,'X-Client-Account':user.id,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})}),f.env);

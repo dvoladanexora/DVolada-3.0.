@@ -21,11 +21,14 @@ export function CustomerGoogleButton({api,onSuccess,offline}){
 export function PasswordAccess({authenticate,busy,offline,initialMode='login',onBack}){
  const [mode,setMode]=useState(initialMode),[error,setError]=useState('');
  const submit=async e=>{e.preventDefault();setError('');const data=Object.fromEntries(new FormData(e.currentTarget));if(mode!=='login'&&data.password!==data.confirm){setError('Las contraseñas no coinciden.');return}
- const body={login:data.login,password:data.password,...(mode==='register'?{displayName:data.name}:mode==='recover'?{code:data.code}:{})};await authenticate(mode,body);};
+ const body={login:data.login,password:data.password,...(mode==='register'?{displayName:data.name,phone:'+504'+data.phone}:mode==='recover'?{code:data.code}:{})};await authenticate(mode,body);};
  return <form key={mode} className="dvl-panel dvl-login" onSubmit={submit}>
  <h2>{mode==='register'?'Creá tu cuenta':mode==='recover'?'Restablecer contraseña':'Ingresar con contraseña'}</h2>
  <div className="dvl-inline">{[['login','Ingresar'],['register','Crear cuenta'],['recover','Recuperar']].map(([v,l])=><button type="button" key={v} className={'dvl-action '+(mode===v?'':'secondary')} onClick={()=>{setMode(v);setError('')}}>{l}</button>)}</div>
- {mode==='register'&&<label>Nombre completo<input name="name" required minLength={2} maxLength={80} autoComplete="name"/></label>}
+ {mode==='register'&&<>
+  <label>Nombre completo<input name="name" required minLength={2} maxLength={80} autoComplete="name"/></label>
+  <label>Teléfono de Honduras (+504)<input name="phone" required pattern="[0-9]{8}" maxLength={8} inputMode="numeric" autoComplete="tel-national"/></label>
+ </>}
  <label>Usuario<input name="login" required minLength={4} maxLength={40} autoComplete="username" autoCapitalize="none" spellCheck={false}/></label>
  {mode==='recover'&&<label>Código de recuperación<input name="code" type="password" required minLength={43} maxLength={43} autoComplete="off"/></label>}
  <label>{mode==='login'?'Contraseña':'Nueva contraseña (mínimo 12 caracteres)'}<input name="password" type="password" required minLength={12} maxLength={128} autoComplete={mode==='login'?'current-password':'new-password'}/></label>

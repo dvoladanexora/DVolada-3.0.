@@ -164,9 +164,10 @@ async function financeSummary(env,req){
    due=nextBillingDate(due,c.frequency,c.billing_day);balance=c.amount_minor;
   }
  }
+ const courier=await env.DB.prepare(`SELECT (SELECT COALESCE(SUM(amount_minor),0) FROM courier_fee_receipts WHERE paid_date BETWEEN ? AND ?) AS courierFeesReceived,(SELECT COALESCE(SUM(c.amount_minor-COALESCE((SELECT SUM(amount_minor) FROM courier_fee_receipts r WHERE r.charge_id=c.id),0)),0) FROM courier_fee_charges c) AS courierFeesOutstanding`).bind(start,end).first();
  const advertisingReceived=from===null?total.advertisingRecorded:total.advertisingPeriod;
- return {...total,advertisingReceived,affiliationNextDue,affiliationOverdue,affiliationDueToday,
-  totalReceived:total.affiliationReceived+advertisingReceived+total.settledDvolada,asOf:day,from,until};
+ return {...total,...courier,advertisingReceived,affiliationNextDue,affiliationOverdue,affiliationDueToday,
+  totalReceived:total.affiliationReceived+advertisingReceived+total.settledDvolada+courier.courierFeesReceived,asOf:day,from,until};
 }
 export async function commercialControl(req,env,actor,path){
  requireRole(actor,'platform_admin');

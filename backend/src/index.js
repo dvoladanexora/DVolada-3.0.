@@ -2,6 +2,7 @@ import {bankAccount,customerTransfer,reviewTransfers} from './bank-transfers.js'
 import {submitRestaurantApplication,manageRestaurantApplications} from './restaurant-applications.js';
 import {controlRoute} from './control-center.js';
 import {commercialControl,publicSpots,rateCourier} from './commercial-control.js';
+import {courierCommercial} from './courier-commercial.js';
 import {googleControlAuth,googleControlActor,googleControlRequired,clearControlCookie} from './google-admin-session.js';
 import {courierProfile,courierAvailability,courierApplication,rejectCourierApplication,pendingCouriers,revokeCourierSessions,courierHistory,courierRestaurantChat} from './courier-workspace.js';
 import {restaurantProfile,menuOption,savePhoto,publicPhoto,staffRoster,restaurantCash,restaurantReport} from './restaurant-operations.js';
@@ -161,6 +162,7 @@ async function route(req,env){
  if(/^\/api\/v1\/admin\/control\/(spots|contracts|finance)(?:\/|$)/.test(path))return commercialControl(req,env,actor,path.slice('/api/v1/admin/control/'.length));
  const courierRating=/^\/api\/v1\/customer\/orders\/([0-9a-f-]{36})\/courier-rating$/.exec(path);
  if(method==='POST'&&courierRating)return respond(req,env,200,await rateCourier(req,env,actor,courierRating[1]));
+ if(path.startsWith('/api/v1/admin/control/courier-commercial/'))return courierCommercial(req,env,actor,path.slice('/api/v1/admin/control/'.length));
  if(path.startsWith('/api/v1/admin/control/'))return controlRoute(req,env,actor,path.slice('/api/v1/admin/control/'.length));
  if(method==='POST'&&path==='/api/v1/push/identity'){
   return respond(req,env,200,await issueQaPushIdentity(req,env,actor));
@@ -243,11 +245,13 @@ async function route(req,env){
   if(after)requireUuid(after);
   const {results=[]}=await env.DB.prepare(`SELECT u.id,u.display_name,u.phone_e164,u.status,u.admin_locked,u.created_at,
     c.active,c.available,c.max_active_orders,
+    COALESCE(i.transport,a.transport) AS transport,COALESCE(i.service_zone,a.service_zone) AS service_zone,
+    i.expires_at AS invitation_expires_at,i.claimed_at AS invitation_claimed_at,
     (SELECT AVG(stars) FROM courier_ratings cr WHERE cr.courier_id=u.id) AS rating,
     (SELECT COUNT(*) FROM courier_ratings cr WHERE cr.courier_id=u.id) AS rating_count,
     (SELECT COUNT(*) FROM online_orders o WHERE o.courier_id=u.id AND o.status='Entregado') AS delivered,
     (SELECT COUNT(*) FROM online_orders o WHERE o.courier_id=u.id AND o.status NOT IN ('Entregado','Cancelado','Rechazado')) AS active_orders
-    FROM courier_profiles c JOIN users u ON u.id=c.user_id
+    FROM courier_profiles c JOIN users u ON u.id=c.user_id LEFT JOIN courier_manual_invites i ON i.user_id=u.id LEFT JOIN courier_applications a ON a.user_id=u.id
     WHERE u.account_role='courier' AND (?='' OR u.id>?) AND (?='' OR instr(lower(u.display_name),lower(?))>0 OR instr(coalesce(u.phone_e164,''),?)>0)
     ORDER BY u.id LIMIT 51`).bind(after,after,q,q,q).all();
   const couriers=results.slice(0,50);

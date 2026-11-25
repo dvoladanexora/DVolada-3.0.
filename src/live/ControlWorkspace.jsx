@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from 'react';
+import {CourierBilling} from './CourierCommercial.jsx';
 import {LayoutDashboard,Store,Package,Users,Wallet,Tag,ShieldCheck,MoreHorizontal,ChevronRight,Bike,Clock,CheckCircle2,DoorOpen,Plus,UserPlus,Megaphone,ChartNoAxesCombined,Settings,AlertTriangle} from 'lucide-react';
 
 const tabs={operations:'Seguimiento de pedidos',accounts:'Participantes y cuentas',claims:'Reclamos',coupons:'Cupones',rates:'Tarifas',
@@ -309,7 +310,7 @@ export function ControlWorkspace({section,api,restaurants,offline,busy,run,money
  </section>;
 }
 
-export function CourierDirectory({api,run,busy,offline,errorLabel,setSection}){
+export function CourierDirectory({api,run,busy,offline,errorLabel,setSection,money}){
  const [q,setQ]=useState(''),[search,setSearch]=useState(''),[data,setData]=useState(null),[error,setError]=useState('');
  useEffect(()=>{if(offline)return;let active=true;setData(null);
   api.adminCourierDirectory(search).then(result=>{if(active){setData(result);setError('')}}).catch(e=>{if(active)setError(errorLabel(e))});
@@ -322,7 +323,7 @@ export function CourierDirectory({api,run,busy,offline,errorLabel,setSection}){
  {data?.couriers.length===0&&<p>No hay repartidores para esta búsqueda.</p>}
  <div className="dvl-admin-courier-grid">{data?.couriers.map(row=><article key={row.id} className="dvl-admin-courier-card"><div className="dvl-admin-identity"><span className="dvl-admin-avatar"><Bike size={21}/></span><div><strong>{row.display_name}</strong><small>{state(row)}</small></div></div>
   <div className="dvl-admin-courier-stats"><div><strong>{row.delivered}</strong><small>Entregados</small></div><div><strong>{row.active_orders}/{row.max_active_orders}</strong><small>En curso</small></div></div>
-  <div className="dvl-stack"><div aria-label={row.rating_count?row.rating.toFixed(1)+' de 5 estrellas':'Sin calificaciones'} style={{display:'flex',gap:4,alignItems:'center'}}>{Array.from({length:5},(_,i)=><span key={i} aria-hidden="true" style={{position:'relative',fontSize:23,lineHeight:1,color:'#a16207'}}>☆<span style={{position:'absolute',left:0,top:0,overflow:'hidden',width:Math.max(0,Math.min(1,(row.rating||0)-i))*100+'%',color:'#eab308'}}>★</span></span>)}<small>{row.rating_count?row.rating.toFixed(1)+' / 5 ('+row.rating_count+')':'Sin valoraciones'}</small></div><small>Plan y pago: sin registro de facturación</small></div>
+  <div className="dvl-stack"><div aria-label={row.rating_count?row.rating.toFixed(1)+' de 5 estrellas':'Sin calificaciones'} style={{display:'flex',gap:4,alignItems:'center'}}>{Array.from({length:5},(_,i)=><span key={i} aria-hidden="true" style={{position:'relative',fontSize:23,lineHeight:1,color:'#a16207'}}>☆<span style={{position:'absolute',left:0,top:0,overflow:'hidden',width:Math.max(0,Math.min(1,(row.rating||0)-i))*100+'%',color:'#eab308'}}>★</span></span>)}<small>{row.rating_count?row.rating.toFixed(1)+' / 5 ('+row.rating_count+')':'Sin valoraciones'}</small></div><CourierBilling row={row} api={api} run={run} busy={busy} offline={offline} money={money} errorLabel={errorLabel}/></div>
   {row.phone_e164&&/^\+504\d{8}$/.test(row.phone_e164)&&<a className="dvl-action secondary" href={'https://wa.me/'+row.phone_e164.slice(1)} target="_blank" rel="noopener noreferrer">Contactar por WhatsApp</a>}
   <details><summary>Detalles del repartidor</summary><p>Registrado: {time(row.created_at)}</p><p style={{overflowWrap:'anywhere'}}>ID: {row.id}</p><button type="button" className="dvl-action secondary" onClick={()=>setSection('accounts')}>Administrar cuenta</button></details>
  </article>)}</div>

@@ -9,7 +9,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql','0024_commercial_control.sql','0025_public_auth.sql','0026_restaurant_applications.sql','0027_courier_application_details.sql','0028_bank_transfers.sql','0029_finance_receipts.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql','0024_commercial_control.sql','0025_public_auth.sql','0026_restaurant_applications.sql','0027_courier_application_details.sql','0028_bank_transfers.sql','0029_finance_receipts.sql','0030_courier_commercial.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -1812,4 +1812,39 @@ test('advertising receipts preserve historical balances and reject overpayments 
  const history=(await f.call(path,{by})).body;assert.equal(history.undatedMinor,2000);assert.equal(history.payments.length,1);
  const period=(await f.call('/api/v1/admin/control/finance?from='+d+'&until='+d,{by})).body;assert.equal(period.advertisingReceived,3000);assert.equal(period.advertisingUndated,2000);assert.equal(period.advertisingOutstanding,5000);
  const all=(await f.call('/api/v1/admin/control/finance',{by})).body;assert.equal(all.advertisingReceived,5000);
+});
+
+test('manual courier invitation is private, expires and can be claimed once with password',async()=>{
+ const f=await fixture();Object.assign(f.env,{CORS_ORIGINS:passkeyOrigin,QA_CLIENT_ACCESS:'true',QA_PUBLIC_AUTH:'true'});
+ const root='/api/v1/admin/control/courier-commercial',id=randomUUID(),login='manual.courier';
+ const body={id,login,displayName:'Repartidor ficticio',phone:'+50400000007',transport:'bicycle',zone:'Zona de prueba'};
+ assert.equal((await f.call(root+'/invite',{method:'POST',body})).status,403);
+ const created=await f.call(root+'/invite',{by:'platformAdmin',method:'POST',body});assert.equal(created.status,201,JSON.stringify(created.body));assert.equal(created.body.userId,id);
+ const old=created.body.invitation;
+ assert.equal((await f.call(root+'/invite',{by:'platformAdmin',method:'POST',body})).status,409);
+ f.DB.db.prepare('UPDATE courier_manual_invites SET expires_at=0 WHERE user_id=?').run(id);
+ const password='clave-segura-prueba-123';
+ const recover=code=>passkeyRequest(f,'auth/client/password/recover',{login,password,code});
+ assert.equal((await recover(old)).status,401);
+ const renewed=await f.call(root+'/'+id+'/renew',{by:'platformAdmin',method:'POST',body:{}});assert.equal(renewed.status,200);
+ assert.equal((await recover(old)).status,401);
+ const claim=await recover(renewed.body.invitation);assert.equal(claim.status,200);
+ assert.equal((await recover(renewed.body.invitation)).status,401);
+ assert.equal((await f.call(root+'/'+id+'/renew',{by:'platformAdmin',method:'POST',body:{}})).status,409);
+ const me=await (await passkeyRequest(f,'auth/me',undefined,{cookie:partCookie(claim)})).json();assert.equal(me.user.id,id);assert.equal(me.user.role,'courier');
+ const directory=await f.call('/api/v1/admin/courier-directory?q=Repartidor%20ficticio',{by:'platformAdmin'});assert.equal(directory.body.couriers[0].transport,'bicycle');assert.equal(directory.body.couriers[0].available,0);
+});
+test('courier fees are explicitly assigned, partial and counted separately from order commissions',async()=>{
+ const f=await fixture(),by='platformAdmin',root='/api/v1/admin/control/courier-commercial/'+f.tokens.courier.id+'/fees',date=new Date(Date.now()-21600000).toISOString().slice(0,10);
+ const charge={id:randomUUID(),period:date.slice(0,7),dueDate:date,amountMinor:50000};
+ assert.equal((await f.call(root,{method:'POST',body:charge})).status,403);
+ assert.equal((await f.call(root,{by,method:'POST',body:charge})).status,200);
+ assert.equal((await f.call(root,{by,method:'POST',body:{...charge,id:randomUUID()}})).status,409);
+ const body={id:randomUUID(),version:1,amountMinor:20000,paidDate:date,method:'cash',reference:'prueba'};
+ const pay=body=>f.call(root+'/'+charge.id+'/payments',{by,method:'POST',body});
+ assert.equal((await pay(body)).status,200);assert.equal((await pay(body)).status,200);
+ assert.equal((await pay({...body,id:randomUUID(),version:2,amountMinor:31000})).status,409);
+ const data=(await f.call(root,{by})).body;assert.equal(data.charges[0].paid_minor,20000);assert.equal(data.payments.length,1);
+ const finance=(await f.call('/api/v1/admin/control/finance?from='+date+'&until='+date,{by})).body;
+ assert.equal(finance.courierFeesReceived,20000);assert.equal(finance.courierFeesOutstanding,30000);assert.equal(finance.totalReceived,20000);
 });

@@ -13,7 +13,7 @@ const privilegedEligibility=`(SELECT 1 FROM privileged_passkey_accounts a WHERE 
  (a.access_role='platform_admin' AND u.account_role='platform_admin') OR
  (a.access_role='owner' AND u.account_role='customer' AND EXISTS(SELECT 1 FROM restaurant_memberships m
   WHERE m.user_id=u.id AND m.restaurant_id=a.restaurant_id AND m.staff_role='owner' AND m.active=1))))`;
-const eligible=`u.status='active' AND (EXISTS${privilegedEligibility} OR (
+const eligible=`u.status='active' AND NOT EXISTS(SELECT 1 FROM courier_manual_invites i WHERE i.user_id=u.id AND i.claimed_at IS NULL) AND (EXISTS${privilegedEligibility} OR (
  NOT EXISTS(SELECT 1 FROM privileged_passkey_accounts WHERE user_id=u.id) AND
  (u.account_role='customer' OR (u.account_role='courier' AND EXISTS(
  SELECT 1 FROM courier_profiles p WHERE p.user_id=u.id AND p.active=1)))))`;

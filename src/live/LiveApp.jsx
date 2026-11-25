@@ -1,5 +1,6 @@
 import {OrderTransfer,BankAccountForm,TransferQueue} from './BankTransfers.jsx';
 import FinanceSummary from './FinanceSummary.jsx';
+import {ManualCourier} from './CourierCommercial.jsx';
 import {RestaurantApplicationQueue} from './RestaurantApplications.jsx';
 import RestaurantKitchenDisplay from '../RestaurantKitchenDisplay.jsx';
 import {openKitchenTicket} from '../kitchen-operations.js';
@@ -99,6 +100,8 @@ function errorLabel(error){
   COURIER_UNAVAILABLE:'El repartidor ya no está disponible.',
   COURIER_INACTIVE:'Esta cuenta de repartidor está inactiva.',
   SPOT_FINANCIAL_HISTORY:'No se puede eliminar un anuncio con valor contratado. Pausalo para conservar su historial financiero.',
+  COURIER_INVITE_UNAVAILABLE:'La invitación ya fue utilizada o la cuenta está inactiva.',
+  COURIER_FEE_EXISTS:'Ya existe una cuota para este período.',
   FINANCE_BALANCE_CHANGED:'El saldo cambió o el abono supera lo pendiente. Actualizá antes de registrar otro pago.',
   SPOT_USE_RECEIPT:'Registrá los abonos desde Pagos e historial.',
   CONTRACT_PARTIAL_LOCK:'Completá la cuota parcialmente abonada antes de modificar el contrato.',
@@ -916,7 +919,7 @@ export default function LiveApp({CustomerHome}){
     <ControlSubnavigation section={controlSection} setSection={selectControlSection} flash={flashEnabled} commercial={commercial}/>
     {controlSection==='summary'&&<ControlOverview stats={adminStats} setSection={selectControlSection}/>}
     {['operations','accounts','claims','coupons','rates','reports','audit'].includes(controlSection)&&<ControlWorkspace key={controlSection} section={controlSection}
-     api={api} restaurants={adminRestaurants} offline={offline} busy={busy} run={run} money={price} errorLabel={errorLabel} setSection={selectControlSection}/>}
+     api={api} restaurants={adminRestaurants} offline={offline} busy={busy} run={run} money={price} errorLabel={errorLabel} setSection={selectControlSection} money={price}/>}
     {controlSection==='security'&&<section className="dvl-panel dvl-stack">
      <h2>Mi acceso</h2><div className="dvl-admin-identity"><span className="dvl-admin-avatar"><ShieldCheck size={23}/></span><div><strong>{session.user.displayName}</strong><small>Administrador global</small></div></div>
      <p className="dvl-muted">Administrá tu sesión y tus preferencias de acceso.</p>
@@ -937,6 +940,7 @@ export default function LiveApp({CustomerHome}){
     {controlSection==='courierDirectory'&&<CourierDirectory api={api} run={run} busy={busy} offline={offline} errorLabel={errorLabel} setSection={selectControlSection}/>}
     {controlSection==='advertising'&&<SpotManager api={api} run={run} busy={busy} offline={offline} money={price} errorLabel={errorLabel}/>}
     {controlSection==='couriers'&&<>
+     <ManualCourier api={api} run={run} busy={busy} offline={offline}/>
      <CourierApplications api={api} run={run} busy={busy} offline={offline} errorLabel={errorLabel}/>
      <details className="dvl-panel dvl-admin-details"><summary>Vincular repartidor registrado</summary>
       <div className="dvl-grid dvl-editor"><label>ID de repartidor<input value={adminCourierId} onChange={e=>setAdminCourierId(e.target.value)} placeholder="UUID de usuario verificado"/></label>

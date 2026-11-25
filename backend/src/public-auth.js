@@ -81,9 +81,11 @@ export async function publicPassword(req,env,action){
  const recovery=randomSecret(),next=await recoveryHash(env,recovery);
  const [updated]=await env.DB.batch([
   env.DB.prepare(`UPDATE client_credentials SET password_hash=?,recovery_hash=?,revision=revision+1 WHERE user_id=? AND revision=? AND recovery_hash=?
+   AND NOT EXISTS(SELECT 1 FROM courier_manual_invites i WHERE i.user_id=client_credentials.user_id AND i.claimed_at IS NULL AND i.expires_at<=unixepoch())
    AND EXISTS(SELECT 1 FROM users u WHERE u.id=client_credentials.user_id AND u.admin_version=? AND ${allowed})`).bind(await passwordHash(env,password),next,row.id,row.revision,await recoveryHash(env,body.code),row.admin_version),
   env.DB.prepare('DELETE FROM client_passkeys WHERE user_id=? AND EXISTS(SELECT 1 FROM client_credentials WHERE user_id=? AND recovery_hash=?)').bind(row.id,row.id,next),
   env.DB.prepare('UPDATE auth_sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL AND EXISTS(SELECT 1 FROM client_credentials WHERE user_id=? AND recovery_hash=?)').bind(now(),row.id,row.id,next),
+  env.DB.prepare('UPDATE courier_manual_invites SET claimed_at=? WHERE user_id=? AND claimed_at IS NULL AND EXISTS(SELECT 1 FROM client_credentials WHERE user_id=? AND recovery_hash=?)').bind(now(),row.id,row.id,next),
   await session(env,row.id,token,row.revision+1,row.admin_version,next)
  ]);
  if(updated.meta.changes!==1)throw credentialError();

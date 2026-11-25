@@ -1,7 +1,7 @@
 import React,{useEffect,useState} from 'react';
 const today=()=>new Date(Date.now()-21600000).toISOString().slice(0,10);
-const labels={affiliationReceived:'Afiliaciones cobradas',advertisingReceived:'Publicidad cobrada',settledDvolada:'Parte de Dvolada en liquidaciones pagadas'};
-const balances={affiliationNextDue:'Saldo de próximas cuotas',affiliationOverdue:'Cuotas vencidas acumuladas',affiliationDueToday:'Cuotas exigibles hoy',advertisingOutstanding:'Publicidad por cobrar'};
+const labels={affiliationReceived:'Afiliaciones cobradas',advertisingReceived:'Publicidad cobrada',courierFeesReceived:'Cuotas de repartidores cobradas',settledDvolada:'Parte de Dvolada en liquidaciones pagadas'};
+const balances={affiliationNextDue:'Saldo de próximas cuotas',affiliationOverdue:'Cuotas vencidas acumuladas',affiliationDueToday:'Cuotas exigibles hoy',advertisingOutstanding:'Publicidad por cobrar',courierFeesOutstanding:'Cuotas de repartidores por cobrar'};
 export default function FinanceSummary({api,money,offline}){
  const [data,setData]=useState(null),[error,setError]=useState(false),[attempt,setAttempt]=useState(0),[period,setPeriod]=useState('all'),[from,setFrom]=useState(today().slice(0,7)+'-01'),[until,setUntil]=useState(today());
  useEffect(()=>{if(offline)return;let active=true;setData(null);setError(false);

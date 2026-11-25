@@ -67,7 +67,7 @@ export async function settlements(req,env,actor,restaurant,id,operation,central=
  if(req.method==='GET'){
   if(!id)return {settlements:await rows(env.DB.prepare(`SELECT * FROM restaurant_settlements WHERE restaurant_id=?
    ORDER BY from_at DESC,id LIMIT 50`).bind(restaurant)),
-   configured:Boolean(await env.DB.prepare('SELECT 1 FROM restaurant_settlement_rules WHERE restaurant_id=? AND effective_at<=? LIMIT 1').bind(restaurant,now()).first())};
+   configured:Boolean(await env.DB.prepare('SELECT 1 FROM launch_pricing WHERE id=1 UNION ALL SELECT 1 FROM restaurant_settlement_rules WHERE restaurant_id=? AND effective_at<=? LIMIT 1').bind(restaurant,now()).first())};
   const record=await get();
   if(!record)throw new ApiError(404,'SETTLEMENT_NOT_FOUND');
   return detail(env,record);
@@ -95,6 +95,7 @@ export async function settlements(req,env,actor,restaurant,id,operation,central=
   if(!['refund','adjustment'].includes(kind))throw new ApiError(400,'INVALID_INPUT');
   const split=['restaurantMinor','courierMinor','dvoladaMinor'].map(name=>requireInteger(data[name],-2000000000,2000000000,name));
   if(!split.some(Boolean))throw new ApiError(400,'INVALID_INPUT');
+  if(split[2]!==0&&await env.DB.prepare('SELECT 1 FROM launch_pricing WHERE id=1').first())throw new ApiError(409,'LAUNCH_PRICING_FIXED');
   if(!await get())throw new ApiError(404,'SETTLEMENT_NOT_FOUND');
   const lookup=()=>env.DB.prepare('SELECT * FROM restaurant_settlement_adjustments WHERE id=? AND settlement_id=?').bind(key,id).first();
   let saved=await lookup();

@@ -1841,6 +1841,8 @@ test('launch pricing charges exactly L5 once for each completed courier delivery
  const o=await f.create({});assert.equal(o.status,201);const order=o.body.order.id;
  f.DB.db.prepare("UPDATE online_orders SET status='Entregado',courier_id=?,courier_response='accepted' WHERE id=?").run(f.tokens.courier.id,order);
  f.DB.db.prepare("UPDATE online_orders SET status='Entregado' WHERE id=?").run(order);
+ const pickup=await f.create({deliveryMethod:'pickup'});assert.equal(pickup.status,201);f.DB.db.prepare("UPDATE online_orders SET status='Entregado' WHERE id=?").run(pickup.body.order.id);
+ const canceled=await f.create({});assert.equal(canceled.status,201);f.DB.db.prepare("UPDATE online_orders SET status='Cancelado' WHERE id=?").run(canceled.body.order.id);
  const data=(await f.call(root,{by})).body;assert.equal(data.charges.length,1);assert.equal(data.charges[0].id,order);assert.equal(data.charges[0].amount_minor,500);
  const body={id:randomUUID(),version:1,amountMinor:500,paidDate:date,method:'cash',reference:'prueba'};
  const pay=body=>f.call(root+'/'+order+'/payments',{by,method:'POST',body});
@@ -1851,7 +1853,10 @@ test('launch pricing charges exactly L5 once for each completed courier delivery
 test('launch restaurant pricing separates L1500 activation from L500 monthly subscription',async()=>{
  const f=await fixture(),by='platformAdmin',root='/api/v1/admin/control/contracts/'+f.restaurants[0],date=new Date(Date.now()-21600000).toISOString().slice(0,10);
  f.DB.db.prepare('INSERT INTO launch_pricing(id,enabled_at) VALUES(1,unixepoch()-86400)').run();
- const contract={plan:'ONLINE',startDate:date,nextDue:date,frequency:'monthly',amountMinor:50000,version:0};
+ f.env.QA_RESTAURANT_COMMERCIAL='true';
+ const next=new Date(date+'T00:00:00Z');const anchor=next.getUTCDate();next.setUTCDate(1);next.setUTCMonth(next.getUTCMonth()+1);next.setUTCDate(Math.min(anchor,new Date(Date.UTC(next.getUTCFullYear(),next.getUTCMonth()+1,0)).getUTCDate()));
+ const contract={plan:'ONLINE',startDate:date,nextDue:next.toISOString().slice(0,10),frequency:'monthly',amountMinor:50000,version:0};
+ assert.equal((await f.call(root,{by,method:'PATCH',body:{...contract,nextDue:date}})).status,409);
  assert.equal((await f.call(root,{by,method:'PATCH',body:{...contract,amountMinor:75000}})).status,409);
  assert.equal((await f.call(root,{by,method:'PATCH',body:contract})).status,200);
  const before=(await f.call(root,{by})).body;assert.equal(before.activation.amount_minor,150000);assert.equal(before.contract.amount_minor,50000);

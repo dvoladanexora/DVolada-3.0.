@@ -135,7 +135,7 @@ async function contract(req,env,actor,id,payment){
  const plan=choice(d.plan,['ONLINE','LOCAL','PLUS']),start=validDate(d.startDate),due=validDate(d.nextDue),frequency=choice(d.frequency,['monthly','quarterly','semiannual','annual','once']);
  if(due<start)return fail();
  const price=amount(d.amountMinor,1),version=requireInteger(d.version,0,2147483646,'version');
- if(fixed&&plan==='ONLINE'&&(price!==50000||frequency!=='monthly'))throw new ApiError(409,'LAUNCH_PRICING_FIXED');
+ if(fixed&&plan==='ONLINE'&&(price!==50000||frequency!=='monthly'||(!current&&due<nextBillingDate(start,'monthly',Number(start.slice(-2))))))throw new ApiError(409,'LAUNCH_PRICING_FIXED');
  const billing=Number(due.slice(-2));
  const already=await env.DB.prepare('SELECT 1 FROM restaurant_contract_payments WHERE restaurant_id=? AND due_date>=? UNION ALL SELECT 1 FROM contract_receipts WHERE restaurant_id=? AND due_date>=? LIMIT 1').bind(id,due,id,due).first();
  if(await partial()>0)throw new ApiError(409,'CONTRACT_PARTIAL_LOCK');

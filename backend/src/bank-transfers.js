@@ -39,8 +39,8 @@ export async function customerTransfer(req,env,actor,id){
   if(!/^[A-Z0-9]{4,64}$/.test(ref))throw new ApiError(400,'INVALID_INPUT');
   try{
    const result=await env.DB.prepare(`UPDATE order_bank_transfers SET reference=?,status='pending',reviewed_by=NULL,reviewed_at=NULL
-    WHERE order_id=? AND status IN ('awaiting_reference','rejected')
-    AND EXISTS(SELECT 1 FROM online_orders WHERE id=? AND customer_id=? AND status='Pendiente')`).bind(ref,id,id,actor.userId).run();
+    WHERE order_id=? AND status IN ('awaiting_reference','rejected') AND reference!=?
+    AND EXISTS(SELECT 1 FROM online_orders WHERE id=? AND customer_id=? AND status='Pendiente')`).bind(ref,id,ref,id,actor.userId).run();
    if(!result.meta.changes){
     const saved=await get();
     if(!saved||saved.reference!==ref||!['pending','confirmed'].includes(saved.status))throw new ApiError(409,'TRANSFER_UNAVAILABLE');

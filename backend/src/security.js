@@ -143,6 +143,7 @@ export function idempotencyKey(req){
 }
 export function sqlConflict(error){
   const message=String(error?.message||error);
+  if(/TRANSFER_CANCELLATION_REQUIRES_REVIEW/.test(message))return new ApiError(409,'TRANSFER_CANCELLATION_REQUIRES_REVIEW');
   if(/TRANSFER_NOT_CONFIRMED/.test(message))return new ApiError(409,'TRANSFER_NOT_CONFIRMED');
   if(/OFFER_EXPIRED/.test(message))return new ApiError(409,'OFFER_EXPIRED');
   if(/PIN_LOCKED/.test(message))return new ApiError(423,'PIN_LOCKED');

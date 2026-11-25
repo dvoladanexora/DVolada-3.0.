@@ -1755,11 +1755,21 @@ test('direct transfers are scoped, snapshot bank details and block acceptance an
  assert.deepEqual([a.status,b.status].sort(),[200,409]);
  const paid=a.status===200?id:other;
  assert.equal((await f.status(paid,'staffA','Aceptado',1)).body.error,'TRANSFER_NOT_CONFIRMED');
+ assert.equal((await f.call('/api/v1/customer/orders/'+paid+'/cancel',{
+  method:'POST',key:randomUUID(),body:{expectedVersion:1}
+ })).body.error,'TRANSFER_CANCELLATION_REQUIRES_REVIEW');
  const review='/api/v1/restaurant/transfers/'+paid;
  const body={decision:'confirmed',reference:'QA00001'};
  assert.equal((await f.call(review,{by:'staffB',restaurantId:f.restaurants[1],method:'PATCH',body})).status,409);
  const decisions=await Promise.all([f.call(review,{...settings,method:'PATCH',body}),f.call(review,{...settings,method:'PATCH',body:{...body,decision:'rejected'}})]);
  assert.deepEqual(decisions.map(x=>x.status).sort(),[200,409]);
+ if(decisions[1].status===200){
+  assert.equal((await send(paid,{reference:body.reference})).status,409);
+  const corrected='QA00002';
+  assert.equal((await send(paid,{reference:corrected})).status,200);
+  assert.equal((await f.call(review,{...settings,method:'PATCH',body})).status,409);
+  assert.equal((await f.call(review,{...settings,method:'PATCH',body:{...body,reference:corrected}})).status,200);
+ }
  assert.equal((await f.call(customer(paid))).body.transfer.status,'confirmed');
  for(const [i,status] of ['Aceptado','Preparando','Listo','Entregado'].entries())
   assert.equal((await f.status(paid,'staffA',status,i+1)).status,200);

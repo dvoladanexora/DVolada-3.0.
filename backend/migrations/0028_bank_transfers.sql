@@ -21,3 +21,8 @@ CREATE TRIGGER IF NOT EXISTS bank_transfer_before_accept
 CREATE TRIGGER IF NOT EXISTS bank_transfer_sale_guard BEFORE INSERT ON restaurant_sales
  WHEN EXISTS(SELECT 1 FROM order_bank_transfers WHERE order_id=NEW.order_id AND (status!='confirmed' OR NEW.method!='transfer'))
  BEGIN SELECT RAISE(ABORT,'SALE_NOT_ALLOWED'); END;
+CREATE TRIGGER IF NOT EXISTS bank_transfer_cancellation_guard
+ BEFORE UPDATE OF status ON online_orders
+ WHEN NEW.status IN ('Cancelado','Rechazado') AND EXISTS(
+  SELECT 1 FROM order_bank_transfers WHERE order_id=OLD.id AND status IN ('pending','confirmed'))
+ BEGIN SELECT RAISE(ABORT,'TRANSFER_CANCELLATION_REQUIRES_REVIEW'); END;

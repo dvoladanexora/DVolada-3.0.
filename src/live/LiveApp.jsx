@@ -127,6 +127,7 @@ function errorLabel(error){
   INVALID_COUPON:'Revisá el formato del cupón.',
   COUPON_UNAVAILABLE:'Cupón vencido, ya utilizado o ajeno a este restaurante.',
   PASSKEY_INVALID:'No pudimos verificar tu llave. Elegí la llave de tu cuenta de cliente; las llaves del Centro de Control no sirven para este ingreso.',
+  TRANSFER_CANCELLATION_REQUIRES_REVIEW:'El pago quedó en revisión o confirmado. Coordiná con el restaurante antes de cancelar.',
   TRANSFER_NOT_CONFIRMED:'Confirmá la transferencia en Caja antes de aceptar este pedido.',
   PASSKEY_CHALLENGE_INVALID:'La solicitud venció o ya fue usada. Iniciá un intento nuevo.',
   PASSKEY_ALREADY_REGISTERED:'La llave elegida ya pertenece a otra cuenta.',

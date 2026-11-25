@@ -50,3 +50,20 @@ export function AccountBiometrics({api,busy,offline,run,errorLabel}){
  }catch(e){setMessage(errorLabel(e))}};
  return <details className="dvl-panel dvl-span"><summary>Seguridad · Huella o Face ID</summary><p>Usuario para ingresar con llave: <strong>{data.login}</strong></p><p>{data.registered?'Ya tenés una llave de acceso.':'Activá la seguridad de tu dispositivo para iniciar sesión más rápido.'}</p><button className="dvl-action secondary" disabled={busy||offline} onClick={activate}>{data.registered?'Reemplazar llave':'Activar huella o Face ID'}</button>{message&&<p role="status">{message}</p>}<small>Por seguridad, iniciá sesión nuevamente si han pasado más de 10 minutos.</small></details>;
 }
+
+// The welcome action performs real WebAuthn authentication, not just navigation.
+export function WelcomeBiometric({api,offline}){
+ const [enabled,setEnabled]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const pending=useRef(false);
+ useEffect(()=>{let active=true;if(!api||offline)return;api.clientAccess().then(c=>{if(active)setEnabled(Boolean(c.enabled&&c.publicAuth))}).catch(()=>{});return()=>{active=false}},[api,offline]);
+ if(!enabled)return null;
+ const enter=async()=>{if(pending.current||offline)return;pending.current=true;setBusy(true);setError('');try{
+  if(!window.PublicKeyCredential)throw Error('Dispositivo no compatible');
+  const {startAuthentication}=await import('@simplewebauthn/browser');
+  const {id,options}=await api.clientAuthenticate('login','begin',{login:''});
+  const response=await startAuthentication({optionsJSON:options});
+  await api.clientAuthenticate('login','finish',{id,response});
+  window.location.assign('/cuenta');
+ }catch{setError('No pudimos verificar tu huella o Face ID. Ingresá con tu contraseña y activá el acceso en tu perfil.')}finally{pending.current=false;setBusy(false)}};
+ return <><button type="button" className="secondary wide" disabled={busy||offline} onClick={enter}>{busy?'Verificando acceso…':'Entrar con huella o Face ID'}</button>{error&&<p role="alert">{error}</p>}</>;
+}

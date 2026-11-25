@@ -147,7 +147,7 @@ export default function LiveApp({CustomerHome}){
  const [pushConfig,setPushConfig]=useState(null),[pushEnabled,setPushEnabled]=useState(false);
  const [commercial,setCommercial]=useState(false),[staffCredential,setStaffCredential]=useState(null);
  const [accountEnabled,setAccountEnabled]=useState(false),[accessReady,setAccessReady]=useState(false);
- const [publicAuth,setPublicAuth]=useState(false),[googleCustomer,setGoogleCustomer]=useState(false),[passwordMode,setPasswordMode]=useState(true);
+ const [publicAuth,setPublicAuth]=useState(false),[googleCustomer,setGoogleCustomer]=useState(false);
  const [newCodes,setNewCodes]=useState(null),[support,setSupport]=useState(null);
  const [flashEnabled,setFlashEnabled]=useState(false),[flashOffers,setFlashOffers]=useState([]),[flashSelection,setFlashSelection]=useState(null);
  const [favoriteIds,setFavoriteIds]=useState([]),[onlyFavorites,setOnlyFavorites]=useState(false);
@@ -642,7 +642,7 @@ export default function LiveApp({CustomerHome}){
   };
   return <CustomerHome key={cartAccount} connected customerId={cartAccount} initialPage={initialPage} liveCustomer={liveCustomer} onSignOut={()=>logout()}/>;
  }
- return <div className={adminMode?"dvl-app dvl-account-shell dvl-admin-shell":session?"dvl-app dvl-account-shell":"dvl-app"}>
+ return <div className={adminMode?"dvl-app dvl-account-shell dvl-admin-shell":session?"dvl-app dvl-account-shell":publicAuth&&!restaurantIntent&&!qaView?"dvl-app dvl-customer-auth":"dvl-app"}>
   {adminMode?<header className="dvl-header dvl-admin-header">
    <a className="dvl-admin-brand" href="/" aria-label="Inicio de Dvolada"><img src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada"/><span><strong>Dvolada</strong><small>Centro de Control</small></span></a>
    <div className="dvl-admin-header-actions">
@@ -671,12 +671,11 @@ export default function LiveApp({CustomerHome}){
   <ClientCodes codes={newCodes} close={()=>setNewCodes(null)}/>
   {!session&&!accessReady&&!offline&&<p role="status">Verificando acceso…</p>}
   {!session&&accountEnabled&&<>{publicAuth&&!restaurantIntent&&!qaView?<>
-   {passwordMode?<PasswordAccess authenticate={authenticatePassword} busy={busy} offline={offline} initialMode={accountParams.get('mode')==='register'?'register':'login'} onBack={null}/>:<ClientAccess authenticate={authenticateClient} busy={busy} offline={offline}/>}
+   <PasswordAccess authenticate={authenticatePassword} busy={busy} offline={offline} initialMode={accountParams.get('mode')==='register'?'register':'login'} onBack={null}/>
    <section className="dvl-panel dvl-stack" aria-label="Otras opciones de acceso">{googleCustomer&&<CustomerGoogleButton api={api} offline={offline} onSuccess={(me,codes)=>{if(codes.recovery)setNewCodes(codes);openSession(me,true)}}/>}
     <button type="button" className="dvl-action secondary" disabled={busy||offline} onClick={()=>authenticateClient('login',{login:''})}>Ingresar con huella o Face ID</button>
     <p className="dvl-muted">Usá la huella, el rostro o el PIN del dispositivo si ya activaste una llave de acceso.</p>
-    <button type="button" className="dvl-action secondary" disabled={busy||offline} onClick={()=>setPasswordMode(v=>!v)}>{passwordMode?'Otras opciones de llave de acceso':'Volver a usuario y contraseña'}</button>
-    <a href="/#home">Continuar explorando como invitado</a>
+    <a href="/?guest=1">Continuar como invitado</a>
    </section></>:<ClientAccess authenticate={authenticateClient} busy={busy} offline={offline}/>}</>}
   {qaView&&!session&&(accessReady||offline)&&<form className="dvl-panel dvl-login" onSubmit={signIn}>
    <h2>Ingresá con tu acceso de pruebas</h2>

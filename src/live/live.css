@@ -267,3 +267,11 @@
  .dvl-admin-sidebar .dvl-admin-nav button{font-size:10px;padding-inline:1px}
  .dvl-admin-sidebar .dvl-admin-nav button span{max-width:100%;overflow-wrap:normal;white-space:nowrap}
 }
+
+/* Keep public sign-in separate and prevent the mobile header from hiding its heading. */
+.dvl-customer-auth .dvl-header{position:relative;min-height:64px;height:auto;flex-wrap:wrap}
+.dvl-customer-auth .dvl-main{max-width:510px;padding-top:24px}
+.dvl-customer-auth .dvl-login{margin:0 auto 12px;padding:20px;gap:12px}
+.dvl-customer-auth .dvl-client-modes,.dvl-customer-auth .dvl-login .dvl-inline{display:flex;flex-wrap:wrap;gap:8px}
+.dvl-customer-auth .dvl-login .dvl-inline button{flex:1 1 auto;min-width:0}
+.dvl-customer-auth .dvl-main>.dvl-panel{max-width:470px;margin:0 auto 12px}

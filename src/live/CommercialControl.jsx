@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 const moneyMinor=v=>Math.round(Number(v)*100);
 const dateTime=t=>new Date((t-21600)*1000).toISOString().slice(0,16);
 const epoch=t=>Math.floor(Date.parse(t+'-06:00')/1000);
@@ -16,31 +16,50 @@ async function compressImage(file){
 }
 export function SpotManager({api,run,busy,offline,money,errorLabel}){
  const [data,setData]=useState(null),[edit,setEdit]=useState(null),[error,setError]=useState(''),[saving,setSaving]=useState(false);
+ const [preview,setPreview]=useState(''),[previewBusy,setPreviewBusy]=useState(false);
+ const previewSeq=useRef(0);
+ const openEditor=row=>{previewSeq.current++;setPreview('');setPreviewBusy(false);setError('');setEdit(row)};
+ useEffect(()=>{
+  if(!edit?.id||offline)return;
+  const seq=++previewSeq.current;setPreviewBusy(true);
+  api.control('spots/'+edit.id).then(result=>{
+   if(seq===previewSeq.current&&['image/png','image/jpeg','image/webp'].includes(result.mime)&&typeof result.imageBase64==='string')setPreview('data:'+result.mime+';base64,'+result.imageBase64)
+  }).catch(e=>{if(seq===previewSeq.current)setError(errorLabel(e))}).finally(()=>{if(seq===previewSeq.current)setPreviewBusy(false)});
+  return()=>{previewSeq.current++};
+ },[api,edit,offline]);
+ const chooseImage=async e=>{
+  const file=e.target.files?.[0];if(!file)return;
+  const seq=++previewSeq.current;setPreviewBusy(true);setError('');
+  try{const image=await compressImage(file);if(seq===previewSeq.current)setPreview('data:image/webp;base64,'+image)}
+  catch(err){if(seq===previewSeq.current){setPreview('');setError(err.message);e.target.value=''}}
+  finally{if(seq===previewSeq.current)setPreviewBusy(false)}
+ };
  const refresh=async()=>{try{setData((await api.control('spots')).spots);setError('')}catch(e){setError(errorLabel(e))}};
  useEffect(()=>{if(!offline)refresh()},[api,offline]);
- const disabled=busy||offline||saving;
+ const disabled=busy||offline||saving||previewBusy;
  const save=async event=>{event.preventDefault();const form=event.currentTarget;const d=Object.fromEntries(new FormData(form));setSaving(true);setError('');try{
  const imageBase64=d.image?.size?await compressImage(d.image):undefined;
  const result=await run(()=>api.control(edit.id?'spots/'+edit.id:'spots',{method:edit.id?'PATCH':'POST',body:{advertiser:d.advertiser,title:d.title,placement:d.placement,startsAt:epoch(d.start),endsAt:epoch(d.end),durationSeconds:Number(d.duration),link:d.link,priceMinor:moneyMinor(d.price),paidMinor:moneyMinor(d.paid),...(edit.id?{version:edit.version}:{}),...(imageBase64?{imageBase64}:{})}}),{refresh:false});
- if(result){setEdit(null);await refresh()}
+ if(result){openEditor(null);await refresh()}
  }catch(e){setError(e.message)}finally{setSaving(false)}};
  const act=async(row,action)=>{if(action==='delete'&&!window.confirm('¿Eliminar definitivamente este spot?'))return;const r=await run(()=>api.control('spots/'+row.id,{method:'POST',body:{action,version:row.version}}),{refresh:false});if(r)await refresh()};
- return <section className="dvl-panel dvl-stack"><div className="dvl-admin-section-heading"><h2>Spots publicitarios</h2><button className="dvl-action" disabled={disabled} onClick={()=>setEdit({})}>+ Nuevo spot</button></div>
+ return <section className="dvl-panel dvl-stack"><div className="dvl-admin-section-heading"><h2>Spots publicitarios</h2><button className="dvl-action" disabled={disabled} onClick={()=>openEditor({})}>+ Nuevo spot</button></div>
  {error&&<p role="alert">{error}</p>}
  {edit&&<form key={edit.id||'new'} className="dvl-grid dvl-editor" onSubmit={save}>
  <label>Anunciante<input name="advertiser" required maxLength={120} defaultValue={edit.advertiser}/></label>
  <label>Título del anuncio<input name="title" required maxLength={120} defaultValue={edit.title}/></label>
- <label>Imagen JPG, PNG o WebP<input type="file" name="image" accept="image/png,image/jpeg,image/webp" required={!edit.id}/></label>
+ <label>Imagen JPG, PNG o WebP<input type="file" name="image" accept="image/png,image/jpeg,image/webp" onChange={chooseImage} required={!edit.id}/></label>
+ {previewBusy&&<p role="status">Preparando vista previa…</p>}{preview&&<div className="dvl-span"><img src={preview} alt="Vista previa del spot" style={{display:'block',width:'100%',maxHeight:240,objectFit:'contain',borderRadius:12}}/></div>}
  <label>Ubicación<select name="placement" defaultValue={edit.placement||'carousel'}>{Object.entries(placeLabels).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
  <label>Inicio (Honduras)<input name="start" type="datetime-local" required defaultValue={edit.starts_at?dateTime(edit.starts_at):today()+'T00:00'}/></label>
  <label>Vencimiento (Honduras)<input name="end" type="datetime-local" required defaultValue={edit.ends_at?dateTime(edit.ends_at):''}/></label>
  <label>Segundos por aparición<input name="duration" type="number" min="5" max="30" required defaultValue={edit.duration_seconds||5}/></label>
  <label>Enlace HTTPS o WhatsApp<input name="link" type="url" maxLength={400} defaultValue={edit.link||''}/></label>
  <label>Precio contratado (L)<input name="price" type="number" min="0" max="1000000" step=".01" required defaultValue={(edit.price_minor||0)/100}/></label>
- <label>Pagado (L)<input name="paid" type="number" min="0" max="1000000" step=".01" required defaultValue={(edit.paid_minor||0)/100}/></label>
- <button className="dvl-action" disabled={disabled}>{edit.id?'Guardar cambios':'Guardar spot'}</button><button type="button" className="dvl-action secondary" onClick={()=>setEdit(null)}>Cancelar</button></form>}
+ <label>Pagado (L)<input name="paid" type="number" min={(edit.paid_minor||0)/100} max="1000000" step=".01" required defaultValue={(edit.paid_minor||0)/100}/></label>
+ <button className="dvl-action" disabled={disabled}>{edit.id?'Guardar cambios':'Guardar spot'}</button><button type="button" className="dvl-action secondary" onClick={()=>openEditor(null)}>Cancelar</button></form>}
  {!data&&!error&&<p role="status">Cargando anuncios…</p>}{data?.length===0&&<p>No hay anuncios registrados.</p>}
- {data?.map(row=><article key={row.id} className="dvl-panel dvl-stack"><strong>{row.title} · {row.advertiser}</strong><small>{placeLabels[row.placement]} · {row.ends_at<=Date.now()/1000?'Vencido':!row.active?'Pausado':row.starts_at>Date.now()/1000?'Programado':'Activo'}</small><span>{dateTime(row.starts_at).replace('T',' ')} a {dateTime(row.ends_at).replace('T',' ')}</span><p>Contrato: {money(row.price_minor)} · Pagado: {money(row.paid_minor)} · Saldo: {money(row.price_minor-row.paid_minor)}</p><div className="dvl-inline"><button className="dvl-action secondary" disabled={disabled} onClick={()=>setEdit(row)}>Editar / renovar</button><button className="dvl-action" disabled={disabled} onClick={()=>act(row,row.active?'pause':'activate')}>{row.active?'Pausar':'Activar'}</button><button className="dvl-action secondary" disabled={disabled} onClick={()=>act(row,'delete')}>Eliminar</button></div></article>)}
+ {data?.map(row=><article key={row.id} className="dvl-panel dvl-stack"><strong>{row.title} · {row.advertiser}</strong><small>{placeLabels[row.placement]} · {row.ends_at<=Date.now()/1000?'Vencido':!row.active?'Pausado':row.starts_at>Date.now()/1000?'Programado':'Activo'}</small><span>{dateTime(row.starts_at).replace('T',' ')} a {dateTime(row.ends_at).replace('T',' ')}</span><p>Contrato: {money(row.price_minor)} · Pagado: {money(row.paid_minor)} · Saldo: {money(row.price_minor-row.paid_minor)}</p><div className="dvl-inline"><button className="dvl-action secondary" disabled={disabled} onClick={()=>openEditor(row)}>Editar / renovar</button><button className="dvl-action" disabled={disabled} onClick={()=>act(row,row.active?'pause':'activate')}>{row.active?'Pausar':'Activar'}</button>{row.price_minor===0&&row.paid_minor===0?<button className="dvl-action secondary" disabled={disabled} onClick={()=>act(row,'delete')}>Eliminar</button>:<small>Conservado en finanzas. Podés pausarlo, pero no eliminar su historial.</small>}</div></article>)}
  </section>
 }
 export function RestaurantContract({restaurant,api,run,busy,offline,money,errorLabel,onSaved}){

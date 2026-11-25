@@ -1606,6 +1606,13 @@ test('commercial spots are admin-only, scheduled, pausable and public without pr
  const create=await f.call(root,{by:'platformAdmin',method:'POST',body});assert.equal(create.status,200,JSON.stringify(create.body));
  const id=create.body.id;
  assert.equal((await f.call('/api/v1/catalog/spots')).body.spots.length,0);
+ assert.equal((await f.call(root+'/'+id)).status,403);
+ const preview=await f.call(root+'/'+id,{by:'platformAdmin'});
+ assert.equal(preview.status,200);assert.equal(preview.body.mime,'image/jpeg');assert.equal(preview.body.imageBase64,body.imageBase64);
+ const blockedDelete=await f.call(root+'/'+id,{by:'platformAdmin',method:'POST',body:{action:'delete',version:1}});
+ assert.equal(blockedDelete.status,409);assert.equal(blockedDelete.body.error,'SPOT_FINANCIAL_HISTORY');
+ const blockedReduction=await f.call(root+'/'+id,{by:'platformAdmin',method:'PATCH',body:{...body,paidMinor:0,version:1}});
+ assert.equal(blockedReduction.status,409);assert.equal(blockedReduction.body.error,'SPOT_PAYMENT_REDUCTION');
  assert.equal((await f.call(root+'/'+id,{by:'platformAdmin',method:'POST',body:{action:'activate',version:1}})).status,200);
  const live=await f.call('/api/v1/catalog/spots');assert.equal(live.body.spots.length,1);assert.equal(live.body.spots[0].price_minor,undefined);
  const image=await worker.fetch(new Request('https://api.example.test/api/v1/catalog/spots/'+id+'/image'),f.env);assert.equal(image.status,200);assert.equal(image.headers.get('content-type'),'image/jpeg');
@@ -1627,6 +1634,9 @@ test('commercial spots are admin-only, scheduled, pausable and public without pr
  assert.equal(summary.body.advertisingRecorded,25000);
  assert.equal(summary.body.advertisingOutstanding,50000);
  assert.equal(summary.body.settledDvolada,0);
+ const free=await f.call(root,{by:'platformAdmin',method:'POST',body:{...body,priceMinor:0,paidMinor:0}});assert.equal(free.status,200);
+ assert.equal((await f.call(root+'/'+free.body.id,{by:'platformAdmin',method:'POST',body:{action:'delete',version:1}})).status,200);
+ assert.equal((await f.call(root+'/'+free.body.id,{by:'platformAdmin'})).status,404);
 });
 test('affiliate payment is unique per due date and advances billing date',async()=>{
  const f=await fixture(),root='/api/v1/admin/control/contracts/'+f.restaurants[0];

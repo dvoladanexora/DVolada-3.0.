@@ -42,11 +42,16 @@ export async function publicSpots(req,env,id){
 }
 async function spots(req,env,actor,id){
  if(req.method==='GET'&&!id)return {spots:(await rows(env.DB.prepare('SELECT '+spotFields+' FROM commercial_spots ORDER BY created_at DESC LIMIT 200')))};
+ if(id&&req.method==='GET'){
+  const row=await env.DB.prepare('SELECT mime,image_base64 FROM commercial_spots WHERE id=?').bind(id).first();
+  if(!row)throw new ApiError(404,'NOT_FOUND');
+  return {mime:row.mime,imageBase64:row.image_base64};
+ }
  if(id&&req.method==='POST'){
   const body=await readJson(req);requireKeys(body,['action','version']);const version=requireInteger(body.version,1,2147483646,'version');
   const action=choice(body.action,['activate','pause','delete']);
-  const stmt=action==='delete'?env.DB.prepare('DELETE FROM commercial_spots WHERE id=? AND version=?').bind(id,version):env.DB.prepare('UPDATE commercial_spots SET active=?,version=version+1 WHERE id=? AND version=?').bind(action==='activate'?1:0,id,version);
-  const [r]=await env.DB.batch([stmt,audit(env,actor,'spot_'+action,id,{version})]);if(!r.meta.changes)throw new ApiError(409,'ADMIN_ACCOUNT_CHANGED');return {ok:true};
+  const stmt=action==='delete'?env.DB.prepare('DELETE FROM commercial_spots WHERE id=? AND version=? AND price_minor=0 AND paid_minor=0').bind(id,version):env.DB.prepare('UPDATE commercial_spots SET active=?,version=version+1 WHERE id=? AND version=?').bind(action==='activate'?1:0,id,version);
+  const [r]=await env.DB.batch([stmt,audit(env,actor,'spot_'+action,id,{version})]);if(!r.meta.changes){if(action==='delete'&&await env.DB.prepare('SELECT 1 FROM commercial_spots WHERE id=? AND version=? AND (price_minor>0 OR paid_minor>0)').bind(id,version).first())throw new ApiError(409,'SPOT_FINANCIAL_HISTORY');throw new ApiError(409,'ADMIN_ACCOUNT_CHANGED')}return {ok:true};
  }
  if((req.method!=='POST'||id)&&(req.method!=='PATCH'||!id))throw new ApiError(405,'METHOD_NOT_ALLOWED');
  const d=await readJson(req,165000);requireKeys(d,['advertiser','title','placement','startsAt','endsAt','durationSeconds','link','imageBase64','priceMinor','paidMinor','version']);
@@ -56,9 +61,9 @@ async function spots(req,env,actor,id){
  let mime=null;if(d.imageBase64!==undefined){try{if(typeof d.imageBase64==='string'&&d.imageBase64.length<=163840)mime=photoType(atob(d.imageBase64))}catch{}if(!mime)throw new ApiError(400,'INVALID_PHOTO')}
  if(!id&&!mime)throw new ApiError(400,'INVALID_PHOTO');
  const key=id||crypto.randomUUID();let stmt;
- if(id){const version=requireInteger(d.version,1,2147483646,'version');stmt=env.DB.prepare('UPDATE commercial_spots SET advertiser=?,title=?,placement=?,starts_at=?,ends_at=?,duration_seconds=?,link=?,price_minor=?,paid_minor=?,image_base64=COALESCE(?,image_base64),mime=COALESCE(?,mime),version=version+1 WHERE id=? AND version=?').bind(advertiser,title,placement,start,end,duration,link,price,paid,d.imageBase64??null,mime,key,version)}
+ if(id){const version=requireInteger(d.version,1,2147483646,'version');stmt=env.DB.prepare('UPDATE commercial_spots SET advertiser=?,title=?,placement=?,starts_at=?,ends_at=?,duration_seconds=?,link=?,price_minor=?,paid_minor=?,image_base64=COALESCE(?,image_base64),mime=COALESCE(?,mime),version=version+1 WHERE id=? AND version=? AND paid_minor<=?').bind(advertiser,title,placement,start,end,duration,link,price,paid,d.imageBase64??null,mime,key,version,paid)}
  else stmt=env.DB.prepare('INSERT INTO commercial_spots(id,advertiser,title,placement,starts_at,ends_at,duration_seconds,link,price_minor,paid_minor,image_base64,mime) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(key,advertiser,title,placement,start,end,duration,link,price,paid,d.imageBase64,mime);
- const [r]=await env.DB.batch([stmt,audit(env,actor,id?'spot_updated':'spot_created',key,{price,paid,placement,start,end})]);if(!r.meta.changes)throw new ApiError(409,'ADMIN_ACCOUNT_CHANGED');return {id:key};
+ const [r]=await env.DB.batch([stmt,audit(env,actor,id?'spot_updated':'spot_created',key,{price,paid,placement,start,end})]);if(!r.meta.changes){if(id&&await env.DB.prepare('SELECT 1 FROM commercial_spots WHERE id=? AND version=? AND paid_minor>?').bind(id,d.version,paid).first())throw new ApiError(409,'SPOT_PAYMENT_REDUCTION');throw new ApiError(409,'ADMIN_ACCOUNT_CHANGED')}return {id:key};
 }
 async function contract(req,env,actor,id,payment){
  const restaurant=await env.DB.prepare('SELECT id,plan FROM restaurants WHERE id=?').bind(id).first();if(!restaurant)throw new ApiError(404,'RESTAURANT_NOT_FOUND');

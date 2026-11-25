@@ -95,6 +95,8 @@ function errorLabel(error){
   OFFER_EXPIRED:'La oferta venció. Actualizá la lista de pedidos.',
   COURIER_UNAVAILABLE:'El repartidor ya no está disponible.',
   COURIER_INACTIVE:'Esta cuenta de repartidor está inactiva.',
+  SPOT_FINANCIAL_HISTORY:'No se puede eliminar un anuncio con valor contratado. Pausalo para conservar su historial financiero.',
+  SPOT_PAYMENT_REDUCTION:'No se puede reducir un importe ya registrado como pagado sin una corrección auditada.',
   ADMIN_ACCOUNT_CHANGED:'La cuenta cambió o la acción está restringida. Actualizá la lista.',
   ADMIN_CLAIM_CHANGED:'El reclamo cambió, ya está resuelto o el responsable no puede atenderlo.',
   ADMIN_COUPON_EXISTS:'El código ya existe o el restaurante no admite cupones.',

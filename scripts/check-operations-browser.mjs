@@ -103,11 +103,13 @@ try{
    await page.getByLabel('Anunciante',{exact:true}).fill('Comercio de prueba');
    await page.getByLabel('Título del anuncio',{exact:true}).fill('Anuncio de prueba');
    await page.getByLabel('Imagen JPG, PNG o WebP').setInputFiles({name:'spot.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB9sAAAAASUVORK5CYII=','base64')});
+   await page.getByAltText('Vista previa del spot',{exact:true}).waitFor();
    await page.getByLabel('Inicio (Honduras)',{exact:true}).fill('2026-11-01T00:00');
    await page.getByLabel('Vencimiento (Honduras)',{exact:true}).fill('2026-12-31T23:59');
    await page.getByLabel('Precio contratado (L)',{exact:true}).fill('500');
    await page.getByRole('button',{name:'Guardar spot',exact:true}).click();
    await page.getByText('Anuncio de prueba · Comercio de prueba',{exact:true}).waitFor();
+   await page.getByText('Conservado en finanzas.',{exact:false}).waitFor();
    await page.screenshot({path:'visual-checks/admin-spot-mobile.png'});
    await page.getByRole('navigation',{name:'Opciones de Publicidad'}).getByRole('button',{name:'Cupones',exact:true}).click();
    await page.getByRole('heading',{name:'Cupones',exact:true}).waitFor();

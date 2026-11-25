@@ -1670,7 +1670,7 @@ test('password account can enroll a verified passkey without changing password o
  const begin=await call('begin',{});assert.equal(begin.status,200);const {id,options}=await begin.json();const key=virtualPasskey(),response=key.registration(options);
  assert.equal((await call('finish',{id,response})).status,200);
  assert.equal((await call('finish',{id,response})).status,401);
- const challenge=await beginKey(f,'login',{login});assert.equal(challenge.status,200);const payload=await challenge.json();
+ const challenge=await beginKey(f,'login',{login:''});assert.equal(challenge.status,200);const payload=await challenge.json();
  const done=await finishKey(f,'login',payload.id,key.assertion(payload.options),partCookie(challenge));assert.equal(done.status,204);
  const me=await (await passkeyRequest(f,'auth/me',undefined,{cookie:partCookie(done)})).json();assert.equal(me.user.id,user.id);
  assert.equal((await passkeyRequest(f,'auth/client/password/login',{login,password})).status,204);

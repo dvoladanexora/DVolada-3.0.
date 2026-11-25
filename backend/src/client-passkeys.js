@@ -26,7 +26,8 @@ const browserHash=(env,secret)=>hmacHex(env.SESSION_PEPPER,'client-passkey-brows
 async function begin(req,env,mode,input,rpID){
  requireKeys(input,mode==='register'?['login','displayName']:mode==='recover'?['login','code']:['login']);
  const login=typeof input.login==='string'?input.login.trim().toLowerCase():'';
- if(!loginPattern.test(login))throw new ApiError(400,'CLIENT_CREDENTIAL_FORMAT');
+ const discoverable=mode==='login'&&input.login===''&&rpID==='dvolada-qa.dvoladanexora.workers.dev'&&env.QA_PUBLIC_AUTH==='true';
+ if(!discoverable&&!loginPattern.test(login))throw new ApiError(400,'CLIENT_CREDENTIAL_FORMAT');
  const birth=now();
  const ip=await hmacHex(env.SESSION_PEPPER,'client-passkey-rate:v1:'+(req.headers.get('cf-connecting-ip')||'unknown'));
  const limit=await env.DB.prepare(`INSERT INTO client_auth_throttle(source_hash,time_bucket,attempts)
@@ -74,7 +75,9 @@ async function begin(req,env,mode,input,rpID){
 async function verifyLogin(env,assertion,expected,login){
  const row=await env.DB.prepare(`SELECT p.*,c.revision,u.admin_version FROM client_passkeys p
   JOIN client_credentials c ON c.user_id=p.user_id JOIN users u ON u.id=p.user_id
-  WHERE p.credential_id=? AND c.login_name=? AND ${eligible}`).bind(assertion.id,login).first();
+  WHERE p.credential_id=? AND (c.login_name=? OR (?='' AND u.account_role IN ('customer','courier')
+   AND NOT EXISTS(SELECT 1 FROM privileged_passkey_accounts a WHERE a.user_id=u.id)
+   AND NOT EXISTS(SELECT 1 FROM restaurant_memberships m WHERE m.user_id=u.id))) AND ${eligible}`).bind(assertion.id,login,login).first();
  if(!row)throw new ApiError(401,'PASSKEY_INVALID');
  let verified;
  try{

@@ -9,7 +9,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql','0024_commercial_control.sql','0025_public_auth.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql','0024_commercial_control.sql','0025_public_auth.sql','0026_restaurant_applications.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -1675,4 +1675,26 @@ test('password account can enroll a verified passkey without changing password o
  const done=await finishKey(f,'login',payload.id,key.assertion(payload.options),partCookie(challenge));assert.equal(done.status,204);
  const me=await (await passkeyRequest(f,'auth/me',undefined,{cookie:partCookie(done)})).json();assert.equal(me.user.id,user.id);
  assert.equal((await passkeyRequest(f,'auth/client/password/login',{login,password})).status,204);
+});
+
+test('restaurant applications persist once, remain private and have one audited decision',async()=>{
+ const f=await fixture(),origin='https://api.example.test';
+ f.env.CORS_ORIGINS=origin;
+ const body={business:'Comedor de prueba',owner:'Titular ficticio',phone:'+50400000003',
+  email:'titular@example.test',location:'Barrio de prueba',type:'Comedor',plan:'ONLINE',notes:''};
+ const key=randomUUID(),path='/api/v1/restaurant-applications';
+ assert.equal((await f.call(path,{method:'POST',body,key})).status,403);
+ const attempts=await Promise.all([key,key,randomUUID()].map(k=>f.call(path,{method:'POST',body,key:k,origin})));
+ assert.deepEqual(attempts.map(r=>r.status),[202,202,202]);
+ const queue='/api/v1/admin/restaurant-applications';
+ assert.equal((await f.call(queue)).status,403);
+ const approved=await f.call(queue,{by:'platformAdmin'});
+ assert.equal(approved.body.applications.length,1);
+ const request=approved.body.applications[0];
+ const reject=reason=>f.call(queue+'/'+request.id,{by:'platformAdmin',method:'PATCH',body:{decision:'rejected',reason}});
+ assert.equal((await reject('')).status,400);
+ assert.equal((await reject('Datos insuficientes')).status,200);
+ assert.equal((await reject('Otra revisión')).status,409);
+ assert.equal(f.DB.db.prepare("SELECT COUNT(*) AS n FROM control_audit WHERE action='restaurant_application_decided'").get().n,1);
+ assert.equal(f.DB.db.prepare('SELECT count(*) AS n FROM restaurants').get().n,2);
 });

@@ -47,7 +47,7 @@ const endpoints={operations:'orders',accounts:'accounts',claims:'claims',coupons
 // One navigation model, shared across the desktop sidebar and mobile bar.
 const controlGroups=[
  {id:'summary',label:'Inicio',icon:LayoutDashboard,sections:[['summary','Vista general'],['operations','Pedidos'],['claims','Reclamos']]},
- {id:'business',label:'Afiliados',icon:Store,sections:[['business','Restaurantes'],['owners','Propietarios'],['staff','Personal']]},
+ {id:'business',label:'Afiliados',icon:Store,sections:[['business','Restaurantes'],['restaurantApplications','Solicitudes'],['owners','Propietarios'],['staff','Personal']]},
  {id:'couriers',label:'Repartidores',icon:Bike,sections:[['courierDirectory','Directorio'],['couriers','Solicitudes']]},
  {id:'advertising',label:'Publicidad',icon:Megaphone,sections:[['advertising','Spots'],['coupons','Cupones'],['flash','Flash y regalos']]},
  {id:'statistics',label:'Estadísticas',icon:ChartNoAxesCombined,sections:[['reports','Reportes de actividad'],['settlements','Liquidaciones']]},

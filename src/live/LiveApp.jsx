@@ -1,3 +1,4 @@
+import {RestaurantApplicationQueue} from './RestaurantApplications.jsx';
 import RestaurantKitchenDisplay from '../RestaurantKitchenDisplay.jsx';
 import {openKitchenTicket} from '../kitchen-operations.js';
 import SlideConfirm from '../SlideConfirm.jsx';
@@ -903,6 +904,7 @@ export default function LiveApp({CustomerHome}){
      <Action kind="secondary" disabled={busy||offline} onClick={()=>logout()}><LogOut size={17}/> Cerrar sesión</Action>
      <a className="dvl-action secondary" href="/">Ir a Dvolada</a>
     </section>}
+    {controlSection==='restaurantApplications'&&<RestaurantApplicationQueue api={api}/>}
     {controlSection==='owners'&&<section className="dvl-panel dvl-stack"><h2>Invitar propietario</h2>
       <p className="dvl-muted">Seleccioná el restaurante y generá una invitación privada para su propietario.</p>
       <label>Restaurante<select value={adminSelectedId} onChange={e=>setAdminSelectedId(e.target.value)}>

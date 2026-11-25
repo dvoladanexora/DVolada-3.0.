@@ -1,3 +1,4 @@
+import {submitRestaurantApplication,manageRestaurantApplications} from './restaurant-applications.js';
 import {controlRoute} from './control-center.js';
 import {commercialControl,publicSpots,rateCourier} from './commercial-control.js';
 import {googleControlAuth,googleControlActor,googleControlRequired,clearControlCookie} from './google-admin-session.js';
@@ -36,6 +37,7 @@ async function route(req,env){
   await env.DB.prepare('SELECT 1').first();
   return respond(req,env,200,{status:'ok',service:'dvolada-online',version:1});
  }
+ if(method==='POST'&&path==='/api/v1/restaurant-applications')return submitRestaurantApplication(req,env);
  if(method==='GET'&&path==='/api/v1/catalog/spots')return publicSpots(req,env);
  const spotImage=/^\/api\/v1\/catalog\/spots\/([0-9a-f-]{36})\/image$/.exec(path);
  if(method==='GET'&&spotImage)return publicSpots(req,env,spotImage[1]);
@@ -153,6 +155,8 @@ async function route(req,env){
  if(['POST','PATCH'].includes(method))await mutationRateLimit(env,actor);
  const biometricRoute=/^\/api\/v1\/auth\/biometric\/(status|begin|finish)$/.exec(path);
  if(biometricRoute&&(biometricRoute[1]==='status'?method==='GET':method==='POST'))return biometric(req,env,actor,biometricRoute[1]);
+ const application=/^\/api\/v1\/admin\/restaurant-applications(?:\/([0-9a-f-]{36}))?$/.exec(path);
+ if(application)return manageRestaurantApplications(req,env,actor,application[1]);
  if(/^\/api\/v1\/admin\/control\/(spots|contracts)(?:\/|$)/.test(path))return commercialControl(req,env,actor,path.slice('/api/v1/admin/control/'.length));
  const courierRating=/^\/api\/v1\/customer\/orders\/([0-9a-f-]{36})\/courier-rating$/.exec(path);
  if(method==='POST'&&courierRating)return respond(req,env,200,await rateCourier(req,env,actor,courierRating[1]));

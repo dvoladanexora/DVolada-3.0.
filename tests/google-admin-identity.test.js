@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
-import {verifyGoogleAdminIdentity,googleAdminConfiguration} from '../backend/src/google-admin-identity.js';
+import {verifyGoogleAdminIdentity,googleAdminConfiguration,verifyGoogleIdentity} from '../backend/src/google-admin-identity.js';
 
 const env={
  GOOGLE_ADMIN_CLIENT_ID:'test-client.apps.googleusercontent.com',
@@ -79,4 +79,12 @@ test('retries transient Google key failures but does not accept untrusted key so
  assert.deepEqual(await verify(token,{fetchImpl:async()=>++calls===1?new Response('',{status:503}):fetchImpl('https://www.googleapis.com/oauth2/v3/certs')}),{subject:'12345',email:'founder.one@gmail.com'});
  assert.equal(calls,2);
  await assert.rejects(verify(token,{fetchImpl:async()=>({ok:true,url:'https://example.com/keys',json:async()=>({keys:[jwk]})})}),{code:'GOOGLE_ADMIN_KEYS_UNAVAILABLE'});
+});
+
+test('public Google accepts verified non-admin accounts only for the public audience',async()=>{
+ const client='public-client.apps.googleusercontent.com';
+ const token=await sign({...base,aud:client,email:'customer@example.com',name:'Cliente de prueba'});
+ assert.deepEqual(await verifyGoogleIdentity(token,client,nonce,{fetchImpl,now}),{subject:'12345',email:'customer@example.com',name:'Cliente de prueba'});
+ await assert.rejects(verify(token));
+ await assert.rejects(verifyGoogleIdentity(await sign(),client,nonce,{fetchImpl,now}));
 });

@@ -141,7 +141,7 @@ export default function LiveApp({CustomerHome}){
  const [pushConfig,setPushConfig]=useState(null),[pushEnabled,setPushEnabled]=useState(false);
  const [commercial,setCommercial]=useState(false),[staffCredential,setStaffCredential]=useState(null);
  const [accountEnabled,setAccountEnabled]=useState(false),[accessReady,setAccessReady]=useState(false);
- const [publicAuth,setPublicAuth]=useState(false),[googleCustomer,setGoogleCustomer]=useState(false),[passwordMode,setPasswordMode]=useState(false);
+ const [publicAuth,setPublicAuth]=useState(false),[googleCustomer,setGoogleCustomer]=useState(false),[passwordMode,setPasswordMode]=useState(()=>new URLSearchParams(location.search).get('mode')==='register');
  const [newCodes,setNewCodes]=useState(null),[support,setSupport]=useState(null);
  const [flashEnabled,setFlashEnabled]=useState(false),[flashOffers,setFlashOffers]=useState([]),[flashSelection,setFlashSelection]=useState(null);
  const [favoriteIds,setFavoriteIds]=useState([]),[onlyFavorites,setOnlyFavorites]=useState(false);

@@ -1658,3 +1658,20 @@ test('public Google client cannot reuse the administrative OAuth client ID',asyn
  f.env.GOOGLE_CUSTOMER_CLIENT_ID='customer.apps.googleusercontent.com';
  const ready=await worker.fetch(new Request(origin+'/api/v1/auth/client/google/challenge',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:'{}'}),f.env);assert.equal(ready.status,200);assert.equal((await ready.json()).clientId,f.env.GOOGLE_CUSTOMER_CLIENT_ID);
 });
+
+test('password account can enroll a verified passkey without changing password or account identity',async()=>{
+ const f=await fixture();Object.assign(f.env,{CORS_ORIGINS:passkeyOrigin,QA_CLIENT_ACCESS:'true',QA_PUBLIC_AUTH:'true'});
+ const login='qa.password.bio',password='clave-ficticia-segura';
+ const registered=await passkeyRequest(f,'auth/client/password/register',{login,displayName:'Cliente ficticio',password});
+ assert.equal(registered.status,201);const cookie=partCookie(registered);
+ const {user}=await (await passkeyRequest(f,'auth/me',undefined,{cookie})).json();
+ const call=(stage,body)=>worker.fetch(new Request(passkeyOrigin+'/api/v1/auth/biometric/'+stage,{method:body?'POST':'GET',headers:{Origin:passkeyOrigin,Cookie:cookie,'X-Client-Account':user.id,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})}),f.env);
+ assert.equal((await (await call('status')).json()).registered,false);
+ const begin=await call('begin',{});assert.equal(begin.status,200);const {id,options}=await begin.json();const key=virtualPasskey(),response=key.registration(options);
+ assert.equal((await call('finish',{id,response})).status,200);
+ assert.equal((await call('finish',{id,response})).status,401);
+ const challenge=await beginKey(f,'login',{login});assert.equal(challenge.status,200);const payload=await challenge.json();
+ const done=await finishKey(f,'login',payload.id,key.assertion(payload.options),partCookie(challenge));assert.equal(done.status,204);
+ const me=await (await passkeyRequest(f,'auth/me',undefined,{cookie:partCookie(done)})).json();assert.equal(me.user.id,user.id);
+ assert.equal((await passkeyRequest(f,'auth/client/password/login',{login,password})).status,204);
+});

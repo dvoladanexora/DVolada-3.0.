@@ -45,10 +45,10 @@ async function verifyPassword(env,password,stored){
  const derived=await passwordHash(env,password,match?match[1]:'A'.repeat(43));
  return Boolean(match&&same(derived,stored));
 }
-async function session(env,user,token,revision,adminVersion,guard=false){
+async function session(env,user,token,revision,adminVersion,recovery=null){
  return env.DB.prepare(`INSERT INTO auth_sessions(id,user_id,token_hash,device_label,expires_at)
  SELECT ?,u.id,?,'Dvolada',? FROM users u JOIN client_credentials c ON c.user_id=u.id
- WHERE u.id=? AND c.revision=? AND u.admin_version=? AND ${allowed} ${guard?'AND changes()=1':''}`).bind(crypto.randomUUID(),await hmacHex(env.SESSION_PEPPER,'session:v1:'+token),now()+sessionSeconds,user,revision,adminVersion);
+ WHERE u.id=? AND c.revision=? AND u.admin_version=? AND ${allowed} ${recovery?'AND c.recovery_hash=?':''}`).bind(crypto.randomUUID(),await hmacHex(env.SESSION_PEPPER,'session:v1:'+token),now()+sessionSeconds,user,revision,adminVersion,...(recovery?[recovery]:[]));
 }
 export async function publicPassword(req,env,action){
  assertOrigin(req,env);const body=await readJson(req,4096);
@@ -82,7 +82,7 @@ export async function publicPassword(req,env,action){
    AND EXISTS(SELECT 1 FROM users u WHERE u.id=client_credentials.user_id AND u.admin_version=? AND ${allowed})`).bind(await passwordHash(env,password),next,row.id,row.revision,await recoveryHash(env,body.code),row.admin_version),
   env.DB.prepare('DELETE FROM client_passkeys WHERE user_id=? AND EXISTS(SELECT 1 FROM client_credentials WHERE user_id=? AND recovery_hash=?)').bind(row.id,row.id,next),
   env.DB.prepare('UPDATE auth_sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL AND EXISTS(SELECT 1 FROM client_credentials WHERE user_id=? AND recovery_hash=?)').bind(now(),row.id,row.id,next),
-  await session(env,row.id,token,row.revision+1,row.admin_version)
+  await session(env,row.id,token,row.revision+1,row.admin_version,next)
  ]);
  if(updated.meta.changes!==1)throw credentialError();
  return changeClientCookie(respond(req,env,200,{login,recovery}),token);

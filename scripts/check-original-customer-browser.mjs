@@ -10,7 +10,7 @@ const server=spawn(process.execPath,['node_modules/vite/bin/vite.js','preview','
 let browser;
 try{
  for(let i=0;i<60;i++){try{if((await fetch(origin)).ok)break}catch{}await new Promise(r=>setTimeout(r,250))}
- browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+ browser=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE,headless:true,args:['--no-sandbox']});
  const account='11111111-1111-4111-8111-111111111111',rid='22222222-2222-4222-8222-222222222222',pid='33333333-3333-4333-8333-333333333333',oid='44444444-4444-4444-8444-444444444444';
  const restaurant={id:rid,name:'Comedor de fixture',online_state:'open',delivery_fee_minor:500};
  const product={id:pid,name:'Baleada de fixture',price_minor:5000,category:'Baleadas',options:[]};

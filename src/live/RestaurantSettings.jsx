@@ -1,8 +1,43 @@
 import React,{useEffect,useState} from 'react';
+import {readPhotoAsThumbnail} from '../restaurant-menu-rules.js';
 
 const weekdays=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
 const labels={cash:'Efectivo',transfer:'Transferencia',external_card:'Tarjeta externa'};
 const blankOption={id:null,name:'',kind:'extra',price:'0',available:true};
+
+function RestaurantBranding({api,id,run,busy,offline}){
+ const [images,setImages]=useState(null),[saving,setSaving]=useState(false),[error,setError]=useState('');
+ useEffect(()=>{
+  if(offline)return;
+  let active=true;
+  api.restaurantBranding(id).then(result=>{if(active){setImages(result.images||{});setError('')}})
+   .catch(()=>{if(active)setError('No se pudieron cargar el logo y la portada.')});
+  return()=>{active=false};
+ },[api,id,offline]);
+ async function upload(event,kind){
+  const input=event.currentTarget,file=input.files[0];
+  input.value='';
+  if(!file)return;
+  setSaving(true);setError('');
+  try{
+   const source=await readPhotoAsThumbnail(file,120*1024);
+   const result=await run(()=>api.saveRestaurantImage(id,kind,source.split(',')[1]),{refresh:false});
+   if(result)setImages(current=>({...current,[kind]:result.src}));
+  }catch(problem){setError(problem.message||'No se pudo preparar la imagen.')}
+  finally{setSaving(false)}
+ }
+ return <div className="dvl-stack">
+  {error&&<p role="alert">{error}</p>}
+  {images&&<div className="dvl-grid dvl-restaurant-branding">
+   {Object.entries({logo:'Logo del restaurante',cover:'Portada del restaurante'}).map(([kind,label])=>
+    <label key={kind}>{label}
+     {images[kind]&&<img src={images[kind]} alt={label} className={'dvl-brand-image-'+kind}/>}
+     <input type="file" aria-label={label} accept="image/png,image/jpeg,image/webp" disabled={saving||busy||offline}
+      onChange={event=>upload(event,kind)}/>
+    </label>)}
+  </div>}
+ </div>;
+}
 
 export function RestaurantProfile({api,id,run,busy,offline}){
  const [profile,setProfile]=useState(null),[error,setError]=useState('');
@@ -23,6 +58,7 @@ export function RestaurantProfile({api,id,run,busy,offline}){
  }
  return <section className="dvl-panel"><h2>Perfil del restaurante</h2>
   {error&&<p role="alert">{error}</p>}
+  <RestaurantBranding {...{api,id,run,busy,offline}}/>
   {profile&&<form className="dvl-stack" onSubmit={save}>
    <label>Descripción<textarea rows={3} maxLength={500} {...field('description')}/></label>
    <label>Dirección<input maxLength={250} {...field('address')}/></label>

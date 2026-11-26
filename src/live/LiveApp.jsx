@@ -11,7 +11,7 @@ import {CourierConsole,CourierApplication,CourierApplications} from './CourierWo
 import {StaffSignIn,StaffSecret,ManageStaffAccess,SettlementPanel} from './RestaurantCommercial.jsx';
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {ShoppingBag,Store,Bike,ShieldCheck,ShoppingCart,History,Users,Home,LogOut,RefreshCw,WifiOff,ArrowRight,Package,CheckCircle2} from 'lucide-react';
+import {ShoppingBag,Store,Bike,ShieldCheck,ShoppingCart,History,Users,Home,LogOut,RefreshCw,WifiOff,ArrowRight,Package,CheckCircle2,ChefHat,BookOpen,Wallet,Settings,Receipt} from 'lucide-react';
 import {createLiveApi,LiveApiError} from './live-api.js';
 import './live.css';
 import { enableQaPush, disableQaPush } from './onesignal-push.js';
@@ -285,7 +285,7 @@ export default function LiveApp({CustomerHome}){
   if(view==='restaurant'&&restaurantId){
    const assignment=session?.restaurants?.find(item=>item.restaurant_id===restaurantId)?.staff_role;
    const manages=['owner','manager'].includes(assignment);
-   const board=assignment==='cashier'||restaurantTab==='cash'?'unrecorded':restaurantTab==='history'?'history':'active';
+   const board=assignment==='cashier'||restaurantTab==='cash'?'unrecorded':restaurantTab==='history'?'history':restaurantTab==='kitchen'?'kitchen':'active';
    const [result,eligible,menu,capabilities]=await Promise.all([
     api.restaurantOrders(restaurantId,board==='history'&&restaurantTab==='history'?historyCursor:undefined,board),
     manages&&(!poll||board==='active')?api.eligibleCouriers(restaurantId):null,
@@ -603,7 +603,8 @@ export default function LiveApp({CustomerHome}){
  const canManage=['owner','manager'].includes(selectedBusiness?.staff_role);
  const kitchenRole=selectedBusiness?.staff_role==='kitchen';
  const cashRole=selectedBusiness?.staff_role==='cashier';
- const boardOrders=kitchenRole?[...orders].sort((a,b)=>a.createdAt-b.createdAt||a.orderNumber.localeCompare(b.orderNumber)):orders;
+ const kitchenView=kitchenRole||(canManage&&restaurantTab==='kitchen');
+ const boardOrders=kitchenView?[...orders].sort((a,b)=>a.createdAt-b.createdAt||a.orderNumber.localeCompare(b.orderNumber)):orders;
  const setBoard=tab=>{setRestaurantTab(tab);setHistoryCursor(null);setNextHistory(null);setOrderDetail(null);setSupport(null);setOrders([])};
  const formattedUserId=session?.user?.id||'';
  const adminMode=Boolean(session&&scope==='admin');
@@ -830,13 +831,13 @@ export default function LiveApp({CustomerHome}){
        <Action kind="text" onClick={()=>setSelectedPin(null)}>Ocultar</Action></div>}
     </section>
    </div>}
-   {scope==='restaurant'&&<div className="dvl-stack">
+   {scope==='restaurant'&&<div className={'dvl-stack'+(canManage?' dvl-restaurant-workspace':'')}>
     <section className="dvl-panel" id="negocio"><div className="dvl-row"><h2>{kitchenRole?'Pantalla de cocina':cashRole?'Caja del restaurante':'Centro de pedidos'}</h2><label>Negocio<select value={selectedRestaurantId}
      onChange={e=>{setBoard('active');setOrderDetail(null);setSupport(null);setOrders([]);setManageProducts([]);setRestaurantCapabilities(null);setCouriers([]);setEditPrices({});setCourierChoice({});setSelectedRestaurantId(e.target.value)}}>{session.restaurants?.map(r=><option key={r.restaurant_id} value={r.restaurant_id}>{r.name}</option>)}</select></label></div>
-     {canManage&&<nav className="dvl-inline dvl-client-modes" aria-label="Secciones de Restaurante Cloud">
-      {Object.entries({active:'Pedidos activos',history:'Historial',menu:'Subir comida y menú',settings:'Perfil y personal',cash:'Caja y ventas',...(commercial?{settlements:'Liquidaciones'}:{})}).map(([tab,label])=>
+     {canManage&&<nav className="dvl-restaurant-nav" aria-label="Secciones de Restaurante Cloud">
+      {Object.entries({active:['Pedidos activos',Package],kitchen:['Cocina',ChefHat],history:['Historial',History],menu:['Menú',BookOpen],settings:['Perfil y personal',Settings],cash:['Caja y ventas',Wallet],...(commercial?{settlements:['Liquidaciones',Receipt]}:{})}).map(([tab,[label,Icon]])=>
        <button type="button" key={tab} aria-pressed={restaurantTab===tab} disabled={busy} className={'dvl-action '+(restaurantTab===tab?'':'secondary')}
-        onClick={()=>setBoard(tab)}>{label}</button>)}
+        onClick={()=>setBoard(tab)}><Icon size={18} aria-hidden="true"/>{label}</button>)}
      </nav>}
      {canManage&&restaurantTab==='active'&&<Action onClick={()=>setBoard('menu')} disabled={busy}>Subir comida</Action>}
      {kitchenRole&&<p>Comandas aceptadas, de la más antigua a la reciente.</p>}
@@ -881,7 +882,7 @@ export default function LiveApp({CustomerHome}){
       onSaved={()=>load().catch(error=>setError(errorLabel(error)))}/>
      </div>)}</div>
     </section>}
-    {kitchenRole&&<RestaurantKitchenDisplay serverBacked connected={!offline} busy={busy}
+    {kitchenView&&<RestaurantKitchenDisplay serverBacked connected={!offline} busy={busy}
      restaurantId={selectedRestaurantId} restaurantName={selectedBusiness.name}
      orders={boardOrders.map(order=>({...order,kind:'food',placeId:selectedRestaurantId,orderNo:order.orderNumber,
       delivery:order.deliveryMethod,createdAt:order.createdAt*1000,acceptedAt:order.stageAt*1000,
@@ -890,9 +891,9 @@ export default function LiveApp({CustomerHome}){
      onChange={(order,next)=>action(()=>api.restaurantStatus(selectedRestaurantId,order,next,newKey()))}
      onPrint={order=>{if(!openKitchenTicket(order,selectedBusiness.name))setError('Permití abrir la comanda para imprimirla.')}}
      onDetail={showRestaurantOrder}/>}
-    {kitchenRole&&orderDetail?.restaurantId===selectedRestaurantId&&<section className="dvl-panel" aria-label="Detalle de la comanda">
+    {kitchenView&&orderDetail?.restaurantId===selectedRestaurantId&&<section className="dvl-panel" aria-label="Detalle de la comanda">
      <h2>Comanda {orderDetail.orderNumber}</h2>
-     <ul>{orderDetail.items.map((item,i)=><li key={i}>{item.quantity} × {item.name_snapshot}{item.optionNames?.map(name=>' · '+name)}</li>)}</ul>
+     <ul>{orderDetail.items.map((item,i)=><li key={i}>{item.quantity} × {item.name_snapshot}{(item.optionNames||optionsFromReceipt(item).map(option=>option.name)).map(name=>' · '+name)}</li>)}</ul>
      {orderDetail.note&&<p>{orderDetail.note}</p>}<Action kind="secondary" onClick={()=>setOrderDetail(null)}>Cerrar detalle</Action>
     </section>}
     {!cashRole&&!kitchenRole&&['active','history'].includes(restaurantTab)&&<>

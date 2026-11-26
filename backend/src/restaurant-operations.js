@@ -70,11 +70,7 @@ export const photoType=bytes=>{
  if(bytes.startsWith('RIFF')&&bytes.slice(8,12)==='WEBP')return 'image/webp';
  return null;
 };
-export async function savePhoto(req,env,actor,access,productId){
- requireStaff(access.staff_role,manage);
- const id=requireUuid(productId);
- if(!await env.DB.prepare('SELECT 1 FROM products WHERE id=? AND restaurant_id=?').bind(id,access.restaurantId).first())
-  throw new ApiError(404,'PRODUCT_NOT_FOUND');
+async function readPhoto(req){
  const body=await readJson(req,165000);
  requireKeys(body,['base64']);
  let mime=null;
@@ -82,9 +78,33 @@ export async function savePhoto(req,env,actor,access,productId){
   try{mime=photoType(atob(body.base64))}catch{}
  }
  if(!mime)throw new ApiError(400,'INVALID_PHOTO');
+ return {mime,base64:body.base64};
+}
+export async function restaurantBranding(req,env,actor,access,kind){
+ requireStaff(access.staff_role,manage);
+ const id=access.restaurantId;
+ if(req.method==='POST'){
+  const {mime,base64}=await readPhoto(req);
+  await env.DB.batch([
+   env.DB.prepare(`INSERT INTO restaurant_brand_images(restaurant_id,kind,mime,image_base64) VALUES(?,?,?,?)
+    ON CONFLICT(restaurant_id,kind) DO UPDATE SET mime=excluded.mime,image_base64=excluded.image_base64`)
+    .bind(id,kind,mime,base64),
+   audit(env,actor,access,'restaurant_'+kind+'_saved',id)
+  ]);
+  return {kind,src:'data:'+mime+';base64,'+base64};
+ }
+ const rows=await resultRows(env.DB.prepare('SELECT kind,mime,image_base64 FROM restaurant_brand_images WHERE restaurant_id=?').bind(id));
+ return {images:Object.fromEntries(rows.map(row=>[row.kind,'data:'+row.mime+';base64,'+row.image_base64]))};
+}
+export async function savePhoto(req,env,actor,access,productId){
+ requireStaff(access.staff_role,manage);
+ const id=requireUuid(productId);
+ if(!await env.DB.prepare('SELECT 1 FROM products WHERE id=? AND restaurant_id=?').bind(id,access.restaurantId).first())
+  throw new ApiError(404,'PRODUCT_NOT_FOUND');
+ const {mime,base64}=await readPhoto(req);
  await env.DB.batch([env.DB.prepare(`INSERT INTO restaurant_product_photos(product_id,mime,image_base64) VALUES(?,?,?)
    ON CONFLICT(product_id) DO UPDATE SET mime=excluded.mime,image_base64=excluded.image_base64`)
-  .bind(id,mime,body.base64),audit(env,actor,access,'photo_saved',id)]);
+  .bind(id,mime,base64),audit(env,actor,access,'photo_saved',id)]);
  return {photoUrl:'/api/v1/catalog/photos/'+id};
 }
 export async function publicPhoto(env,id){

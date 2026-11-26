@@ -72,8 +72,10 @@ export async function restaurantOrders(req,env,access,url){
  const cursor=url.searchParams.get('cursor');
  let where='restaurant_id=?',args=[access.restaurantId];
  const view=url.searchParams.get('view');
- if(view&&!['active','history','unrecorded'].includes(view))throw new ApiError(400,'INVALID_INPUT');
- if(access.staff_role==='kitchen')where+=" AND status IN ('Aceptado','Preparando','Listo')";
+ if(view&&!['active','history','unrecorded','kitchen'].includes(view))throw new ApiError(400,'INVALID_INPUT');
+ if(view==='kitchen')requireStaff(access.staff_role,['owner','manager','kitchen']);
+ const kitchenView=access.staff_role==='kitchen'||view==='kitchen';
+ if(kitchenView)where+=" AND status IN ('Aceptado','Preparando','Listo')";
  else if(view==='active')where+=" AND status NOT IN ('Entregado','Cancelado','Rechazado')";
  else if(view==='unrecorded'){
   requireStaff(access.staff_role,['owner','manager','cashier']);
@@ -88,16 +90,16 @@ export async function restaurantOrders(req,env,access,url){
   where+=' AND (updated_at<? OR (updated_at=? AND id<?))';
   args.push(time,time,id);
  }
- const projection=access.staff_role==='kitchen'?`SELECT id,order_number,status,version,delivery_method,
+ const projection=kitchenView?`SELECT id,order_number,status,version,delivery_method,
   flash_gift_name,customer_note,created_at,updated_at,
   (SELECT max(e.created_at) FROM online_order_events e WHERE e.order_id=online_orders.id AND e.to_status=online_orders.status) AS stage_at,
   (SELECT json_group_array(json_object('name',i.name_snapshot,'qty',i.quantity,'options',json(i.options_json)) ORDER BY i.id)
    FROM online_order_items i WHERE i.order_id=online_orders.id) AS kitchen_lines FROM online_orders`:briefOrder;
  const {results=[]}=await env.DB.prepare(`${projection} WHERE ${where}
-   ORDER BY updated_at DESC,id DESC LIMIT 51`).bind(...args).all();
+   ORDER BY ${kitchenView?'created_at,id':'updated_at DESC,id DESC'} LIMIT 51`).bind(...args).all();
  const orders=results.slice(0,50);
  const end=orders.at(-1);
- const publicOrders=access.staff_role==='kitchen'?orders.map(order=>({id:order.id,orderNumber:order.order_number,
+ const publicOrders=kitchenView?orders.map(order=>({id:order.id,orderNumber:order.order_number,
   status:order.status,version:order.version,deliveryMethod:order.delivery_method,flashGiftName:order.flash_gift_name,
   createdAt:order.created_at,updatedAt:order.updated_at,stageAt:order.stage_at,note:order.customer_note,
   items:JSON.parse(order.kitchen_lines).map(line=>({name:line.name,qty:line.qty,extras:line.options.map(option=>option.name)}))})):orders.map(order=>orderDto(order));

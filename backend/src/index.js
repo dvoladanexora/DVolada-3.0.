@@ -5,7 +5,7 @@ import {commercialControl,publicSpots,rateCourier} from './commercial-control.js
 import {courierCommercial} from './courier-commercial.js';
 import {googleControlAuth,googleControlActor,googleControlRequired,clearControlCookie} from './google-admin-session.js';
 import {courierProfile,courierAvailability,courierApplication,rejectCourierApplication,pendingCouriers,revokeCourierSessions,courierHistory,courierRestaurantChat} from './courier-workspace.js';
-import {restaurantProfile,menuOption,savePhoto,publicPhoto,staffRoster,restaurantCash,restaurantReport} from './restaurant-operations.js';
+import {restaurantBranding,restaurantProfile,menuOption,savePhoto,publicPhoto,staffRoster,restaurantCash,restaurantReport} from './restaurant-operations.js';
 import {
  ApiError,requireUuid,identity,assertConfiguration,assertAllowedOrigin,respond,preflight,
  restaurantAccess,requireStaff,requireRole,mutationRateLimit
@@ -338,6 +338,11 @@ async function route(req,env){
   const options=/^\/api\/v1\/restaurant\/products\/([0-9a-f-]+)\/options(?:\/([0-9a-f-]+))?$/i.exec(path);
   if(options&&(options[2]?method==='PATCH':['GET','POST'].includes(method)))
    return respond(req,env,200,await menuOption(req,env,actor,access,options[1],options[2]));
+  if(method==='GET'&&path==='/api/v1/restaurant/branding')
+   return respond(req,env,200,await restaurantBranding(req,env,actor,access));
+  const brandImage=/^\/api\/v1\/restaurant\/branding\/(logo|cover)$/.exec(path);
+  if(method==='POST'&&brandImage)
+   return respond(req,env,200,await restaurantBranding(req,env,actor,access,brandImage[1]));
   const managePhoto=/^\/api\/v1\/restaurant\/products\/([0-9a-f-]+)\/photo$/i.exec(path);
   if(method==='POST'&&managePhoto)return respond(req,env,200,await savePhoto(req,env,actor,access,managePhoto[1]));
   if(method==='GET'&&path==='/api/v1/restaurant/orders')

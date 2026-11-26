@@ -9,7 +9,7 @@ import {drainQaOrderPush,qaPushAudience} from '../src/qa-order-push.js';
 import {hmacHex} from '../src/security.js';
 import {exchangeFirebase,verifyFirebaseIdToken} from '../src/firebase-identity.js';
 
-const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql','0024_commercial_control.sql','0025_public_auth.sql','0026_restaurant_applications.sql','0027_courier_application_details.sql','0028_bank_transfers.sql','0029_finance_receipts.sql','0030_courier_commercial.sql'].map(file=>
+const migrations=['0001_core.sql','0002_checkout_guards.sql','0003_firebase_identity.sql','0004_pickup_delivery_guards.sql','0005_courier_offers.sql','0006_management_audit.sql','0007_customer_phones.sql','0008_phone_required_without_otp.sql','0009_qa_order_push_outbox.sql','0010_checkout_fee_guard.sql','0011_client_workspace.sql','0012_client_checkout_options.sql','0013_client_passwords.sql','0014_flash_campaigns.sql','0015_restaurant_operations.sql','0016_restaurant_commercial.sql','0017_courier_workspace.sql','0018_control_center.sql','0019_client_passkeys.sql','0020_privileged_passkeys.sql','0023_google_admin_nonces.sql','0024_commercial_control.sql','0025_public_auth.sql','0026_restaurant_applications.sql','0027_courier_application_details.sql','0028_bank_transfers.sql','0029_finance_receipts.sql','0030_courier_commercial.sql','0031_restaurant_brand_images.sql'].map(file=>
  readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
 const PEPPER='test-session-pepper-only-not-production-123456789012345';
 const PIN_SECRET='test-pin-secret-only-not-production-987654321098765';
@@ -642,6 +642,10 @@ test('kitchen preparation is permitted while cancellations and platform audit ar
  assert.equal((await f.status(order.id,'staffA','Aceptado',1)).status,200);
  const board=await f.call('/api/v1/restaurant/orders?view=active',{by:'kitchen',restaurantId:f.restaurants[0]});
  assert.equal(board.status,200);
+ const ownerBoard=await f.call('/api/v1/restaurant/orders?view=kitchen',{by:'staffA',restaurantId:f.restaurants[0]});
+ assert.deepEqual(ownerBoard.body.orders,board.body.orders);
+ const otherBoard=await f.call('/api/v1/restaurant/orders?view=kitchen',{by:'staffB',restaurantId:f.restaurants[1]});
+ assert.deepEqual(otherBoard.body.orders,[]);
  const ticket=board.body.orders.find(row=>row.id===order.id);
  assert.equal(ticket.items[0].name,'Baleada');
  assert.equal(ticket.items[0].qty,1);
@@ -1978,4 +1982,20 @@ test('only one available approved courier takes a restaurant-accepted delivery',
  assert.equal(assigned.courier_response,'accepted');
  assert.equal(assigned.version,4);
  assert.deepEqual(await list('courier'),[]);
+});
+
+test('restaurant logo and cover persist independently and stay scoped to the tenant',async()=>{
+ const f=await fixture();
+ await f.user('brandingKitchen','customer',[f.restaurants[0],'kitchen']);
+ const path='/api/v1/restaurant/branding';
+ const image=Buffer.from('\x89PNG\r\n\x1a\n','latin1').toString('base64');
+ const update=(kind,by,restaurantId,base64=image)=>f.call(path+'/'+kind,{by,restaurantId,method:'POST',body:{base64}});
+ assert.equal((await update('logo','staffA',f.restaurants[0])).status,200);
+ assert.equal((await update('cover','staffA',f.restaurants[0])).status,200);
+ assert.equal((await update('logo','brandingKitchen',f.restaurants[0])).status,403);
+ assert.equal((await update('logo','staffB',f.restaurants[0])).status,403);
+ assert.equal((await update('logo','staffA',f.restaurants[0],'bm90LWFuLWltYWdl')).status,400);
+ assert.deepEqual((await f.call(path,{by:'staffA',restaurantId:f.restaurants[0]})).body.images,
+  {logo:'data:image/png;base64,'+image,cover:'data:image/png;base64,'+image});
+ assert.deepEqual((await f.call(path,{by:'staffB',restaurantId:f.restaurants[1]})).body.images,{});
 });

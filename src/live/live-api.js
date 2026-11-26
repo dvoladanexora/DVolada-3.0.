@@ -37,7 +37,7 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
  return {
   submitRestaurantApplication:(body,key)=>request('/api/v1/restaurant-applications',{auth:false,method:'POST',body,key}),
   applicationCounts:()=>request('/api/v1/admin/application-counts'),
-  restaurantApplications:()=>request('/api/v1/admin/restaurant-applications'),
+  restaurantApplications:(after='')=>request('/api/v1/admin/restaurant-applications?'+new URLSearchParams({after})),
   decideRestaurantApplication:(id,body)=>request('/api/v1/admin/restaurant-applications/'+s(id),{method:'PATCH',body}),
   financeSummary:period=>request('/api/v1/admin/control/finance'+(period?'?'+new URLSearchParams(period):'')),
   health:()=>request('/health',{auth:false}),
@@ -159,6 +159,7 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
   adminAssignMember:(id,body)=>request('/api/v1/admin/restaurants/'+s(id)+'/members',{method:'POST',body}),
   control:(path,options)=>request('/api/v1/admin/control/'+path,options),
   setFlashActive:(id,active)=>request('/api/v1/admin/flash/'+s(id),{method:'PATCH',body:{active}}),
+  restoreCourierProfile:id=>request('/api/v1/admin/couriers/'+s(id)+'/restore-profile',{method:'POST'}),
   adminEnrollCourier:(userId,applicationCreatedAt)=>request('/api/v1/admin/couriers',{method:'POST',body:{userId,applicationCreatedAt}})
  };
 }

@@ -1939,6 +1939,11 @@ test('control lists legacy couriers without granting access and paginates pendin
  const directory=await f.call('/api/v1/admin/courier-directory',{by:'platformAdmin'});
  assert.equal(directory.body.couriers.find(row=>row.id===legacy.id).active,null);
  assert.equal((await f.call('/api/v1/courier/orders',{by:'legacyCourier'})).status,403);
+ const restore='/api/v1/admin/couriers/'+legacy.id+'/restore-profile';
+ assert.equal((await f.call(restore,{by:'customer',method:'POST'})).status,403);
+ assert.equal((await f.call(restore,{by:'platformAdmin',method:'POST'})).status,201);
+ assert.equal((await f.call(restore,{by:'platformAdmin',method:'POST'})).status,409);
+ assert.equal((await f.call('/api/v1/courier/orders',{by:'legacyCourier'})).body.profile.available,0);
  const applicant=f.DB.db.prepare("INSERT INTO users(id,display_name,account_role) VALUES(?,?,'customer')");
  const application=f.DB.db.prepare('INSERT INTO courier_applications(user_id) VALUES(?)');
  const ids=Array.from({length:101},()=>randomUUID()).sort();
@@ -1998,4 +2003,18 @@ test('restaurant logo and cover persist independently and stay scoped to the ten
  assert.deepEqual((await f.call(path,{by:'staffA',restaurantId:f.restaurants[0]})).body.images,
   {logo:'data:image/png;base64,'+image,cover:'data:image/png;base64,'+image});
  assert.deepEqual((await f.call(path,{by:'staffB',restaurantId:f.restaurants[1]})).body.images,{});
+});
+
+test('control can read restaurant applications beyond the first page',async()=>{
+ const f=await fixture();
+ const insert=f.DB.db.prepare(`INSERT INTO restaurant_applications(id,business_name,owner_name,phone,email,location,business_type,plan,notes)
+  VALUES(?,?,'Propietario','+50498765432','fixture@example.test','Centro','Comedor','ONLINE','')`);
+ const ids=Array.from({length:51},()=>randomUUID()).sort();
+ for(const id of ids)insert.run(id,'Negocio de prueba '+id);
+ const route='/api/v1/admin/restaurant-applications';
+ const first=await f.call(route,{by:'platformAdmin'});
+ assert.equal(first.body.next,ids[49]);
+ const next=await f.call(route+'?after='+first.body.next,{by:'platformAdmin'});
+ assert.deepEqual([...first.body.applications,...next.body.applications].map(row=>row.id),ids);
+ assert.equal(next.body.next,null);
 });

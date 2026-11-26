@@ -3,7 +3,7 @@ import {mkdir} from 'node:fs/promises';
 import {chromium} from 'playwright';
 import {spawn} from 'node:child_process';
 const server=spawn(process.execPath,['node_modules/vite/bin/vite.js','preview','--host','127.0.0.1','--port','4184','--strictPort'],{env:{...process.env,VITE_DVOLADA_LIVE_MODE:'true'}});
-const browser=await chromium.launch();
+const browser=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE});
 try{
  for(let i=0;i<60;i++){try{if((await fetch('http://127.0.0.1:4184')).ok)break}catch{}await new Promise(r=>setTimeout(r,250))}
  await mkdir('visual-checks',{recursive:true});
@@ -11,7 +11,9 @@ try{
   const context=await browser.newContext({serviceWorkers:'block',viewport:{width:390,height:844}});
   const page=await context.newPage();
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  let contract=null,spots=[];
+  let contract=null,spots=[],taken=false,images={};
+  const delivery={id:'55555555-5555-4555-8555-555555555555',orderNumber:'DV-DISPONIBLE',status:'Aceptado',version:2,restaurantName:'Negocio de prueba'};
+  const brandPhoto=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB9sAAAAASUVORK5CYII=','base64');
   await page.route('**/api/v1/**',route=>{
    const path=new URL(route.request().url()).pathname;
    const restaurant={restaurant_id:'11111111-1111-4111-8111-111111111111',staff_role:role,name:'Negocio de prueba'};
@@ -26,7 +28,27 @@ try{
     if(route.request().method()==='POST'){const d=route.request().postDataJSON();assert.ok(d.imageBase64);assert.equal(d.placement,'carousel');spots=[{id:'44444444-4444-4444-8444-444444444444',title:d.title,advertiser:d.advertiser,placement:d.placement,starts_at:d.startsAt,ends_at:d.endsAt,duration_seconds:d.durationSeconds,link:d.link,price_minor:d.priceMinor,paid_minor:d.paidMinor,active:0,version:1}];return route.fulfill({json:{id:spots[0].id}})}
     return route.fulfill({json:{spots}});
    }
+   if(path==='/api/v1/courier/orders/'+delivery.id+'/take'){
+    assert.equal(route.request().postDataJSON().expectedVersion,2);
+    assert.ok(route.request().headers()['idempotency-key']);
+    taken=true;
+    return route.fulfill({json:{order:{id:delivery.id,version:4,courierResponse:'accepted'}}});
+   }
+   if(path==='/api/v1/restaurant/branding')return route.fulfill({json:{images}});
+   if(path.startsWith('/api/v1/restaurant/branding/')){
+    assert.equal(route.request().method(),'POST');
+    const kind=path.split('/').at(-1);
+    const {base64}=route.request().postDataJSON();
+    assert.ok(base64);
+    images[kind]='data:image/jpeg;base64,'+base64;
+    return route.fulfill({json:{kind,src:images[kind]}});
+   }
+   if(path.endsWith('/chat/dispatch'))return route.fulfill({json:{writable:true,messages:[
+    {id:1,mine:false,body:'La comanda está en preparación.'}
+   ]}});
    const fixtures={
+    '/api/v1/restaurant/profile':{profile:{description:'',address:'',latitude:null,longitude:null,hours:Array(7).fill(null),paymentMethods:['cash']}},
+    '/api/v1/restaurant/staff-access':{staff:[],history:[]},
     '/api/v1/auth/me':{
      user:{id:'22222222-2222-4222-8222-222222222222',role:business?'customer':role,
       displayName:'Participante de prueba',privilegedPasskey:['owner','platform_admin'].includes(role)},
@@ -40,10 +62,12 @@ try{
     '/api/v1/admin/control/claims':{claims:[]},
     '/api/v1/admin/control/coupons':{coupons:[]},
     '/api/v1/admin/control/audit':{events:[]},
+    '/api/v1/courier/orders':{profile:{active:1,available:1,capacity:2},
+     orders:taken?[{...delivery,courierResponse:'accepted',version:4}]:[],available:taken?[]:[delivery]},
     '/api/v1/courier/history':{orders:[],periods:[],commissions:{deliveries:0,chargedMinor:0,paidMinor:0,outstandingMinor:0},nextCursor:null}
    };
    const data=fixtures[path]??{restaurants:[],orders:[],products:[],couriers:[],
-    profile:{available:0,active:1,capacity:2},enabled:false,counts:[],applications:[],rules:[],campaigns:[],settlements:[]};
+    profile:{available:0,active:1,capacity:2},enabled:false,counts:[],applications:[],rules:[],campaigns:[],settlements:[],staff:[],history:[]};
    return route.fulfill({json:data});
   });
   await page.goto('http://127.0.0.1:4184/cuenta');
@@ -61,6 +85,42 @@ try{
     assert.ok(overflow<=1,role+' '+width+' px: '+overflow);
     await page.screenshot({path:'visual-checks/'+role+'-'+width+'-'+theme+'.png'});
    }
+  }
+  if(role==='owner'){
+   const nav=page.getByRole('navigation',{name:'Secciones de Restaurante Cloud'});
+   await nav.getByRole('button',{name:'Cocina',exact:true}).click();
+   await page.locator('.dv-kitchen-lane-preparing').waitFor();
+   await nav.getByRole('button',{name:'Perfil y personal',exact:true}).click();
+   await page.getByRole("heading",{name:"Perfil del restaurante",exact:true}).waitFor({timeout:5000});
+   for(const label of ['Logo del restaurante','Portada del restaurante']){
+    await page.getByLabel(label,{exact:true}).setInputFiles({name:'brand.png',mimeType:'image/png',buffer:brandPhoto},{timeout:6000});
+    await page.getByAltText(label,{exact:true}).waitFor();
+   }
+  }
+  if(role==='courier'){
+   await page.getByRole('button',{name:'Tomar pedido',exact:true}).click();
+   await page.getByText(/1 de 2 espacios ocupados/).waitFor();
+   await page.getByRole('button',{name:'Chat con restaurante',exact:true}).click();
+   await page.getByText('La comanda está en preparación.',{exact:true}).waitFor();
+   for(const width of [390,1440]){
+    await page.setViewportSize({width,height:844});
+    const panel=page.getByRole('complementary',{name:'Conversación del pedido'});
+    const handle=panel.getByRole('button',{name:'Mover conversación con las flechas'});
+    if(await panel.getByRole('button',{name:'Minimizar conversación'}).count()===0)
+     await panel.getByRole('button',{name:'Abrir conversación'}).click();
+    const before=await panel.boundingBox(), grip=await handle.boundingBox();
+    await page.mouse.move(grip.x+grip.width/2,grip.y+grip.height/2);
+    await page.mouse.down();
+    await page.mouse.move(grip.x+grip.width/2,grip.y+grip.height/2-45,{steps:5});
+    await page.mouse.up();
+    assert.ok((await panel.boundingBox()).y<before.y-15);
+    await panel.getByRole('button',{name:'Minimizar conversación'}).click();
+    const bubble=await panel.boundingBox();
+    await handle.press('ArrowUp');
+    assert.ok((await panel.boundingBox()).y<bubble.y);
+   }
+   await page.getByRole('button',{name:'Abrir conversación'}).click();
+   await page.getByRole('button',{name:'Cerrar conversación'}).click();
   }
   if(role==='platform_admin'){
    await page.setViewportSize({width:390,height:844});

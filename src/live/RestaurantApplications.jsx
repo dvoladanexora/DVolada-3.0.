@@ -36,9 +36,21 @@ export function RestaurantApplicationForm({api}){
 
 export function RestaurantApplicationQueue({api}){
  const [rows,setRows]=useState(null),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
+ const refreshing=useRef(false);
  async function refresh(){
-  try{setRows((await api.restaurantApplications()).applications)}
-  catch{setMessage('No se pudieron cargar las solicitudes.')}
+  if(refreshing.current)return;
+  refreshing.current=true;
+  try{
+   const entries=[];
+   let after='';
+   do{
+    const page=await api.restaurantApplications(after);
+    entries.push(...page.applications);
+    after=page.next;
+   }while(after);
+   setRows(entries);
+  }catch{setMessage('No se pudieron cargar las solicitudes.')}
+  finally{refreshing.current=false}
  }
  useEffect(()=>{refresh();const timer=setInterval(()=>{if(!document.hidden&&navigator.onLine)refresh()},15000);return()=>clearInterval(timer)},[api]);
  async function decide(event,id){
@@ -50,6 +62,7 @@ export function RestaurantApplicationQueue({api}){
   setBusy(true);setMessage('');
   try{
    await api.decideRestaurantApplication(id,{decision,reason});
+   setRows(current=>current?.filter(row=>row.id!==id));
    setMessage(decision==='approved'?'Solicitud aprobada. Registrá el negocio en Restaurantes para continuar.':'Solicitud rechazada.');
    await refresh();
   }catch(error){setMessage(error.status===409?'Otra sesión ya resolvió la solicitud.':'El servidor no confirmó la decisión.');await refresh()}

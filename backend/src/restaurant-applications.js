@@ -24,9 +24,12 @@ export async function submitRestaurantApplication(req,env){
 export async function manageRestaurantApplications(req,env,actor,id){
  requireRole(actor,'platform_admin');
  if(req.method==='GET'&&!id){
+  const after=new URL(req.url).searchParams.get('after')||'';
+  if(after)requireUuid(after);
   const {results}=await env.DB.prepare(`SELECT * FROM restaurant_applications
-   WHERE status='pending' ORDER BY created_at DESC,id DESC LIMIT 50`).all();
-  return respond(req,env,200,{applications:results});
+   WHERE status='pending' AND (?='' OR id>?) ORDER BY id LIMIT 51`).bind(after,after).all();
+  const applications=results.slice(0,50);
+  return respond(req,env,200,{applications,next:results.length>50?applications.at(-1).id:null});
  }
  if(req.method!=='PATCH'||!id)throw new ApiError(404,'NOT_FOUND');
  id=requireUuid(id);

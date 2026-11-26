@@ -16,7 +16,7 @@ import {
  customerOrder,customerCancel,customerCheckoutStatus,customerCoupon
 } from './orders.js';
 import { issueQaPushIdentity } from './qa-push-identity.js';
-import {createRestaurant,updateRestaurant,assignMember,enrollCourier,createProduct,
+import {createRestaurant,updateRestaurant,assignMember,enrollCourier,restoreCourierProfile,createProduct,
  updateProduct,updateAvailability} from './management.js';
 
 import {adminFlash,flashCatalogue} from './flash.js';
@@ -296,6 +296,9 @@ async function route(req,env){
   return respond(req,env,200,await pendingCouriers(env,actor,url));
  if(method==='POST'&&path==='/api/v1/admin/courier-applications/reject')
   return respond(req,env,200,await rejectCourierApplication(req,env,actor));
+ const courierRestore=/^\/api\/v1\/admin\/couriers\/([0-9a-f-]+)\/restore-profile$/i.exec(path);
+ if(method==='POST'&&courierRestore)
+  return respond(req,env,201,await restoreCourierProfile(env,actor,courierRestore[1]));
  if(method==='POST'&&path==='/api/v1/admin/couriers')
   return respond(req,env,201,await enrollCourier(req,env,actor));
  if(commercial){

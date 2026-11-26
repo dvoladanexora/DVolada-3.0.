@@ -333,6 +333,12 @@ export function CourierDirectory({api,run,busy,offline,errorLabel,setSection,mon
   <div className="dvl-admin-courier-stats"><div><strong>{row.delivered}</strong><small>Entregados</small></div><div><strong>{row.active_orders}/{row.max_active_orders??0}</strong><small>En curso</small></div></div>
   <div className="dvl-stack"><div aria-label={row.rating_count?row.rating.toFixed(1)+' de 5 estrellas':'Sin calificaciones'} style={{display:'flex',gap:4,alignItems:'center'}}>{Array.from({length:5},(_,i)=><span key={i} aria-hidden="true" style={{position:'relative',fontSize:23,lineHeight:1,color:'#a16207'}}>☆<span style={{position:'absolute',left:0,top:0,overflow:'hidden',width:Math.max(0,Math.min(1,(row.rating||0)-i))*100+'%',color:'#eab308'}}>★</span></span>)}<small>{row.rating_count?row.rating.toFixed(1)+' / 5 ('+row.rating_count+')':'Sin valoraciones'}</small></div>{row.active!=null&&<CourierBilling row={row} api={api} run={run} busy={busy} offline={offline} money={money} errorLabel={errorLabel}/>}</div>
   {row.phone_e164&&/^\+504\d{8}$/.test(row.phone_e164)&&<a className="dvl-action secondary" href={'https://wa.me/'+row.phone_e164.slice(1)} target="_blank" rel="noopener noreferrer">Contactar por WhatsApp</a>}
+  {row.active==null&&row.status==='active'&&!row.admin_locked&&<button type="button" className="dvl-action secondary" disabled={busy||offline}
+   onClick={async()=>{
+    const profile=await run(()=>api.restoreCourierProfile(row.id),{refresh:false});
+    if(profile)setData(old=>({...old,couriers:old.couriers.map(item=>item.id===row.id?
+     {...item,active:1,available:0,max_active_orders:profile.maxActiveOrders}:item)}));
+   }}>Restaurar perfil operativo</button>}
   <details><summary>Detalles del repartidor</summary><p>Registrado: {time(row.created_at)}</p><p style={{overflowWrap:'anywhere'}}>ID: {row.id}</p><button type="button" className="dvl-action secondary" onClick={()=>setSection('accounts')}>Administrar cuenta</button></details>
  </article>)}</div>
  {data?.next&&<button className="dvl-action secondary" disabled={busy||offline} onClick={async()=>{const next=await run(()=>api.adminCourierDirectory(search,data.next),{refresh:false});if(next)setData(old=>({...next,couriers:[...old.couriers,...next.couriers]}))}}>Cargar más repartidores</button>}

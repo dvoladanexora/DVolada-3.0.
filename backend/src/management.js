@@ -82,6 +82,21 @@ export async function enrollCourier(req,env,actor){
  if(!approved.meta.changes)throw new ApiError(409,'COURIER_ENROLLMENT_FORBIDDEN');
  return {courierId:userId,active:true,maxActiveOrders:2};
 }
+export async function restoreCourierProfile(env,actor,userId){
+ requireRole(actor,'platform_admin');
+ const id=requireUuid(userId,'userId');
+ const [restored]=await env.DB.batch([
+  env.DB.prepare(`INSERT INTO courier_profiles(user_id,active,max_active_orders,available)
+   SELECT u.id,1,2,0 FROM users u WHERE u.id=? AND u.account_role='courier'
+    AND u.status='active' AND u.admin_locked=0
+    AND NOT EXISTS(SELECT 1 FROM restaurant_memberships m WHERE m.user_id=u.id AND m.active=1)
+   ON CONFLICT(user_id) DO NOTHING`).bind(id),
+  env.DB.prepare(`INSERT INTO control_audit(actor_id,subject,action,detail)
+   SELECT ?,?,'courier_profile_restored','{}' WHERE changes()>0`).bind(actor.userId,id)
+ ]);
+ if(!restored.meta.changes)throw new ApiError(409,'COURIER_ENROLLMENT_FORBIDDEN');
+ return {courierId:id,active:true,available:false,maxActiveOrders:2};
+}
 export async function createProduct(req,env,actor,access){
  requireStaff(access.staff_role,['owner','manager']);
  const body=await readJson(req,165000);requireKeys(body,['name','priceMinor','available','category','photoBase64']);

@@ -7,7 +7,7 @@ export default function ClientAccess({authenticate,offline,busy}){
  const intent=['restaurant','courier'].includes(params.get('intent'))?params.get('intent'):betaIntent;
  // UI preference only. Authentication and roles are always verified by the server.
  const requestedMode=params.get('mode');
- const initialMode=Object.hasOwn(actions,requestedMode)?requestedMode:intent==='restaurant'?'recover':['customer','courier'].includes(intent)?'register':'login';
+ const initialMode=Object.hasOwn(actions,requestedMode)&&!(intent==='restaurant'&&requestedMode==='register')?requestedMode:intent==='restaurant'?'recover':['customer','courier'].includes(intent)?'register':'login';
  const [mode,setMode]=useState(initialMode),[login,setLogin]=useState(''),[name,setName]=useState(''),[code,setCode]=useState('');
  async function submit(event){
   event.preventDefault();
@@ -19,11 +19,11 @@ export default function ClientAccess({authenticate,offline,busy}){
   setCode('');
  }
  return <form className="dvl-panel dvl-login" onSubmit={submit}>
-  <h2>Cuenta Dvolada</h2>
+  <h2>{intent==='restaurant'?'Acceso de propietarios':'Cuenta Dvolada'}</h2>
   {intent==='restaurant'&&<p>Para activar tu restaurante, usá la invitación del propietario. Si ya tenés llave, elegí Ingresar.</p>}
   {intent==='courier'&&<p>Creá tu cuenta o ingresá con tu llave. Después, en Trabajá como repartidor, solicitá la aprobación.</p>}
   <div className="dvl-inline dvl-client-modes" aria-label="Acceso a la cuenta">
-   {Object.entries(actions).map(([key,label])=><button key={key} type="button" disabled={busy} aria-pressed={key===mode}
+   {Object.entries(intent==='restaurant'?{login:'Ingresar como propietario',recover:'Activar acceso'}:actions).map(([key,label])=><button key={key} type="button" disabled={busy} aria-pressed={key===mode}
     className={'dvl-action '+(key===mode?'':'secondary')} onClick={()=>{setMode(key);setCode('')}}>{label}</button>)}
   </div>
   {mode==='register'&&<label>Nombre<input autoComplete="name" minLength={2} maxLength={80} value={name} onChange={event=>setName(event.target.value)} required/></label>}

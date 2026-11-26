@@ -39,6 +39,14 @@ function OwnerInvitation({restaurantId,invite,disabled}){
  if(issued)return <section className="dvl-panel dvl-code-panel" aria-label="Invitación de propietario creada">
   <h3>Invitación de propietario</h3>
   <p>Entregala en privado a {issued.login}. Vence a las {new Date(issued.expiresAt*1000).toLocaleTimeString()}.</p>
+  <p>Enviá al propietario este enlace y el código por privado. Debe abrir el enlace, escribir su usuario y pegar el código en Activar acceso.</p>
+  <p>Usuario: <strong>{issued.login}</strong></p>
+  <a className="dvl-action secondary" href="/cuenta?intent=restaurant&amp;mode=recover" target="_blank" rel="noopener noreferrer">Abrir activación de propietario</a>
+  <button type="button" className="dvl-action secondary" onClick={async event=>{
+   const button=event.currentTarget;
+   try{await navigator.clipboard.writeText(window.location.origin+'/cuenta?intent=restaurant&mode=recover');button.textContent='Enlace copiado'}
+   catch{button.textContent='Abrí el enlace y copiá su dirección'}
+  }}>Copiar enlace de activación</button>
   <label>Código de invitación<input readOnly value={issued.invitation} onFocus={event=>event.target.select()}/></label>
   <button type="button" className="dvl-action" onClick={()=>setIssued(null)}>Cerrar invitación</button>
  </section>;
@@ -444,7 +452,9 @@ export default function LiveApp({CustomerHome}){
     setPushEnabled(false);
    }
    if(sessionRef.current)await (everywhere?api.revokeAccessSessions():api.logout());
+   const customer=session?.user.role==='customer'&&!session.restaurants?.length&&!controlView&&!qaView;
    endLocalSession();
+   if(customer){window.location.replace('/');return}
    if(pushFailure)setStatus('Sesión cerrada. Revisá el permiso de notificaciones de este sitio en el navegador.');
   }catch(e){if(!handleSessionError(e))setError(errorLabel(e))}
   finally{setBusy(false)}

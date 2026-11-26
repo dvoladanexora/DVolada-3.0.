@@ -222,7 +222,7 @@ export default function LiveApp({CustomerHome}){
   setCouriers([]);setCourierChoice({});setAdminStats(null);setAdminRestaurants([]);
   setControlSection('summary');setAdminBusinessSearch('');setAdminCreateOpen(false);setAdminFee('');setAdminSelectedId('');setAdminCourierId('');setAdminMemberId('');setAudit(null);
   setNewRestaurantName('');setNewRestaurantPlan('ONLINE');setAdminStaffRole('owner');
-  setNewProductName('');setNewProductPrice('');setEditPrices({});
+  setEditPrices({});
   setCart([]);setCartRestaurantId('');setShoppingRestaurant('');setProducts([]);setCatalogTerm('');
   setOptionsByProduct({});setAppliedCoupon(null);setCouponText('');
   setPendingKey(null);setReplaceCart(null);setDeliveryMethod('delivery');

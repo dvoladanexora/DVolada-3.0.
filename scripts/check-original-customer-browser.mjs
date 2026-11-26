@@ -35,6 +35,7 @@ try{
    '/api/v1/customer/favorites':{ids:[]},
    '/api/v1/customer/courier-application':{requested:false},
   };
+  if(p==='/api/v1/auth/logout'){signedIn=false;return route.fulfill({status:204,body:''})}
   if(p==='/api/v1/auth/me'&&!signedIn)return route.fulfill({status:401,json:{error:'SESSION_REQUIRED'}});
   if(p==='/api/v1/auth/client/password/login'){assert.deepEqual(req.postDataJSON(),{login:'cliente.fixture',password:'solo-prueba-12345'});signedIn=true;return route.fulfill({status:204,body:''})}
   if(p==='/api/v1/customer/orders'){
@@ -134,6 +135,25 @@ try{
    await page.screenshot({path:'visual-checks/inicio-'+width+'-'+scheme+'.png'});
   }
  }
+ await page.locator('.mobile-nav').getByRole('button',{name:'Más',exact:true}).click();
+ await page.getByRole('button',{name:'Mi perfil',exact:true}).click();
+ const photo=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=640;c.height=320;const x=c.getContext('2d');x.fillStyle='#ff6000';x.fillRect(0,0,640,320);return c.toDataURL().split(',')[1]});
+ await page.locator('input[type=file]').setInputFiles({name:'perfil.png',mimeType:'image/png',buffer:Buffer.from(photo,'base64')});
+ await page.getByRole('dialog',{name:'Recortar foto de perfil'}).waitFor();
+ await page.getByRole('slider',{name:'Zoom'}).fill('2');
+ await page.getByRole('button',{name:'Usar recorte'}).click();
+ await page.getByRole('img',{name:'Foto de perfil'}).waitFor();
+ assert.equal(await page.getByRole('img',{name:'Foto de perfil'}).evaluate(el=>el.naturalWidth),320);
+ assert.equal(await page.getByRole('button',{name:'Cerrar sesión',exact:true}).count(),0);
+ await page.locator('.mobile-nav').getByRole('button',{name:'Más',exact:true}).click();
+ await page.getByRole('button',{name:'Cerrar sesión',exact:true}).click();
+ await page.waitForURL(origin+'/');
+ await page.getByRole('button',{name:'Continuar como invitado'}).waitFor();
+ await page.goto(origin+'/cuenta?intent=restaurant&mode=recover');
+ await page.getByRole('heading',{name:'Acceso de propietarios'}).waitFor();
+ await page.getByRole('button',{name:'Activar acceso',exact:true}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'Crear cuenta',exact:true}).count(),0);
+ console.log('Recorte, cierre de sesión y acceso de propietario aprobados');
  assert.deepEqual(errors,[]);
  assert.deepEqual(unexpected,[]);
  console.log(JSON.stringify({originalAuthenticatedShell:true,originalCart:true,orderFlow:true,profile:true,fixtureOrders:created,viewport:390}));

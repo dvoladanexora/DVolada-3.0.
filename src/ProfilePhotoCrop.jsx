@@ -6,9 +6,11 @@ export default function ProfilePhotoCrop({onSave,notify}){
  const canvas=useRef(null);
  useEffect(()=>{
   if(!file)return;
-  const next=URL.createObjectURL(file);
-  setUrl(next);
-  return()=>URL.revokeObjectURL(next);
+  const reader=new FileReader();
+  reader.onload=()=>setUrl(String(reader.result));
+  reader.onerror=()=>{setFile(null);notify('No se pudo leer la foto.')};
+  reader.readAsDataURL(file);
+  return()=>{if(reader.readyState===1)reader.abort()};
  },[file]);
  useEffect(()=>{
   if(!image||!canvas.current)return;

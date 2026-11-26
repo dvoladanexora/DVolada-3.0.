@@ -8,7 +8,7 @@ import {courierProfile,courierAvailability,courierApplication,rejectCourierAppli
 import {restaurantProfile,menuOption,savePhoto,publicPhoto,staffRoster,restaurantCash,restaurantReport} from './restaurant-operations.js';
 import {
  ApiError,requireUuid,identity,assertConfiguration,assertAllowedOrigin,respond,preflight,
- restaurantAccess,requireStaff,mutationRateLimit
+ restaurantAccess,requireStaff,requireRole,mutationRateLimit
 } from './security.js';
 import {
  restaurantOrders,restaurantOrder,changes,restaurantStatus,assignCourier,
@@ -139,6 +139,8 @@ async function route(req,env){
   req=new Request(req,{headers});
  }
  const actor=googleMode?await googleControlActor(req,env):await identity(req,env);
+ if(actor.role==='courier'&&(path==='/api/v1/auth/me'||path.startsWith('/api/v1/courier/')||
+  /\/chat\/(courier|dispatch)$/.test(path)))await courierProfile(env,actor);
  if(actor.role==='platform_admin'&&!actor.googleAdmin&&googleControlRequired(req,env))throw new ApiError(403,'GOOGLE_ADMIN_REQUIRED');
  if(token&&((!['customer','courier'].includes(actor.role)&&!(actor.role==='platform_admin'&&actor.privilegedPasskey))||(path!=='/api/v1/auth/me'&&req.headers.get('x-client-account')!==actor.userId)))
   throw new ApiError(401,'SESSION_INVALID');
@@ -283,6 +285,13 @@ async function route(req,env){
   return respond(req,env,200,await assignMember(req,env,actor,platformMember[1]));
  if(clientAccessEnabled(req,env)&&['GET','POST'].includes(method)&&path==='/api/v1/customer/courier-application')
   return respond(req,env,200,await courierApplication(req,env,actor));
+ if(method==='GET'&&path==='/api/v1/admin/application-counts'){
+  requireRole(actor,'platform_admin');
+  const counts=await env.DB.prepare(`SELECT
+   (SELECT count(*) FROM courier_applications a JOIN users u ON u.id=a.user_id WHERE u.account_role='customer' AND u.status='active') AS couriers,
+   (SELECT count(*) FROM restaurant_applications WHERE status='pending') AS business`).first();
+  return respond(req,env,200,counts);
+ }
  if(method==='GET'&&path==='/api/v1/admin/courier-applications')
   return respond(req,env,200,await pendingCouriers(env,actor));
  if(method==='POST'&&path==='/api/v1/admin/courier-applications/reject')

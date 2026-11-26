@@ -54,6 +54,7 @@ function OwnerInvitation({restaurantId,invite,disabled}){
 const qaView=['/pruebas','/pruebas/'].includes(window.location.pathname);
 const controlView=['/cuenta','/cuenta/'].includes(window.location.pathname)&&new URLSearchParams(window.location.search).get('panel')==='control';
 const accountParams=new URLSearchParams(window.location.search);
+const courierIntent=accountParams.get('intent')==='courier';
 const restaurantIntent=accountParams.get('intent')==='restaurant'||(location.hostname==='dvolada-beta.dvoladanexora.workers.dev'&&accountParams.get('beta_rol')==='restaurant');
 const apiOrigin=import.meta.env.VITE_DVOLADA_API_URL||window.location.origin;
 const optionPrice=options=>(options||[]).reduce((total,option)=>total+option.price_minor,0);
@@ -616,6 +617,13 @@ export default function LiveApp({CustomerHome}){
   if(cartAccount&&customerSection)document.getElementById(customerSection)?.scrollIntoView();
  },[cartAccount,customerSection]);
  if(controlView&&!session)return <div className="dvl-app dvl-account-shell"><main className="dvl-main">{!accessReady&&!offline?<p role="status">Verificando acceso…</p>:<GoogleAdminSignIn api={api} offline={offline} onSuccess={me=>openSession(me,true)}/>}</main></div>;
+ if(courierIntent&&cartAccount&&!qaView)return <div className="dvl-app"><main className="dvl-main">
+  <h1>Afiliación de repartidores</h1>
+  <p>Completá tus datos y consultá el estado de tu solicitud.</p>
+  <WaitOrError message={error} warning/>
+  <CourierApplication api={api} busy={busy} offline={offline} account={cartAccount} run={run} standalone onApproved={openSession}/>
+  <a className="dvl-action secondary" href="/">Volver a Dvolada</a>
+ </main></div>;
  if(CustomerHome&&cartAccount&&!qaView){
   const resetDiscount=()=>{setAppliedCoupon(null);setCouponText('');setFlashSelection(null)};
   const changeDraft=(draft)=>{
@@ -662,7 +670,7 @@ export default function LiveApp({CustomerHome}){
    </div>
   </header>:<header className="dvl-header"><div className="dvl-brand"><img className="dvl-official-logo" src={import.meta.env.BASE_URL+'logo.png'} alt="Dvolada" /><div><strong>Dvolada</strong><small>Pedí fácil, que te llega de volada</small></div></div>
    <div className="dvl-head-actions"><a className="dvl-action secondary" href="/">Inicio</a><label className="dvl-theme">Tema<select aria-label="Tema visual" value={theme} onChange={e=>setTheme(e.target.value)}><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Automático</option></select></label>{session&&<span>{session.user.displayName}</span>}{session&&<Action kind="secondary" disabled={busy||offline} onClick={()=>logout()}><LogOut size={15}/> Salir</Action>}</div></header>}
-  {adminMode?<ControlNavigation section={controlSection} setSection={selectControlSection} flash={flashEnabled} commercial={commercial}/>:session&&<nav className="dvl-shortcuts" aria-label="Navegación principal">{shortcuts.map(([label,Icon,action])=>
+  {adminMode?<ControlNavigation api={api} offline={offline} section={controlSection} setSection={selectControlSection} flash={flashEnabled} commercial={commercial}/>:session&&<nav className="dvl-shortcuts" aria-label="Navegación principal">{shortcuts.map(([label,Icon,action])=>
    <button type="button" key={label} onClick={action}><Icon size={20} aria-hidden="true"/>{label}</button>)}</nav>}
   <main className="dvl-main">
   <div className="dvl-intro"><span className="dvl-kicker">NEXORA SYSTEMS · DVOLADA ONLINE</span>

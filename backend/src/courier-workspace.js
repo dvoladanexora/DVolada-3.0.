@@ -40,7 +40,8 @@ export async function courierApplication(req,env,actor){
    throw new ApiError(403,'ROLE_FORBIDDEN');
  }
  const request=await env.DB.prepare('SELECT contact_phone FROM courier_applications WHERE user_id=?').bind(actor.userId).first();
- return {requested:Boolean(request),needsDetails:Boolean(request&&!request.contact_phone)};
+ const rejected=!request&&await env.DB.prepare("SELECT 1 FROM control_audit WHERE subject=? AND action='courier_application_rejected' LIMIT 1").bind(actor.userId).first();
+ return {requested:Boolean(request),needsDetails:Boolean(request&&!request.contact_phone),status:request?'pending':rejected?'rejected':'none'};
 }
 
 export async function rejectCourierApplication(req,env,actor){

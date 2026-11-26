@@ -10,24 +10,39 @@ function Button({secondary=false,...props}){
  return <button type="button" className={'dvl-action'+(secondary?' secondary':'')} {...props}/>;
 }
 
-export function CourierApplication({api,busy,offline,account,run}){
- const [requested,setRequested]=useState(null);
+export function CourierApplication({api,busy,offline,account,run,standalone=false,onApproved}){
+ const [requested,setRequested]=useState(null),[decision,setDecision]=useState(''),[error,setError]=useState(false);
  useEffect(()=>{
   if(offline)return;
   let active=true;
-  api.courierApplication(false).then(data=>{if(active)setRequested(data.requested&&!data.needsDetails)}).catch(()=>{});
-  return()=>{active=false};
- },[api,account,offline]);
- if(requested===null)return null;
- return <details className="dvl-panel dvl-span">
+  async function refresh(){
+   if(document.hidden)return;
+   try{
+    const data=await api.courierApplication(false);
+    if(active){setDecision(data.status);setRequested(data.requested&&!data.needsDetails);setError(false)}
+   }catch(e){
+    if(!active)return;
+    if(e.status===403&&standalone){
+     try{const me=await api.me(true);if(active&&me.user.role==='courier')onApproved(me)}
+     catch{if(active)setError(true)}
+    }else setError(true);
+   }
+  }
+  refresh();
+  const timer=standalone?setInterval(refresh,15000):null;
+  return()=>{active=false;clearInterval(timer)};
+ },[api,account,offline,standalone,onApproved]);
+ if(requested===null)return <p role="status">{offline?'Conectate para consultar tu solicitud.':error?'No se pudo consultar tu solicitud.':'Consultando tu solicitud…'}</p>;
+ return <details className="dvl-panel dvl-span" open={standalone||undefined}>
   <summary>Trabajá como repartidor</summary>
-  {requested?<p role="status">Solicitud enviada. Cuando el Centro de Control habilite tu cuenta, volvé a iniciar sesión.</p>:
+  {requested?<p role="status">Solicitud recibida. Estamos revisando tus datos. Podrás trabajar cuando el Centro de Control apruebe tu cuenta.</p>:
    <form className="dvl-stack" onSubmit={async event=>{
     event.preventDefault();
     const values=Object.fromEntries(new FormData(event.currentTarget));
     const response=await run(()=>api.courierApplication({...values,phone:'+504'+values.phone}),{refresh:false});
     if(response)setRequested(response.requested&&!response.needsDetails);
    }}>
+    {decision==='rejected'&&<p role="status">Tu solicitud anterior fue rechazada. Podés enviar una nueva con los datos corregidos.</p>}
     <label>Teléfono o WhatsApp (+504)<input name="phone" required inputMode="numeric" autoComplete="tel-national" pattern="[0-9]{8}" maxLength={8}/></label>
     <label>Medio de transporte<select name="transport">{Object.entries(transportLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
     <label>Zona de cobertura<input name="zone" required minLength={2} maxLength={100}/></label>
@@ -41,9 +56,10 @@ export function CourierApplications({api,run,busy,offline,errorLabel}){
  useEffect(()=>{
   if(offline)return;
   let active=true;
-  api.courierApplications().then(data=>{if(active){setApplications(data.applications);setError('')}})
+  const refresh=()=>{if(document.hidden)return;api.courierApplications().then(data=>{if(active){setApplications(data.applications);setError('')}})
    .catch(err=>{if(active)setError(errorLabel(err))});
-  return()=>{active=false};
+  };refresh();const timer=setInterval(refresh,15000);
+  return()=>{active=false;clearInterval(timer)};
  },[api,offline,errorLabel]);
  return <section className="dvl-panel dvl-stack">
   <h2>Solicitudes de repartidores</h2>

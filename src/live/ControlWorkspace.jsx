@@ -57,8 +57,16 @@ const controlGroups=[
 function visibleGroups(flash,commercial){
  return controlGroups.map(group=>({...group,sections:group.sections.filter(([id])=>(id!=='flash'||flash)&&(id!=='settlements'||commercial))}));
 }
-export function ControlNavigation({section,setSection,flash,commercial}){
+export function ControlNavigation({section,setSection,flash,commercial,api,offline}){
  const [more,setMore]=useState(false);
+ const [counts,setCounts]=useState({});
+ useEffect(()=>{
+  if(!api||offline)return;
+  let active=true;
+  const refresh=()=>{if(!document.hidden)api.applicationCounts().then(data=>{if(active)setCounts(data)}).catch(()=>{})};
+  refresh();const timer=setInterval(refresh,15000);
+  return()=>{active=false;clearInterval(timer)};
+ },[api,offline]);
  const groups=visibleGroups(flash,commercial);
  const active=groups.find(group=>group.sections.some(([id])=>id===section))?.id||'summary';
  useEffect(()=>{setMore(false)},[section]);
@@ -71,7 +79,7 @@ export function ControlNavigation({section,setSection,flash,commercial}){
  const navButton=(group,index)=>{const Icon=group.icon;return <button type="button" key={group.id}
   className={'dvl-admin-nav-item '+(index>=4?'dvl-admin-nav-extra ':'')+(active===group.id?'active':'')}
   aria-current={active===group.id?'page':undefined} onClick={()=>choose(group)}>
-  <Icon size={19} aria-hidden="true"/><span>{group.label}</span>
+  <Icon size={19} aria-hidden="true"/><span>{group.label}{counts[group.id]>0&&<small aria-live="polite"> · {counts[group.id]} pendientes</small>}</span>
  </button>};
  return <aside className="dvl-admin-sidebar">
   <div className="dvl-admin-sidebar-label">ESPACIO DE GESTIÓN</div>

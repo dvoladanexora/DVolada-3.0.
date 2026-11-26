@@ -36,6 +36,7 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
  const s=id=>encodeURIComponent(id);
  return {
   submitRestaurantApplication:(body,key)=>request('/api/v1/restaurant-applications',{auth:false,method:'POST',body,key}),
+  applicationCounts:()=>request('/api/v1/admin/application-counts'),
   restaurantApplications:()=>request('/api/v1/admin/restaurant-applications'),
   decideRestaurantApplication:(id,body)=>request('/api/v1/admin/restaurant-applications/'+s(id),{method:'PATCH',body}),
   financeSummary:period=>request('/api/v1/admin/control/finance'+(period?'?'+new URLSearchParams(period):'')),

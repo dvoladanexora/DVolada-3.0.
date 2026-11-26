@@ -1049,6 +1049,9 @@ test('QA courier application, platform validation and global session revocation'
  const [application]=(await f.call('/api/v1/admin/courier-applications',{by:'platformAdmin'})).body.applications;
  assert.equal(application.transport,'bicycle');
  assert.equal(application.contact_phone,'+50400000003');
+ assert.equal((await f.call('/api/v1/admin/application-counts')).status,403);
+ assert.equal((await f.call('/api/v1/admin/application-counts',{by:'platformAdmin'})).body.couriers,1);
+ assert.equal((await (await req('customer/courier-application',undefined,{cookie,account})).json()).status,'pending');
 
  assert.deepEqual((await f.call('/api/v1/admin/courier-applications',{by:'platformAdmin'})).body.applications.map(x=>x.user_id),[account]);
  const pending=f.DB.db.prepare('SELECT created_at FROM courier_applications WHERE user_id=?').get(account);
@@ -1056,12 +1059,17 @@ test('QA courier application, platform validation and global session revocation'
  const reject=by=>f.call('/api/v1/admin/courier-applications/reject',{by,method:'POST',body:decision});
  assert.equal((await reject('customer')).status,403);
  assert.equal((await reject('platformAdmin')).status,200);
+ assert.equal((await (await req('customer/courier-application',undefined,{cookie,account})).json()).status,'rejected');
  assert.equal((await reject('platformAdmin')).status,409);
  assert.equal((await f.call('/api/v1/admin/couriers',{by:'platformAdmin',method:'POST',body:{userId:account,applicationCreatedAt:pending.created_at}})).status,409);
  assert.equal(f.DB.db.prepare("SELECT count(*) AS n FROM control_audit WHERE subject=? AND action='courier_application_rejected'").get(account).n,1);
  assert.equal((await f.call('/api/v1/admin/couriers',{by:'platformAdmin',method:'POST',body:{userId:account}})).status,201);
  const current=await (await req('auth/me',undefined,{cookie})).json();
  assert.equal(current.user.role,'courier');
+ f.DB.db.prepare('UPDATE courier_profiles SET active=0 WHERE user_id=?').run(account);
+ assert.equal((await req('auth/me',undefined,{cookie})).status,403);
+ assert.equal((await req('courier/orders',undefined,{cookie,account})).status,403);
+ f.DB.db.prepare('UPDATE courier_profiles SET active=1 WHERE user_id=?').run(account);
  assert.equal((await (await req('courier/orders',undefined,{cookie,account})).json()).profile.available,0);
  assert.equal((await req('courier/availability',{available:true},{cookie,account,method:'PATCH'})).status,200);
  assert.equal((await req('customer/orders',undefined,{cookie,account})).status,403);

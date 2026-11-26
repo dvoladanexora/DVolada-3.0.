@@ -40,7 +40,7 @@ export function RestaurantApplicationQueue({api}){
   try{setRows((await api.restaurantApplications()).applications)}
   catch{setMessage('No se pudieron cargar las solicitudes.')}
  }
- useEffect(()=>{refresh()},[api]);
+ useEffect(()=>{refresh();const timer=setInterval(()=>{if(!document.hidden&&navigator.onLine)refresh()},15000);return()=>clearInterval(timer)},[api]);
  async function decide(event,id){
   event.preventDefault();
   if(busy)return;

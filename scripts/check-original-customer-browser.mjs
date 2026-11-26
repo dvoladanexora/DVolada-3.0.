@@ -149,6 +149,16 @@ try{
  await page.getByRole('button',{name:'Cerrar sesión',exact:true}).click();
  await page.waitForURL(origin+'/');
  await page.getByRole('button',{name:'Continuar como invitado'}).waitFor();
+ await page.getByRole('button',{name:'Iniciar sesión',exact:true}).click();
+ assert.equal(page.url(),origin+'/');
+ const inline=page.getByRole('region',{name:'Iniciar sesión'});
+ await inline.getByLabel('Usuario',{exact:true}).fill('cliente.fixture');
+ await inline.getByLabel('Contraseña',{exact:true}).fill('solo-prueba-12345');
+ await inline.getByRole('button',{name:'Ingresar',exact:true}).click();
+ await page.locator('.dv-tools-header').waitFor();
+ await page.locator('.mobile-nav').getByRole('button',{name:'Más',exact:true}).click();
+ await page.getByRole('button',{name:'Cerrar sesión',exact:true}).click();
+ await page.waitForURL(origin+'/');
  await page.goto(origin+'/cuenta?intent=restaurant&mode=recover');
  await page.getByRole('heading',{name:'Acceso de propietarios'}).waitFor();
  await page.getByRole('button',{name:'Activar acceso',exact:true}).waitFor();

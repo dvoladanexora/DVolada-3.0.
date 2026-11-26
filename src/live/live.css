@@ -298,3 +298,7 @@
 .dvl-restaurant-branding img{display:block;height:6rem;max-width:100%;border-radius:.6rem;object-fit:cover}
 .dvl-brand-image-logo{width:6rem}
 .dvl-brand-image-cover{width:100%}
+
+.dv-welcome-password{margin-top:.9rem;text-align:left}
+.dv-welcome-password .dvl-login{padding:.85rem}
+.dv-welcome-password>.dvl-inline{padding-top:.5rem;justify-content:space-between}

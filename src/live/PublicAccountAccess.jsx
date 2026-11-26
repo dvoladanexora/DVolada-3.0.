@@ -18,13 +18,13 @@ export function CustomerGoogleButton({api,onSuccess,offline}){
  return <div className="dvl-stack">{offline?<p>Conectate a internet para ingresar.</p>:<div ref={button}/>}
  {error&&<><p role="alert">{error}</p><button type="button" className="dvl-action secondary" onClick={()=>setRetry(n=>n+1)}>Reintentar Google</button></>}</div>;
 }
-export function PasswordAccess({authenticate,busy,offline,initialMode='login',onBack}){
+export function PasswordAccess({authenticate,busy,offline,initialMode='login',onBack,loginOnly=false}){
  const [mode,setMode]=useState(initialMode),[error,setError]=useState('');
  const submit=async e=>{e.preventDefault();setError('');const data=Object.fromEntries(new FormData(e.currentTarget));if(mode!=='login'&&data.password!==data.confirm){setError('Las contraseñas no coinciden.');return}
  const body={login:data.login,password:data.password,...(mode==='register'?{displayName:data.name,phone:'+504'+data.phone}:mode==='recover'?{code:data.code}:{})};await authenticate(mode,body);};
  return <form key={mode} className="dvl-panel dvl-login" onSubmit={submit}>
  <h2>{mode==='register'?'Creá tu cuenta':mode==='recover'?'Restablecer contraseña':'Ingresar con contraseña'}</h2>
- <div className="dvl-inline">{[['login','Ingresar'],['register','Crear cuenta'],['recover','Recuperar']].map(([v,l])=><button type="button" key={v} className={'dvl-action '+(mode===v?'':'secondary')} onClick={()=>{setMode(v);setError('')}}>{l}</button>)}</div>
+ {!loginOnly&&<div className="dvl-inline">{[['login','Ingresar'],['register','Crear cuenta'],['recover','Recuperar']].map(([v,l])=><button type="button" key={v} className={'dvl-action '+(mode===v?'':'secondary')} onClick={()=>{setMode(v);setError('')}}>{l}</button>)}</div>}
  {mode==='register'&&<>
   <label>Nombre completo<input name="name" required minLength={2} maxLength={80} autoComplete="name"/></label>
   <label>Teléfono de Honduras (+504)<input name="phone" required pattern="[0-9]{8}" maxLength={8} inputMode="numeric" autoComplete="tel-national"/></label>
@@ -37,6 +37,32 @@ export function PasswordAccess({authenticate,busy,offline,initialMode='login',on
  <button type="submit" className="dvl-action" disabled={busy||offline}>{mode==='register'?'Crear mi cuenta':mode==='recover'?'Restablecer contraseña':'Ingresar'}</button>
  {onBack&&<button type="button" className="dvl-action secondary" onClick={onBack}>Otras formas de ingreso</button>}
  </form>;
+}
+export function WelcomePassword({api,offline,close}){
+ const [busy,setBusy]=useState(false),[error,setError]=useState('');
+ const pending=useRef(false);
+ async function authenticate(mode,body){
+  if(pending.current||offline)return;
+  pending.current=true;
+  setBusy(true);setError('');
+  try{
+   await api.clientPassword(mode,body);
+   window.location.assign('/cuenta');
+  }catch(problem){
+   setError(problem.status===429?'Esperá unos minutos antes de volver a intentar.':
+    problem.status===0?'No pudimos conectarnos. Reintentá cuando vuelva la conexión.':
+    problem.status===401?'Revisá tu usuario y contraseña.':'Por el momento no se pudo iniciar sesión.');
+  }finally{pending.current=false;setBusy(false)}
+ }
+ return <section className="dv-welcome-password" aria-label="Iniciar sesión">
+  <PasswordAccess authenticate={authenticate} busy={busy} offline={offline} loginOnly/>
+  {offline&&<p role="status">Conectate para iniciar sesión.</p>}
+  {error&&<p role="alert">{error}</p>}
+  <div className="dvl-inline">
+   <a href="/cuenta?mode=recover">Recuperar contraseña</a>
+   <button type="button" className="dvl-action secondary" disabled={busy} onClick={close}>Cerrar formulario</button>
+  </div>
+ </section>;
 }
 export function AccountBiometrics({api,busy,offline,run,errorLabel}){
  const [data,setData]=useState(null),[message,setMessage]=useState('');

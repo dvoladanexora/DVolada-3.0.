@@ -700,7 +700,7 @@ export default function LiveApp({CustomerHome}){
   <ClientCodes codes={newCodes} close={()=>setNewCodes(null)}/>
   {!session&&!accessReady&&!offline&&<p role="status">Verificando acceso…</p>}
   {!session&&accountEnabled&&<>{publicAuth&&!restaurantIntent&&!qaView?<>
-   <PasswordAccess authenticate={authenticatePassword} busy={busy} offline={offline} initialMode={accountParams.get('mode')==='register'?'register':'login'} onBack={null}/>
+   <PasswordAccess authenticate={authenticatePassword} busy={busy} offline={offline} initialMode={['register','recover'].includes(accountParams.get('mode'))?accountParams.get('mode'):'login'} onBack={null}/>
    <section className="dvl-panel dvl-stack" aria-label="Otras opciones de acceso">{googleCustomer&&<CustomerGoogleButton api={api} offline={offline} onSuccess={(me,codes)=>{if(codes.recovery)setNewCodes(codes);openSession(me,true)}}/>}
     <button type="button" className="dvl-action secondary" disabled={busy||offline} onClick={()=>authenticateClient('login',{login:''})}>Ingresar con huella o Face ID</button>
     <p className="dvl-muted">Usá la huella, el rostro o el PIN del dispositivo si ya activaste una llave de acceso.</p>

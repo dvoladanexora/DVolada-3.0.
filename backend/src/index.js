@@ -12,7 +12,7 @@ import {
 } from './security.js';
 import {
  restaurantOrders,restaurantOrder,changes,restaurantStatus,assignCourier,
- courierOrders,courierStatus,courierOffer,confirmDelivery,customerCreate,customerOrders,
+ courierOrders,courierStatus,courierOffer,takeCourierOrder,confirmDelivery,customerCreate,customerOrders,
  customerOrder,customerCancel,customerCheckoutStatus,customerCoupon
 } from './orders.js';
 import { issueQaPushIdentity } from './qa-push-identity.js';
@@ -390,6 +390,9 @@ async function route(req,env){
   return changeClientCookie(await revokeCourierSessions(req,env,actor),'');
  if(method==='GET'&&path==='/api/v1/courier/orders')
   return respond(req,env,200,await courierOrders(env,actor));
+ const takeOrderMatch=/^\/api\/v1\/courier\/orders\/([0-9a-f-]+)\/take$/i.exec(path);
+ if(method==='POST'&&takeOrderMatch)
+  return respond(req,env,200,await takeCourierOrder(req,env,actor,takeOrderMatch[1]));
  const courierOfferMatch=/^\/api\/v1\/courier\/orders\/([0-9a-f-]+)\/offer$/i.exec(path);
  if(method==='POST'&&courierOfferMatch)
   return respond(req,env,200,await courierOffer(req,env,actor,courierOfferMatch[1]));

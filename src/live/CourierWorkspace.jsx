@@ -188,13 +188,13 @@ function CourierHistory({api,run,busy,offline,money,openChat}){
  </section>;
 }
 
-export function CourierConsole({api,profile,orders,busy,offline,action,run,money,openChat,endSession}){
+export function CourierConsole({api,profile,orders,availableOrders=[],busy,offline,action,run,money,openChat,endSession}){
  const [confirm,setConfirm]=useState(false);
  const booked=orders.length;
  const status=offline?'Sin conexión':!profile?'Consultando disponibilidad…':
   !profile.available?'Desconectado':booked>=profile.capacity?'Ocupado':'Disponible';
  return <div className="dvl-stack">
-  <section className="dvl-panel dvl-stack" id="entregas"><h2>Mis entregas</h2>
+  <section className="dvl-panel dvl-stack" id="entregas"><h2>Mis pedidos</h2>
    <p role="status">{status}{profile&&' · '+booked+' de '+profile.capacity+' espacios ocupados'}</p>
    {profile&&<Button disabled={busy||offline} onClick={()=>action(()=>api.courierAvailability(!profile.available))}>
     {profile.available?'Dejar de recibir ofertas':'Conectarme para recibir ofertas'}
@@ -203,6 +203,17 @@ export function CourierConsole({api,profile,orders,busy,offline,action,run,money
   </section>
   <div className="dvl-grid">{orders.map(order=><CourierOrder key={order.id} {...{order,api,busy,offline,profile,action,openChat}}/>)}</div>
   {!orders.length&&<p>Sin pedidos asignados.</p>}
+  <section className="dvl-panel dvl-stack">
+   <h2>Pedidos disponibles</h2>
+   {!offline&&profile?.available&&booked<profile.capacity&&availableOrders.length===0&&<p>No hay pedidos disponibles.</p>}
+   {!profile?.available&&<p>Conectate para consultar pedidos disponibles.</p>}
+   {profile?.available&&booked>=profile.capacity&&<p>Completá un pedido para liberar espacio.</p>}
+   {!offline&&availableOrders.map(order=><div className="dvl-row" key={order.id}>
+    <span><strong>{order.orderNumber}</strong> · {order.restaurantName} · {order.status}</span>
+    <Button disabled={busy||!profile?.available||booked>=profile.capacity} onClick={()=>
+     action(()=>api.takeCourierOrder(order,crypto.randomUUID()))}>Tomar pedido</Button>
+   </div>)}
+  </section>
   <CourierHistory {...{api,run,busy,offline,money,openChat}}/>
   <details className="dvl-panel"><summary>Sesiones de la cuenta</summary>
    {!confirm?<Button secondary disabled={busy||offline} onClick={()=>setConfirm(true)}>Cerrar todas mis sesiones</Button>:

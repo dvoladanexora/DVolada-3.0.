@@ -1945,3 +1945,37 @@ test('control lists legacy couriers without granting access and paginates pendin
  assert.deepEqual([...first.body.applications,...second.body.applications].map(row=>row.user_id),ids);
  assert.equal(second.body.next,null);
 });
+
+test('only one available approved courier takes a restaurant-accepted delivery',async()=>{
+ const f=await fixture();
+ const second=await f.user('secondCourier','courier');
+ f.DB.db.prepare('INSERT INTO courier_profiles(user_id,active,available) VALUES(?,1,1)').run(second.id);
+ await f.call('/api/v1/courier/availability',{by:'courier',method:'PATCH',body:{available:true}});
+ await f.call('/api/v1/courier/application',{by:'customer2',method:'POST',body:{}});
+ const {body:{order}}=await f.create();
+ const list=async by=>(await f.call('/api/v1/courier/orders',{by})).body.available;
+ const keys={courier:randomUUID(),secondCourier:randomUUID()};
+ const take=(by,expectedVersion,key=keys[by]||randomUUID())=>f.call('/api/v1/courier/orders/'+order.id+'/take',
+  {by,method:'POST',key,body:{expectedVersion}});
+ assert.deepEqual(await list('courier'),[]);
+ assert.equal((await take('courier',1)).status,409);
+ assert.equal((await f.status(order.id,'staffA','Aceptado',1)).status,200);
+ const [offer]=await list('courier');
+ assert.equal(offer.id,order.id);
+ assert.equal('deliveryAddress' in offer,false);
+ assert.equal((await take('customer2',2)).status,403);
+ await f.call('/api/v1/courier/availability',{by:'courier',method:'PATCH',body:{available:false}});
+ assert.deepEqual(await list('courier'),[]);
+ assert.equal((await take('courier',2)).status,409);
+ await f.call('/api/v1/courier/availability',{by:'courier',method:'PATCH',body:{available:true}});
+ const actors=['courier','secondCourier'];
+ const outcomes=await Promise.all(actors.map(by=>take(by,2)));
+ assert.deepEqual(outcomes.map(result=>result.status).sort(),[200,409]);
+ const winner=actors[outcomes.findIndex(result=>result.status===200)];
+ assert.equal((await take(winner,2)).body.replayed,true);
+ const assigned=f.DB.db.prepare('SELECT courier_id,courier_response,version FROM online_orders WHERE id=?').get(order.id);
+ assert.equal(assigned.courier_id,f.tokens[winner].id);
+ assert.equal(assigned.courier_response,'accepted');
+ assert.equal(assigned.version,4);
+ assert.deepEqual(await list('courier'),[]);
+});

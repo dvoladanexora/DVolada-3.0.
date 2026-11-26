@@ -192,7 +192,7 @@ export default function LiveApp({CustomerHome}){
  const [adminSelectedId,setAdminSelectedId]=useState(''),[adminMemberId,setAdminMemberId]=useState(''),[adminStaffRole,setAdminStaffRole]=useState('owner');
  const [adminCourierId,setAdminCourierId]=useState('');
  const [adminFee,setAdminFee]=useState(''),[audit,setAudit]=useState(null);
- const [selectedPin,setSelectedPin]=useState(null),[courierProfile,setCourierProfile]=useState(null);
+ const [selectedPin,setSelectedPin]=useState(null),[courierProfile,setCourierProfile]=useState(null),[availableOrders,setAvailableOrders]=useState([]);
  const [adminStats,setAdminStats]=useState(null),[adminRestaurants,setAdminRestaurants]=useState([]);
  const [busy,setBusy]=useState(false),[offline,setOffline]=useState(!navigator.onLine);
  const [theme,setTheme]=useState(()=>{try{return JSON.parse(localStorage.getItem('dv_theme'))||'light'}catch{return 'light'}});
@@ -226,7 +226,7 @@ export default function LiveApp({CustomerHome}){
   setCart([]);setCartRestaurantId('');setShoppingRestaurant('');setProducts([]);setCatalogTerm('');
   setOptionsByProduct({});setAppliedCoupon(null);setCouponText('');
   setPendingKey(null);setReplaceCart(null);setDeliveryMethod('delivery');
-  setSelectedPin(null);setCourierProfile(null);setPhone('');setDeliveryAddress('');setOrderNote('');
+  setSelectedPin(null);setCourierProfile(null);setAvailableOrders([]);setPhone('');setDeliveryAddress('');setOrderNote('');
   setStaffCredential(null);setPushEnabled(false);setRefreshWarning('');setStatus('');
  },[]);
  const openSession=useCallback((me,clientAccount=false)=>{
@@ -299,7 +299,7 @@ export default function LiveApp({CustomerHome}){
     if(capabilities)setRestaurantCapabilities(capabilities);
    }
   }
-  if(view==='courier'){const r=await api.courierOrders();if(canApply()){setOrders(r.orders||[]);setCourierProfile(r.profile)}}
+  if(view==='courier'){const r=await api.courierOrders();if(canApply()){setOrders(r.orders||[]);setCourierProfile(r.profile);setAvailableOrders(r.available||[])}}
   if(view==='admin'){
    const [overview,managed]=await Promise.all([api.adminOverview(),poll?null:api.adminRestaurants()]);
    if(canApply()){setAdminStats(overview);if(managed)setAdminRestaurants(managed.restaurants||[])}
@@ -930,7 +930,7 @@ export default function LiveApp({CustomerHome}){
     </div>}
     </>}
     </div>}
-   {scope==='courier'&&<CourierConsole api={api} profile={courierProfile} orders={orders} busy={busy} offline={offline}
+   {scope==='courier'&&<CourierConsole api={api} profile={courierProfile} orders={orders} availableOrders={availableOrders} busy={busy} offline={offline}
     action={action} run={run} money={price} errorLabel={errorLabel} endSession={endLocalSession}
     openChat={(order,mode)=>setSupport({id:order.id,order,mode})}/>}
    {scope==='admin'&&<div className="dvl-stack dvl-admin-content" id="control-secciones">

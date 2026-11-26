@@ -138,6 +138,8 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
   rejectCourierApplication:(userId,createdAt)=>request('/api/v1/admin/courier-applications/reject',{method:'POST',body:{userId,createdAt}}),
   courierApplications:(after='')=>request('/api/v1/admin/courier-applications?'+new URLSearchParams({after})),
   courierOrders:()=>request('/api/v1/courier/orders'),
+  takeCourierOrder:(order,key)=>request('/api/v1/courier/orders/'+s(order.id)+'/take',
+   {method:'POST',key,body:{expectedVersion:order.version}}),
   courierOffer:(order,action,key)=>request('/api/v1/courier/orders/'+s(order.id)+'/offer',
    {method:'POST',key,body:{action,expectedVersion:order.version}}),
   courierStatus:(order,status,key)=>request('/api/v1/courier/orders/'+s(order.id)+'/status',

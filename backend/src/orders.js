@@ -211,6 +211,48 @@ export async function courierOffer(req,env,actor,orderId){
  return {order:{id,version:expectedVersion+1,courierResponse:body.action==='accept'?'accepted':'unassigned'},
   replayed:false};
 }
+const availableDelivery=`o.delivery_method='delivery' AND o.status IN ('Aceptado','Preparando','Listo')
+ AND (o.courier_id IS NULL OR (o.courier_response='offered' AND o.courier_offer_expires_at<=unixepoch()))`;
+
+export async function takeCourierOrder(req,env,actor,orderId){
+ await courierProfile(env,actor);
+ const body=await readJson(req);
+ requireKeys(body,['expectedVersion']);
+ const version=requireInteger(body.expectedVersion,1,2147483645,'expectedVersion');
+ const id=requireUuid(orderId);
+ const key=idempotencyKey(req);
+ const hash=await sha256(JSON.stringify({action:'take',id,version}));
+ const replay=async()=>{
+  const previous=await env.DB.prepare('SELECT request_hash FROM order_assignments WHERE actor_id=? AND request_key=?')
+   .bind(actor.userId,key).first();
+  if(!previous)return null;
+  if(previous.request_hash!==hash)throw new ApiError(409,'IDEMPOTENCY_KEY_REUSED');
+  return {order:{id,version:version+2,courierResponse:'accepted'},replayed:true};
+ };
+ const previous=await replay();
+ if(previous)return previous;
+ try{
+  await env.DB.batch([
+   env.DB.prepare(`INSERT INTO order_assignments(id,order_id,restaurant_id,actor_id,courier_id,request_key,request_hash,expected_version)
+    SELECT ?,o.id,o.restaurant_id,?,?,?,?,? FROM online_orders o
+    WHERE o.id=? AND ${availableDelivery} AND EXISTS(
+     SELECT 1 FROM users u WHERE u.id=? AND u.status='active' AND u.admin_locked=0
+    )`).bind(crypto.randomUUID(),actor.userId,actor.userId,key,hash,version,id,actor.userId),
+   env.DB.prepare(`INSERT INTO courier_offer_responses(id,order_id,courier_id,request_key,request_hash,expected_version,action)
+    SELECT ?,order_id,courier_id,request_key,request_hash,expected_version+1,'accept'
+    FROM order_assignments WHERE actor_id=? AND request_key=? AND request_hash=?`)
+    .bind(crypto.randomUUID(),actor.userId,key,hash)
+  ]);
+ }catch(error){
+  const repeated=await replay();
+  if(repeated)return repeated;
+  throw sqlConflict(error);
+ }
+ const accepted=await replay();
+ if(!accepted)throw new ApiError(409,'ORDER_CHANGED');
+ return {...accepted,replayed:false};
+}
+
 export async function courierOrders(env,actor){
  const profile=await courierProfile(env,actor);
  const {results=[]}=await env.DB.prepare(`SELECT o.*,r.name AS pickup_name,p.address AS pickup_address,p.latitude,p.longitude
@@ -218,7 +260,12 @@ export async function courierOrders(env,actor){
   WHERE o.courier_id=? AND o.status NOT IN ('Entregado','Cancelado','Rechazado')
    AND (o.courier_response='accepted' OR (o.courier_response='offered' AND o.courier_offer_expires_at>unixepoch()))
   ORDER BY o.created_at DESC,o.id LIMIT 20`).bind(actor.userId).all();
- return {profile,orders:results.map(order=>{
+ const {results:available=[]}=profile.available&&results.length<profile.capacity?
+  await env.DB.prepare(`SELECT o.id,o.order_number,o.status,o.version,o.delivery_fee_minor,r.name
+    FROM online_orders o JOIN restaurants r ON r.id=o.restaurant_id
+    WHERE ${availableDelivery} ORDER BY o.created_at,o.id LIMIT 30`).all():{};
+ return {profile,available:available.map(row=>({id:row.id,orderNumber:row.order_number,status:row.status,
+  version:row.version,deliveryFeeMinor:row.delivery_fee_minor,restaurantName:row.name})),orders:results.map(order=>{
   const accepted=order.courier_response==='accepted';
   return {...orderDto(order,{includeAddress:accepted}),restaurantName:order.pickup_name,
    ...(accepted?{pickupAddress:order.pickup_address,pickupLatitude:order.latitude,pickupLongitude:order.longitude}:{})};

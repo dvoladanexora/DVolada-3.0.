@@ -56,9 +56,23 @@ export function CourierApplications({api,run,busy,offline,errorLabel}){
  useEffect(()=>{
   if(offline)return;
   let active=true;
-  const refresh=()=>{if(document.hidden)return;api.courierApplications().then(data=>{if(active){setApplications(data.applications);setError('')}})
-   .catch(err=>{if(active)setError(errorLabel(err))});
-  };refresh();const timer=setInterval(refresh,15000);
+  let refreshing=false;
+  async function refresh(){
+   if(document.hidden||refreshing)return;
+   refreshing=true;
+   try{
+    const rows=[];
+    let after='';
+    do{
+     const page=await api.courierApplications(after);
+     rows.push(...page.applications);
+     after=page.next;
+    }while(active&&after);
+    if(active){setApplications(rows);setError('')}
+   }catch(err){if(active)setError(errorLabel(err))}
+   finally{refreshing=false}
+  }
+  refresh();const timer=setInterval(refresh,15000);
   return()=>{active=false;clearInterval(timer)};
  },[api,offline,errorLabel]);
  return <section className="dvl-panel dvl-stack">

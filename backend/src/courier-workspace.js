@@ -59,11 +59,16 @@ export async function rejectCourierApplication(req,env,actor){
  return {rejected:true};
 }
 
-export async function pendingCouriers(env,actor){
+export async function pendingCouriers(env,actor,url){
  requireRole(actor,'platform_admin');
- const {results=[]}=await env.DB.prepare(`SELECT a.user_id,u.display_name,a.created_at,a.contact_phone,a.transport,a.service_zone FROM courier_applications a JOIN users u ON u.id=a.user_id
-  WHERE u.account_role='customer' AND u.status='active' ORDER BY a.created_at,a.user_id LIMIT 100`).all();
- return {applications:results};
+ const after=url.searchParams.get('after')||'';
+ if(after)requireUuid(after);
+ const {results=[]}=await env.DB.prepare(`SELECT a.user_id,u.display_name,a.created_at,a.contact_phone,a.transport,a.service_zone
+  FROM courier_applications a JOIN users u ON u.id=a.user_id
+  WHERE u.account_role='customer' AND u.status='active' AND (?='' OR a.user_id>?)
+  ORDER BY a.user_id LIMIT 101`).bind(after,after).all();
+ const applications=results.slice(0,100);
+ return {applications,next:results.length>100?applications.at(-1).user_id:null};
 }
 
 export async function revokeCourierSessions(req,env,actor){

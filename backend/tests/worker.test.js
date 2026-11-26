@@ -1928,3 +1928,20 @@ test('commercial launch journey: real cash and verified transfer delivery, PIN, 
  const summary=(await api('admin/control/finance',undefined,{by})).body;
  assert.equal(summary.totalReceived,500);assert.equal(summary.courierFeesOutstanding,500);
 });
+
+test('control lists legacy couriers without granting access and paginates pending requests',async()=>{
+ const f=await fixture();
+ const legacy=await f.user('legacyCourier','courier');
+ const directory=await f.call('/api/v1/admin/courier-directory',{by:'platformAdmin'});
+ assert.equal(directory.body.couriers.find(row=>row.id===legacy.id).active,null);
+ assert.equal((await f.call('/api/v1/courier/orders',{by:'legacyCourier'})).status,403);
+ const applicant=f.DB.db.prepare("INSERT INTO users(id,display_name,account_role) VALUES(?,?,'customer')");
+ const application=f.DB.db.prepare('INSERT INTO courier_applications(user_id) VALUES(?)');
+ const ids=Array.from({length:101},()=>randomUUID()).sort();
+ for(const id of ids){applicant.run(id,'Solicitud de prueba');application.run(id)}
+ const first=await f.call('/api/v1/admin/courier-applications',{by:'platformAdmin'});
+ assert.equal(first.body.next,ids[99]);
+ const second=await f.call('/api/v1/admin/courier-applications?after='+first.body.next,{by:'platformAdmin'});
+ assert.deepEqual([...first.body.applications,...second.body.applications].map(row=>row.user_id),ids);
+ assert.equal(second.body.next,null);
+});

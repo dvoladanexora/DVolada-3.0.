@@ -253,7 +253,7 @@ async function route(req,env){
     (SELECT COUNT(*) FROM courier_ratings cr WHERE cr.courier_id=u.id) AS rating_count,
     (SELECT COUNT(*) FROM online_orders o WHERE o.courier_id=u.id AND o.status='Entregado') AS delivered,
     (SELECT COUNT(*) FROM online_orders o WHERE o.courier_id=u.id AND o.status NOT IN ('Entregado','Cancelado','Rechazado')) AS active_orders
-    FROM courier_profiles c JOIN users u ON u.id=c.user_id LEFT JOIN courier_manual_invites i ON i.user_id=u.id LEFT JOIN courier_applications a ON a.user_id=u.id
+    FROM users u LEFT JOIN courier_profiles c ON c.user_id=u.id LEFT JOIN courier_manual_invites i ON i.user_id=u.id LEFT JOIN courier_applications a ON a.user_id=u.id
     WHERE u.account_role='courier' AND (?='' OR u.id>?) AND (?='' OR instr(lower(u.display_name),lower(?))>0 OR instr(coalesce(u.phone_e164,''),?)>0)
     ORDER BY u.id LIMIT 51`).bind(after,after,q,q,q).all();
   const couriers=results.slice(0,50);
@@ -293,7 +293,7 @@ async function route(req,env){
   return respond(req,env,200,counts);
  }
  if(method==='GET'&&path==='/api/v1/admin/courier-applications')
-  return respond(req,env,200,await pendingCouriers(env,actor));
+  return respond(req,env,200,await pendingCouriers(env,actor,url));
  if(method==='POST'&&path==='/api/v1/admin/courier-applications/reject')
   return respond(req,env,200,await rejectCourierApplication(req,env,actor));
  if(method==='POST'&&path==='/api/v1/admin/couriers')

@@ -937,7 +937,7 @@ export default function LiveApp({CustomerHome}){
     <ControlSubnavigation section={controlSection} setSection={selectControlSection} flash={flashEnabled} commercial={commercial}/>
     {controlSection==='summary'&&<ControlOverview stats={adminStats} setSection={selectControlSection}/>}
     {['operations','accounts','claims','coupons','rates','reports','audit'].includes(controlSection)&&<ControlWorkspace key={controlSection} section={controlSection}
-     api={api} restaurants={adminRestaurants} offline={offline} busy={busy} run={run} money={price} errorLabel={errorLabel} setSection={selectControlSection} money={price}/>}
+     api={api} restaurants={adminRestaurants} offline={offline} busy={busy} run={run} money={price} errorLabel={errorLabel} setSection={selectControlSection}/>}
     {controlSection==='security'&&<section className="dvl-panel dvl-stack">
      <h2>Mi acceso</h2><div className="dvl-admin-identity"><span className="dvl-admin-avatar"><ShieldCheck size={23}/></span><div><strong>{session.user.displayName}</strong><small>Administrador global</small></div></div>
      <p className="dvl-muted">Administrá tu sesión y tus preferencias de acceso.</p>
@@ -955,7 +955,7 @@ export default function LiveApp({CustomerHome}){
       invite={(id,body)=>run(()=>api.adminInviteOwner(id,body,newKey()),{refresh:false})}/>}
     </section>}
     {controlSection==='finance'&&<FinanceSummary api={api} money={price} offline={offline}/>}
-    {controlSection==='courierDirectory'&&<CourierDirectory api={api} run={run} busy={busy} offline={offline} errorLabel={errorLabel} setSection={selectControlSection}/>}
+    {controlSection==='courierDirectory'&&<CourierDirectory api={api} money={price} run={run} busy={busy} offline={offline} errorLabel={errorLabel} setSection={selectControlSection}/>}
     {controlSection==='advertising'&&<SpotManager api={api} run={run} busy={busy} offline={offline} money={price} errorLabel={errorLabel}/>}
     {controlSection==='couriers'&&<>
      <ManualCourier api={api} run={run} busy={busy} offline={offline}/>

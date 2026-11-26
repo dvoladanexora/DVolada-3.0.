@@ -136,7 +136,7 @@ export function createLiveApi({baseUrl,getSessionToken,getClientAccount=()=>null
   revokeCourierSessions:()=>request('/api/v1/courier/revoke-sessions',{method:'POST',body:{}}),
   courierApplication:details=>request('/api/v1/customer/courier-application',details?{method:'POST',body:details}:{}),
   rejectCourierApplication:(userId,createdAt)=>request('/api/v1/admin/courier-applications/reject',{method:'POST',body:{userId,createdAt}}),
-  courierApplications:()=>request('/api/v1/admin/courier-applications'),
+  courierApplications:(after='')=>request('/api/v1/admin/courier-applications?'+new URLSearchParams({after})),
   courierOrders:()=>request('/api/v1/courier/orders'),
   courierOffer:(order,action,key)=>request('/api/v1/courier/orders/'+s(order.id)+'/offer',
    {method:'POST',key,body:{action,expectedVersion:order.version}}),
